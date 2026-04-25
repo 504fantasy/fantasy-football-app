@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}504 Fantasy Survivor{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #1f6feb;
+      --accent-hover: #388bfd;
+      --green: #3fb950;
+      --red: #f85149;
+      --gold: #d29922;
+      --orange: #db6d28;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+    a { color: var(--accent-hover); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* NAV */
+    nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 56px; }
+    nav .brand { font-weight: 700; font-size: 16px; color: var(--text); letter-spacing: .5px; }
+    nav .brand span { color: var(--accent-hover); }
+    nav .spacer { flex: 1; }
+    nav a { color: var(--muted); font-size: 13px; }
+    nav a:hover { color: var(--text); text-decoration: none; }
+
+    /* LAYOUT */
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+    .page-header { margin-bottom: 24px; }
+    .page-header h1 { font-size: 22px; font-weight: 600; }
+    .page-header p { color: var(--muted); margin-top: 4px; }
+
+    /* CARDS */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+    /* TABLES */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    /* FORMS */
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+    input[type=text], input[type=password], input[type=number], input[type=email], select, textarea {
+      width: 100%; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 14px;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+    select option { background: var(--surface2); }
+
+    /* BUTTONS */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 6px;
+           font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent;
+           transition: opacity .15s; text-decoration: none; }
+    .btn:hover { opacity: .85; text-decoration: none; }
+    .btn-primary  { background: var(--accent);  color: #fff; }
+    .btn-success  { background: var(--green);   color: #000; }
+    .btn-danger   { background: var(--red);     color: #fff; }
+    .btn-secondary{ background: var(--surface2); color: var(--text); border-color: var(--border); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* BADGES */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-green  { background: rgba(63,185,80,.15);  color: var(--green); }
+    .badge-red    { background: rgba(248,81,73,.15);  color: var(--red);   }
+    .badge-gold   { background: rgba(210,153,34,.15); color: var(--gold);  }
+    .badge-blue   { background: rgba(31,111,235,.15); color: var(--accent-hover); }
+    .badge-muted  { background: var(--surface2); color: var(--muted); }
+
+    /* ALERTS */
+    .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+    .alert-success { background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.3); color: var(--green); }
+    .alert-error   { background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.3); color: var(--red); }
+    .alert-info    { background: rgba(31,111,235,.12); border: 1px solid rgba(31,111,235,.3); color: var(--accent-hover); }
+
+    /* POSITION CHIPS */
+    .pos { display: inline-block; width: 36px; text-align: center; padding: 2px 0; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .pos-QB  { background: rgba(31,111,235,.2); color: #79c0ff; }
+    .pos-RB  { background: rgba(63,185,80,.2); color: #7ee787; }
+    .pos-WR  { background: rgba(210,153,34,.2); color: #f0c14b; }
+    .pos-TE  { background: rgba(219,109,40,.2); color: #ffa657; }
+    .pos-DST { background: rgba(139,73,235,.2); color: #d2a8ff; }
+    .pos-K   { background: rgba(139,148,158,.2); color: #8b949e; }
+
+    /* WEEK NAV */
+    .week-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+    .week-nav span { font-size: 16px; font-weight: 600; }
+    .week-btn { padding: 4px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; cursor: pointer; }
+    .week-btn:disabled { opacity: .4; cursor: default; }
+
+    /* USED BADGE */
+    .used-tag { font-size: 10px; color: var(--red); font-weight: 600; }
+
+    /* LINEUP GRID */
+    .lineup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .lineup-slot { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .lineup-slot .slot-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .lineup-slot select { margin-top: 4px; }
+    .lineup-slot .player-locked { font-weight: 600; color: var(--text); font-size: 15px; }
+    .lineup-slot .player-team   { font-size: 11px; color: var(--muted); }
+
+    /* STANDINGS */
+    .rank-1 td:first-child { color: var(--gold); font-weight: 700; }
+    .rank-2 td:first-child { color: #c0c0c0; font-weight: 700; }
+    .rank-3 td:first-child { color: #cd7f32; font-weight: 700; }
+
+    /* RESPONSIVE */
+    @media (max-width: 640px) {
+      nav { gap: 12px; padding: 0 12px; }
+      .container { padding: 16px 10px; }
+      .lineup-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+<nav>
+  <span class="brand">504 Fantasy <span>Survivor</span></span>
+  {% if user %}
+    {% if league is defined %}
+      <a href="/survivor/{{ league.id }}">Home</a>
+      <a href="/survivor/{{ league.id }}/lineup">My Lineup</a>
+      <a href="/survivor/{{ league.id }}/scores">Scores</a>
+      {% if is_commissioner %}
+        <a href="/survivor/{{ league.id }}/manage">Manage</a>
+      {% endif %}
+    {% endif %}
+    <span class="spacer"></span>
+    <a href="/survivor/dashboard">My Leagues</a>
+    <span style="color:var(--muted);">{{ user.username }}</span>
+    <a href="/survivor/logout">Sign out</a>
+  {% else %}
+    <span class="spacer"></span>
+    <a href="/survivor/login">Sign in</a>
+    <a href="/survivor/register" class="btn btn-primary btn-sm">Register</a>
+  {% endif %}
+</nav>
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

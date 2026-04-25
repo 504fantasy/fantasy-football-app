@@ -1,0 +1,24 @@
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.0
+gunicorn==23.0.0          # production process manager (multi-worker)
+
+# ── Templating ────────────────────────────────────────────────────────────────
+jinja2==3.1.4
+python-multipart==0.0.12  # required for Form() in FastAPI
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0   # JWT signing / verification
+
+# ── Database ──────────────────────────────────────────────────────────────────
+psycopg2-binary==2.9.10   # PostgreSQL driver (binary = no build deps at runtime)
+# Note: SQLite is in Python stdlib — no extra package needed for dev mode
+
+# ── NFL data ─────────────────────────────────────────────────────────────────
+nfl-data-py==0.3.3        # NFL rosters + weekly stats (backed by nflfastR)
+pandas>=1.0,<2.0          # nfl-data-py 0.3.3 requires pandas 1.x
+numpy>=1.24.0             # required by nfl-data-py / pandas
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1      # load .env in development

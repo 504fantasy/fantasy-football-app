@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — {{ league.name }}{% endblock %}
+
+{% block head %}
+<style>
+.filter-bar {
+  display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap;
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
+  padding:1rem 1.25rem; margin-bottom:1.25rem;
+}
+.filter-bar .fg { margin-bottom:0; min-width:140px; flex:1 }
+
+.action-badge {
+  display:inline-block; padding:.15rem .55rem; border-radius:4px;
+  font-family:'Barlow Condensed',sans-serif; font-size:.72rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em; white-space:nowrap;
+}
+.a-DRAFT_PICK          { background:rgba(34,197,94,.14);  color:#4ade80; border:1px solid rgba(34,197,94,.3) }
+.a-DRAFT_RESET         { background:rgba(239,68,68,.14);  color:#f87171; border:1px solid rgba(239,68,68,.3) }
+.a-DRAFT_REWIND        { background:rgba(239,68,68,.10);  color:#fca5a5; border:1px solid rgba(239,68,68,.2) }
+.a-PONY_ADD            { background:rgba(201,69,26,.18);  color:#fb923c; border:1px solid rgba(201,69,26,.35) }
+.a-PONY_LOCK           { background:rgba(239,68,68,.14);  color:#f87171; border:1px solid rgba(239,68,68,.3) }
+.a-PONY_UNLOCK         { background:rgba(34,197,94,.14);  color:#4ade80; border:1px solid rgba(34,197,94,.3) }
+.a-MULTIPLIER_SET      { background:rgba(232,184,75,.14); color:#fcd34d; border:1px solid rgba(232,184,75,.3) }
+.a-PONY_MULTIPLIER_SET { background:rgba(232,184,75,.10); color:#e8b84b; border:1px solid rgba(232,184,75,.2) }
+.a-SCORE_ENTRY         { background:rgba(59,130,246,.14); color:#93c5fd; border:1px solid rgba(59,130,246,.3) }
+.a-SCORE_OVERRIDE      { background:rgba(168,85,247,.14); color:#c4b5fd; border:1px solid rgba(168,85,247,.3) }
+.a-PLAYER_ADD          { background:rgba(34,197,94,.10);  color:#86efac; border:1px solid rgba(34,197,94,.2) }
+.a-PLAYER_EDIT         { background:rgba(232,184,75,.10); color:#fde68a; border:1px solid rgba(232,184,75,.2) }
+.a-PLAYER_DELETE       { background:rgba(239,68,68,.14);  color:#fca5a5; border:1px solid rgba(239,68,68,.3) }
+.a-TEAM_ADD            { background:rgba(34,197,94,.10);  color:#86efac; border:1px solid rgba(34,197,94,.2) }
+.a-TEAM_EDIT           { background:rgba(232,184,75,.10); color:#fde68a; border:1px solid rgba(232,184,75,.2) }
+.a-TEAM_DELETE         { background:rgba(239,68,68,.14);  color:#fca5a5; border:1px solid rgba(239,68,68,.3) }
+.a-LEAGUE_CREATE       { background:rgba(34,197,94,.14);  color:#4ade80; border:1px solid rgba(34,197,94,.3) }
+.a-LEAGUE_JOIN         { background:rgba(59,130,246,.14); color:#93c5fd; border:1px solid rgba(59,130,246,.3) }
+.a-LEAGUE_SETTINGS_UPDATE { background:rgba(232,184,75,.10); color:#fde68a; border:1px solid rgba(232,184,75,.2) }
+
+#log-table td { font-size:.82rem; vertical-align:top }
+#log-table td.ts-cell { font-family:'Barlow Condensed',sans-serif; font-size:.8rem; color:var(--muted); white-space:nowrap }
+#log-table td.actor-cell { font-weight:600; white-space:nowrap }
+#log-table td.details-cell { color:var(--muted); font-size:.78rem; max-width:320px; word-break:break-word }
+
+.log-stats { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1.25rem }
+.log-stat  { font-family:'Barlow Condensed',sans-serif; font-size:.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em }
+.log-stat strong { color:var(--text); font-size:1.05rem; margin-right:.2rem }
+
+.empty-state { text-align:center; padding:4rem 2rem; color:var(--muted) }
+.empty-state .es-icon { font-size:2.5rem; margin-bottom:.75rem }
+mark { background:rgba(232,184,75,.3); color:var(--gold); border-radius:2px; padding:0 2px }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">🧾 Audit <em>Log</em></div>
+  <div style="margin-left:auto;display:flex;gap:.5rem">
+    <a href="/league/{{ league.id }}/audit/export.csv{% if filter_action != 'ALL' or filter_search %}?{% if filter_action != 'ALL' %}action={{ filter_action }}{% endif %}{% if filter_action != 'ALL' and filter_search %}&{% endif %}{% if filter_search %}search={{ filter_search | urlencode }}{% endif %}{% endif %}"
+       class="btn btn-ghost btn-sm" title="Download current view as CSV">⬇ Export CSV</a>
+    <a href="/league/{{ league.id }}/manage" class="btn btn-ghost btn-sm">← Back to Manage</a>
+  </div>
+</div>
+
+<div class="log-stats">
+  <div class="log-stat"><strong>{{ total }}</strong> entries shown</div>
+  {% if filter_action != 'ALL' %}<div class="log-stat"><strong>{{ filter_action }}</strong> filter active</div>{% endif %}
+  {% if filter_search   %}<div class="log-stat">Search: <strong>"{{ filter_search }}"</strong></div>{% endif %}
+</div>
+
+<form method="get" action="/league/{{ league.id }}/audit">
+  <div class="filter-bar">
+    <div class="fg">
+      <label>Action Type</label>
+      <select name="action">
+        <option value="ALL" {% if filter_action=='ALL' %}selected{% endif %}>All Actions</option>
+        {% for at in action_types %}
+        <option value="{{ at }}" {% if filter_action==at %}selected{% endif %}>{{ at }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fg">
+      <label>Search (actor / team / player / details)</label>
+      <input type="text" name="search" value="{{ filter_search }}" placeholder="e.g. admin, Patrick Mahomes…"/>
+    </div>
+    <div class="fg">
+      <label>Show last</label>
+      <select name="limit">
+        <option value="50"   {% if limit==50   %}selected{% endif %}>50</option>
+        <option value="200"  {% if limit==200  %}selected{% endif %}>200</option>
+        <option value="500"  {% if limit==500  %}selected{% endif %}>500</option>
+        <option value="9999" {% if limit==9999 %}selected{% endif %}>All</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-gold">Filter</button>
+    <a href="/league/{{ league.id }}/audit" class="btn btn-ghost">Reset</a>
+  </div>
+</form>
+
+{% if logs %}
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="tbl-wrap">
+    <table id="log-table">
+      <thead>
+        <tr>
+          <th>#</th><th>Time (UTC)</th><th>Actor</th><th>Action</th>
+          <th>Team</th><th>Player</th><th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for log in logs %}
+      <tr>
+        <td class="text-muted" style="font-size:.75rem">{{ log.id }}</td>
+        <td class="ts-cell">{{ log.ts }}</td>
+        <td class="actor-cell">
+          {% if log.actor == 'system' %}<span class="text-muted">⚙ system</span>
+          {% else %}{{ log.actor }}{% endif %}
+        </td>
+        <td><span class="action-badge a-{{ log.action }}">{{ log.action | replace('_',' ') }}</span></td>
+        <td>{% if log.team %}<span>{{ log.team }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if log.player %}{{ log.player }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td class="details-cell">{% if log.details %}{{ log.details }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="es-icon">🧾</div>
+    <p class="fw7 mb-1">No log entries found</p>
+    <p class="text-sm text-muted">
+      {% if filter_action != 'ALL' or filter_search %}Try clearing your filters.
+      {% else %}Actions will appear here once league activity begins.{% endif %}
+    </p>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const searchTerm = {{ filter_search | tojson }};
+if (searchTerm) {
+  const re = new RegExp('(' + searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  document.querySelectorAll('#log-table td').forEach(td => {
+    if (!td.children.length)
+      td.innerHTML = td.textContent.replace(re, '<mark>$1</mark>');
+  });
+}
+</script>
+{% endblock %}

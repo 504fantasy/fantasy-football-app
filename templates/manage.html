@@ -1,0 +1,837 @@
+{% extends "base.html" %}
+{% block title %}Manage — {{ league.name }}{% endblock %}
+
+{% block head %}
+<style>
+.admin-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:1.5rem; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none }
+.admin-tabs::-webkit-scrollbar { display:none }
+.at {
+  font-family:'Barlow Condensed',sans-serif; font-size:.85rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--muted);
+  padding:.6rem 1.2rem; border-bottom:2px solid transparent; margin-bottom:-1px;
+  cursor:pointer; white-space:nowrap; transition:all .15s;
+  background:none; border-left:none; border-right:none; border-top:none;
+}
+.at:hover { color:var(--text) }
+.at.on    { color:var(--gold); border-bottom-color:var(--gold) }
+.tab-panel { display:none } .tab-panel.on { display:block }
+
+.status-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:1rem; margin-bottom:1.5rem }
+.stat-tile { background:var(--s1); border:1px solid var(--border); border-radius:var(--r); padding:1rem 1.2rem }
+.stat-tile .st-val { font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:800 }
+.stat-tile .st-lbl { font-size:.74rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-top:.1rem }
+
+.score-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:.65rem }
+.del-btn { color:var(--red)!important; border-color:rgba(239,68,68,.3)!important }
+.del-btn:hover { background:rgba(239,68,68,.1)!important }
+
+/* invite highlight */
+.invite-display {
+  background: var(--s2); border: 1px solid rgba(232,184,75,.3); border-radius: var(--r);
+  padding: .85rem 1.1rem; display:flex; align-items:center; gap:1rem;
+}
+.invite-code-big {
+  font-family:'Barlow Condensed',sans-serif; font-size:2.2rem; font-weight:800;
+  letter-spacing:.22em; color:var(--gold); flex:1;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">⚙ <em>Manage</em></div>
+  <span class="page-sub">{{ league.name }}</span>
+</div>
+
+{% if msg %}
+<div class="alert alert-success">
+  {% if   msg=='player_added'      %}✅ Player added.
+  {% elif msg=='player_updated'    %}✅ Player updated.
+  {% elif msg=='player_deleted'    %}✅ Player deleted.
+  {% elif msg=='team_added'        %}✅ Team added.
+  {% elif msg=='team_updated'      %}✅ Team updated.
+  {% elif msg=='team_deleted'      %}✅ Team deleted.
+  {% elif msg=='draft_reset'       %}✅ Draft reset — all non-pony picks cleared.
+  {% elif msg=='draft_rewound'     %}✅ Last pick rewound.
+  {% elif msg=='pony_lock_updated' %}✅ Pony lock updated.
+  {% elif msg=='score_saved'       %}✅ Score saved.
+  {% elif msg=='settings_saved'    %}✅ Settings saved.
+  {% elif msg.startswith('sync_ok_') %}✅ Roster synced — {{ msg.split('_')[-1] }} players added.
+  {% elif msg.startswith('scores_synced_') %}✅ Scores synced — {{ msg.split('_')[-1] }} players updated.
+  {% elif msg=='sync_error'         %}❌ Sync failed — check server logs.
+  {% else %}✅ Done.{% endif %}
+</div>
+{% endif %}
+
+<!-- Status strip -->
+<div class="status-grid">
+  <div class="stat-tile">
+    <div class="st-val text-gold">{{ teams | length }}</div>
+    <div class="st-lbl">Teams</div>
+  </div>
+  <div class="stat-tile">
+    <div class="st-val">{{ players | length }}</div>
+    <div class="st-lbl">Player pool</div>
+  </div>
+  <div class="stat-tile">
+    <div class="st-val">R{{ draft_state.current_round }} P{{ draft_state.current_pick + 1 }}</div>
+    <div class="st-lbl">Draft position</div>
+  </div>
+  <div class="stat-tile">
+    <div class="st-val {% if league.pony_locked %}text-red{% else %}text-green{% endif %}">
+      {{ '🔒 Locked' if league.pony_locked else '🔓 Open' }}
+    </div>
+    <div class="st-lbl">Ponies</div>
+  </div>
+  <div class="stat-tile">
+    <div class="st-val {% if multipliers_locked %}text-red{% else %}text-green{% endif %}">
+      {{ '🔒 Locked' if multipliers_locked else '🔓 Open' }}
+    </div>
+    <div class="st-lbl">Multipliers</div>
+  </div>
+  <div class="stat-tile">
+    <div class="st-val">Week {{ current_week }}</div>
+    <div class="st-lbl">Current week</div>
+  </div>
+</div>
+
+<!-- Invite code prominent display -->
+<div class="invite-display mb-2">
+  <div>
+    <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem">League Invite Code</div>
+    <div class="invite-code-big">{{ league.invite_code }}</div>
+  </div>
+  <button class="btn btn-ghost" onclick="copyInvite('{{ league.invite_code }}', this)">📋 Copy</button>
+  <a href="/league/{{ league.id }}/audit" class="btn btn-ghost">🧾 Audit Log</a>
+</div>
+
+<!-- Tabs -->
+<div class="admin-tabs">
+  <button class="at on" data-tab="players">Players</button>
+  <button class="at"    data-tab="teams">Teams</button>
+  <button class="at"    data-tab="draft">Draft</button>
+  <button class="at"    data-tab="scores">Score Entry</button>
+  <button class="at"    data-tab="members">Members</button>
+  <button class="at"    data-tab="settings">Settings</button>
+  <button class="at"    data-tab="sync">⚡ NFL Sync</button>
+  <button class="at"    data-tab="moves">🔀 Roster Moves</button>
+</div>
+
+<!-- ══ PLAYERS ══ -->
+<div id="tab-players" class="tab-panel on">
+  <div class="card mb-2">
+    <div class="card-title">➕ Add Player</div>
+    <form method="post" action="/league/{{ league.id }}/manage/player/add">
+      <div class="form-row">
+        <div class="fg"><label>Name</label><input name="name" required placeholder="Patrick Mahomes"/></div>
+        <div class="fg">
+          <label>Position</label>
+          <select name="position">
+            <option>QB</option><option>RB</option><option>WR</option>
+            <option>TE</option><option>K</option><option>DST</option>
+          </select>
+        </div>
+        <div class="fg"><label>NFL Team</label><input name="nfl_team" required placeholder="KC"/></div>
+        <div class="fg" style="align-self:flex-end">
+          <button class="btn btn-gold" style="width:100%">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Player Pool <span class="ct-right">{{ players | length }} total</span></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>POS</th><th>NFL</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for p in players %}
+        <tr id="pr-{{ p.id }}">
+          <td class="fw7">{{ p.name }}</td>
+          <td><span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span></td>
+          <td class="text-muted">{{ p.nfl_team or '—' }}</td>
+          <td>
+            <div style="display:flex;gap:.35rem">
+              <button class="btn btn-ghost btn-xs"
+                onclick="editPlayer({{ p.id }},'{{ p.name | e }}','{{ p.position or '' }}','{{ p.nfl_team or '' }}')">Edit</button>
+              <form method="post" action="/league/{{ league.id }}/manage/player/delete"
+                    style="display:inline" onsubmit="return confirm('Delete {{ p.name | e }}?')">
+                <input type="hidden" name="player_id" value="{{ p.id }}"/>
+                <button type="submit" class="btn btn-ghost btn-xs del-btn">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="edit-player-form" class="card mt-2" style="display:none;border-color:rgba(232,184,75,.35)">
+    <div class="card-title">✏ Edit Player</div>
+    <form method="post" action="/league/{{ league.id }}/manage/player/edit">
+      <input type="hidden" name="player_id" id="ep-id"/>
+      <div class="form-row">
+        <div class="fg"><label>Name</label><input name="name" id="ep-name" required/></div>
+        <div class="fg">
+          <label>Position</label>
+          <select name="position" id="ep-pos">
+            <option>QB</option><option>RB</option><option>WR</option>
+            <option>TE</option><option>K</option><option>DST</option>
+          </select>
+        </div>
+        <div class="fg"><label>NFL Team</label><input name="nfl_team" id="ep-nfl" required/></div>
+        <div class="fg" style="align-self:flex-end;display:flex;gap:.5rem">
+          <button class="btn btn-gold" style="flex:1">Save</button>
+          <button type="button" class="btn btn-ghost"
+                  onclick="document.getElementById('edit-player-form').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ TEAMS ══ -->
+<div id="tab-teams" class="tab-panel">
+  <div class="card mb-2">
+    <div class="card-title">➕ Add Team</div>
+    <form method="post" action="/league/{{ league.id }}/manage/team/add">
+      <div class="form-row">
+        <div class="fg"><label>Team Name</label><input name="name" required placeholder="Team Chaos"/></div>
+        <div class="fg">
+          <label>Owner Username</label>
+          <select name="owner_username">
+            {% for m in members %}<option>{{ m.username }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fg" style="align-self:flex-end">
+          <button class="btn btn-gold" style="width:100%">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Teams</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Owner</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for t in teams %}
+        <tr>
+          <td class="fw7">{{ t.name }}</td>
+          <td>{{ t.owner_name }}</td>
+          <td>
+            <div style="display:flex;gap:.35rem">
+              <button class="btn btn-ghost btn-xs"
+                onclick="editTeam({{ t.id }},'{{ t.name | e }}','{{ t.owner_name | e }}')">Edit</button>
+              <form method="post" action="/league/{{ league.id }}/manage/team/delete"
+                    style="display:inline" onsubmit="return confirm('Delete {{ t.name | e }}?')">
+                <input type="hidden" name="team_id" value="{{ t.id }}"/>
+                <button type="submit" class="btn btn-ghost btn-xs del-btn">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="edit-team-form" class="card mt-2" style="display:none;border-color:rgba(232,184,75,.35)">
+    <div class="card-title">✏ Edit Team</div>
+    <form method="post" action="/league/{{ league.id }}/manage/team/edit">
+      <input type="hidden" name="team_id" id="et-id"/>
+      <div class="form-row">
+        <div class="fg"><label>Name</label><input name="name" id="et-name" required/></div>
+        <div class="fg">
+          <label>Owner</label>
+          <select name="owner_username" id="et-owner">
+            {% for m in members %}<option>{{ m.username }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fg" style="align-self:flex-end;display:flex;gap:.5rem">
+          <button class="btn btn-gold" style="flex:1">Save</button>
+          <button type="button" class="btn btn-ghost"
+                  onclick="document.getElementById('edit-team-form').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ DRAFT ══ -->
+<div id="tab-draft" class="tab-panel">
+  <div class="card mb-2">
+    <div class="card-title">Draft Controls</div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
+      <form method="post" action="/league/{{ league.id }}/manage/draft/rewind"
+            onsubmit="return confirm('Rewind last pick?')">
+        <button class="btn btn-ghost">⏮ Rewind Last Pick</button>
+      </form>
+      <form method="post" action="/league/{{ league.id }}/manage/draft/reset"
+            onsubmit="return confirm('RESET the entire draft? All non-pony picks will be cleared.')">
+        <button class="btn btn-ember">🗑 Full Reset</button>
+      </form>
+    </div>
+    <p class="text-muted text-sm mt-2">
+      Current: Round {{ draft_state.current_round }}, Pick {{ draft_state.current_pick + 1 }}
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🐴 Pony Lock</div>
+    <form method="post" action="/league/{{ league.id }}/manage/pony/lock"
+          style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+      <button name="lock" value="1"
+              class="btn {% if league.pony_locked %}btn-ember{% else %}btn-ghost{% endif %}">🔒 Lock</button>
+      <button name="lock" value="0"
+              class="btn {% if not league.pony_locked %}btn-green{% else %}btn-ghost{% endif %}">🔓 Unlock</button>
+      <span class="text-muted text-sm">
+        Currently:
+        <strong class="{% if league.pony_locked %}text-red{% else %}text-green{% endif %}">
+          {{ 'Locked' if league.pony_locked else 'Unlocked' }}
+        </strong>
+      </span>
+    </form>
+  </div>
+</div>
+
+<!-- ══ SCORE ENTRY ══ -->
+<div id="tab-scores" class="tab-panel">
+  <div class="card">
+    <div class="card-title">Enter Player Stats
+      <span class="ct-right">Week {{ current_week }}</span>
+    </div>
+    <form method="post" action="/league/{{ league.id }}/manage/scores/entry">
+      <div class="form-row">
+        <div class="fg">
+          <label>Player</label>
+          <select name="player_id" required>
+            <option value="">— Select —</option>
+            {% for p in players %}
+            <option value="{{ p.id }}">{{ p.name }} ({{ p.position }}, {{ p.nfl_team }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="fg">
+          <label>Week</label>
+          <input type="number" name="week" value="{{ current_week }}" min="1" max="22" required/>
+        </div>
+      </div>
+
+      <div class="score-grid">
+        <div class="fg"><label>Receptions</label>   <input type="number" name="receptions"       step=".5" value="0"/></div>
+        <div class="fg"><label>Rec Yards</label>    <input type="number" name="receiving_yards"  step=".5" value="0"/></div>
+        <div class="fg"><label>Rush Yards</label>   <input type="number" name="rushing_yards"    step=".5" value="0"/></div>
+        <div class="fg"><label>Return Yards</label> <input type="number" name="return_yards"     step=".5" value="0"/></div>
+        <div class="fg"><label>Pass Yards</label>   <input type="number" name="passing_yards"    step=".5" value="0"/></div>
+        <div class="fg"><label>Total TDs</label>    <input type="number" name="total_tds"        value="0" min="0"/></div>
+        <div class="fg"><label>Fumbles Lost</label> <input type="number" name="fumbles_lost"     value="0" min="0"/></div>
+        <div class="fg"><label>INTs</label>         <input type="number" name="interceptions"    value="0" min="0"/></div>
+        <div class="fg"><label>Ret Fum Lost</label> <input type="number" name="return_fumbles_lost" value="0" min="0"/></div>
+      </div>
+
+      <hr/>
+      <div class="form-row">
+        <div class="fg">
+          <label>Override Points <span class="text-muted">(leave blank to use stats)</span></label>
+          <input type="number" name="override_points" step=".01" placeholder="e.g. 24.5"/>
+        </div>
+        <div class="fg">
+          <label>Override Note</label>
+          <input type="text" name="override_note" placeholder="e.g. OT bonus"/>
+        </div>
+      </div>
+
+      <div id="score-preview" style="background:var(--s2);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;display:none">
+        Estimated: <strong id="preview-pts" class="text-gold font-c" style="font-size:1.1rem"></strong> pts
+      </div>
+      <button class="btn btn-gold">Save Stats</button>
+    </form>
+  </div>
+
+  {% if week_scores %}
+  <div class="card mt-2">
+    <div class="card-title">Week {{ current_week }} — Entered</div>
+    <div class="tbl-wrap">
+      <table style="font-size:.82rem">
+        <thead><tr><th>Player</th><th>Rec</th><th>RecYd</th><th>RushYd</th><th>PassYd</th><th>TDs</th><th>FL</th><th>INT</th><th>Override</th></tr></thead>
+        <tbody>
+        {% for pid, s in week_scores.items() %}
+        {% set pl = players | selectattr('id','equalto',pid) | first %}
+        {% if pl %}
+        <tr>
+          <td class="fw7">{{ pl.name }}</td>
+          <td>{{ s.receptions or 0 }}</td>
+          <td>{{ s.receiving_yards or 0 }}</td>
+          <td>{{ s.rushing_yards or 0 }}</td>
+          <td>{{ s.passing_yards or 0 }}</td>
+          <td>{{ s.total_tds or 0 }}</td>
+          <td class="text-red">{{ s.fumbles_lost or 0 }}</td>
+          <td class="text-red">{{ s.interceptions or 0 }}</td>
+          <td class="text-gold">{% if s.override_points is not none %}{{ s.override_points }}{% endif %}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══ MEMBERS ══ -->
+<div id="tab-members" class="tab-panel">
+  <div class="card">
+    <div class="card-title">League Members
+      <span class="ct-right">{{ members | length }} total</span>
+    </div>
+    <table>
+      <thead><tr><th>Username</th><th>Role</th><th>Joined</th></tr></thead>
+      <tbody>
+      {% for m in members %}
+      <tr>
+        <td class="fw7">{{ m.username }}</td>
+        <td>
+          {% if m.id == league.commissioner_id %}
+          <span class="badge b-comm">Commissioner</span>
+          {% else %}
+          <span class="badge b-green">Member</span>
+          {% endif %}
+        </td>
+        <td class="text-muted text-sm">{{ m.joined_at[:10] }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ══ -->
+<div id="tab-settings" class="tab-panel">
+  <div class="card">
+    <div class="card-title">⚙ League Settings</div>
+    <form method="post" action="/league/{{ league.id }}/manage/settings">
+      <div class="form-row">
+        <div class="fg">
+          <label>League Name</label>
+          <input name="league_name" value="{{ league.name }}" required/>
+        </div>
+        <div class="fg">
+          <label>Picks Per Team</label>
+          <input type="number" name="picks_per_team" value="{{ league.picks_per_team }}" min="1" max="50"/>
+        </div>
+        <div class="fg">
+          <label>Max Ponies Per Team</label>
+          <input type="number" name="max_ponies_per_team" value="{{ league.max_ponies_per_team }}" min="0" max="20"/>
+        </div>
+      </div>
+      {# multiplier_lock_ts is now managed by the dedicated lock panel below #}
+      <input type="hidden" name="multiplier_lock_ts" value="{{ league.multiplier_lock_ts }}"/>
+      <div class="fg">
+        <label>Pick Timer (seconds per pick — set 0 to disable)</label>
+        <input type="number" name="pick_timer_seconds"
+               value="{{ league.pick_timer_seconds or 0 }}" min="0" max="600"
+               placeholder="e.g. 90"/>
+        <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">
+          When set, the draft clock auto-advances and auto-skips the pick when time expires.
+          Recommended: 60–120 s for a tight draft, 0 for casual async leagues.
+        </div>
+      </div>
+      <button class="btn btn-gold mt-1">Save Settings</button>
+    </form>
+  </div>
+
+  <!-- ── Multiplier Lock ───────────────────────────────────────────────── -->
+  <div class="card mt-2">
+    <div class="card-title">🔒 Multiplier Lock
+      <span class="ct-right" id="lock-status-label">
+        {% if multipliers_locked %}
+          <span style="color:var(--ember)">● Locked</span>
+        {% else %}
+          <span style="color:var(--green)">● Unlocked</span>
+        {% endif %}
+      </span>
+    </div>
+
+    <p class="text-sm text-muted" style="margin-bottom:1rem">
+      While <strong style="color:var(--green)">unlocked</strong>, managers can set their player multipliers.
+      <strong style="color:var(--ember)">Lock</strong> before the first game of each round kicks off.
+      Current lock time: <code style="color:var(--gold);font-size:.82rem">{{ league.multiplier_lock_ts[:16] | replace("T"," ") }} UTC</code>
+    </p>
+
+    {% set round_names = {1:"Wild Card",2:"Divisional",3:"Conf. Champ.",4:"Super Bowl"} %}
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem">
+      {% for w in [1,2,3,4] %}
+      <div style="background:var(--s2);border:1px solid {% if w in snapshotted_weeks %}rgba(34,197,94,.35){% else %}var(--border){% endif %};border-radius:var(--r);padding:.4rem .75rem;font-size:.75rem">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:{% if w in snapshotted_weeks %}var(--green){% else %}var(--muted){% endif %}">
+          {{ round_names[w] }}
+        </span>
+        <span style="margin-left:.4rem;color:{% if w in snapshotted_weeks %}var(--green){% else %}var(--muted){% endif %}">
+          {% if w in snapshotted_weeks %}✓ Snapshotted{% else %}— Not yet locked{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="display:flex;gap:.65rem;flex-wrap:wrap;margin-bottom:1.25rem">
+      <form method="post" action="/league/{{ league.id }}/manage/multiplier-lock">
+        <input type="hidden" name="action" value="unlock"/>
+        <button class="btn btn-green" {% if not multipliers_locked %}disabled style="opacity:.5"{% endif %}>
+          🔓 Unlock Now
+        </button>
+      </form>
+      <form method="post" action="/league/{{ league.id }}/manage/multiplier-lock">
+        <input type="hidden" name="action" value="lock"/>
+        <button class="btn btn-ember" {% if multipliers_locked %}disabled style="opacity:.5"{% endif %}>
+          🔒 Lock Now
+        </button>
+      </form>
+    </div>
+
+    <div class="card-title" style="font-size:.72rem;margin-bottom:.75rem">⏰ Auto-Lock at First Kickoff</div>
+    <p class="text-sm text-muted" style="margin-bottom:.75rem">
+      Set the lock time to the first kickoff of a playoff round — managers must finalize
+      multipliers before that game starts.
+    </p>
+    <div id="kickoff-btns" style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="loadKickoffs()" id="load-kickoffs-btn">
+        🏈 Fetch Game Times from ESPN
+      </button>
+    </div>
+    <div id="kickoff-results" style="margin-top:.75rem;display:none">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.6rem" id="kickoff-grid"></div>
+    </div>
+
+    <hr style="margin:1.25rem 0"/>
+    <div class="card-title" style="font-size:.72rem;margin-bottom:.5rem">🗓 Set Custom Lock Time</div>
+    <form method="post" action="/league/{{ league.id }}/manage/multiplier-lock"
+          style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap">
+      <input type="hidden" name="action" value="set"/>
+      <div class="fg" style="margin:0;flex:1;min-width:200px">
+        <label>Date &amp; Time (your local time)</label>
+        <input type="datetime-local" name="lock_ts" id="lock-dt-input" required/>
+      </div>
+      <button class="btn btn-ghost">Set Lock Time</button>
+    </form>
+    <p class="text-sm text-muted" style="margin-top:.4rem">
+      Times are converted to UTC automatically.
+    </p>
+  </div>
+</div>
+
+<div id="tab-sync" class="tab-panel">
+  <div class="card mb-2">
+    <div class="card-title">🏈 NFL Roster Sync</div>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1rem">
+      Pulls current NFL rosters from nflfastR and adds all active players
+      (QB, RB, WR, TE, K, DST) to this league's player pool.
+      Safe to run multiple times — existing players are skipped.
+    </p>
+    <form method="post" action="/league/{{ league.id }}/manage/sync/roster">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer">
+          <input type="checkbox" name="overwrite" value="true"/>
+          Update existing players' team assignments
+        </label>
+        <button class="btn btn-gold">Sync Roster from NFL</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-title">📊 Weekly Score Sync</div>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:1rem">
+      Pulls official NFL stats for a given week and updates player scores automatically.
+      Manual score overrides are preserved and won't be overwritten.
+      During live game windows, scores auto-sync every 60 seconds in the background.
+    </p>
+    <form method="post" action="/league/{{ league.id }}/manage/sync/week"
+          style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <div class="fg" style="margin:0;min-width:140px">
+        <label>Week</label>
+        <input type="number" name="week" value="{{ current_nfl_week }}"
+               min="1" max="18" style="width:80px"/>
+      </div>
+      <button class="btn btn-gold" style="margin-top:1.3rem">Sync Scores Now</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔄 Auto-Sync Status</div>
+    {% if sync_status %}
+    <div style="font-size:.82rem;font-family:monospace;background:var(--bg2);
+                padding:.75rem 1rem;border-radius:6px;line-height:1.7">
+      {% if sync_status.synced_at %}
+        <div><span style="color:var(--muted)">Last synced:</span>
+          {{ sync_status.synced_at[:19] | replace("T"," ") }} UTC</div>
+      {% endif %}
+      {% if sync_status.week %}
+        <div><span style="color:var(--muted)">Week:</span> {{ sync_status.week }}</div>
+      {% endif %}
+      {% if sync_status.updated is defined %}
+        <div><span style="color:var(--muted)">Updated:</span>
+          <span style="color:var(--green)">{{ sync_status.updated }} players</span></div>
+      {% endif %}
+      {% if sync_status.skipped is defined %}
+        <div><span style="color:var(--muted)">Skipped:</span> {{ sync_status.skipped }}</div>
+      {% endif %}
+      {% if sync_status.error %}
+        <div style="color:var(--ember)">Error: {{ sync_status.error }}</div>
+      {% endif %}
+      {% if sync_status.message %}
+        <div style="color:var(--muted)">{{ sync_status.message }}</div>
+      {% endif %}
+    </div>
+    {% else %}
+    <p style="font-size:.85rem;color:var(--muted)">
+      No sync has run yet for this league.
+      Auto-sync activates automatically during NFL game windows
+      (Sundays 1pm–midnight, Monday/Thursday nights).
+    </p>
+    {% endif %}
+
+    <div style="margin-top:1rem;font-size:.78rem;color:var(--muted)">
+      <strong>Current NFL week:</strong> {{ current_nfl_week }}<br>
+      <strong>Auto-sync interval:</strong> Every 60 s during game windows · Every hour otherwise<br>
+      <strong>Data source:</strong> nflfastR via nfl-data-py (~5–10 min lag behind live play)
+    </div>
+  </div>
+</div>
+
+<div id="tab-moves" class="tab-panel">
+  {% if msg == 'player_moved' %}
+  <div class="alert alert-success">✅ Player moved successfully.</div>
+  {% endif %}
+  {% if msg == 'same_team' %}
+  <div class="alert alert-warning">⚠ Player is already on that team.</div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-title">🔀 Move Player Between Teams
+      <span class="ct-right">Commissioner only</span>
+    </div>
+    <p class="text-muted text-sm" style="margin-bottom:1rem">
+      Use this to correct draft mistakes. Select a player from their current team, then choose the destination team.
+    </p>
+
+    <div class="form-row" style="margin-bottom:1rem">
+      <div class="fg">
+        <label>Filter by team</label>
+        <select id="move-team-filter" onchange="filterMoveRoster()">
+          <option value="">All teams</option>
+          {% for t in teams %}
+          <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="fg">
+        <label>Filter by position</label>
+        <select id="move-pos-filter" onchange="filterMoveRoster()">
+          <option value="">All positions</option>
+          <option>QB</option><option>RB</option><option>WR</option>
+          <option>TE</option><option>K</option><option>DST</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table id="move-roster-table">
+        <thead>
+          <tr>
+            <th>Player</th><th>Pos</th><th>NFL</th><th>Current Team</th><th>Move To</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rosters_for_move %}
+          <tr data-team-id="{{ r.team_id }}" data-pos="{{ r.position or '' }}">
+            <td class="fw7">{{ r.player_name }}{% if r.is_pony %} <span class="badge b-ember">🐴</span>{% endif %}</td>
+            <td><span class="badge b-{{ r.position or 'UNK' }}">{{ r.position or '?' }}</span></td>
+            <td class="text-muted text-sm">{{ r.nfl_team or '—' }}</td>
+            <td>{{ r.team_name }}</td>
+            <td>
+              {% if not r.is_pony %}
+              <form method="post" action="/league/{{ league.id }}/manage/roster/move" style="display:flex;gap:.4rem;align-items:center">
+                <input type="hidden" name="roster_id" value="{{ r.roster_id }}"/>
+                <select name="to_team_id" style="font-size:.78rem;padding:.25rem .5rem">
+                  {% for t in teams %}
+                  <option value="{{ t.id }}" {% if t.id == r.team_id %}disabled style="color:var(--muted)"{% endif %}>
+                    {{ t.name }}{% if t.id == r.team_id %} (current){% endif %}
+                  </option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-ember btn-xs" type="submit">Move</button>
+              </form>
+              {% else %}
+              <span class="text-muted text-sm" style="font-style:italic">Pony — not moveable</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if r.is_pony %}
+              <form method="post" action="/league/{{ league.id }}/manage/pony/delete"
+                    onsubmit="return confirm('Remove 🐴 {{ r.player_name }} from {{ r.team_name }}?')">
+                <input type="hidden" name="roster_id" value="{{ r.roster_id }}"/>
+                <button class="btn btn-ghost btn-xs" style="color:var(--ember);border-color:rgba(201,69,26,.4)"
+                        type="submit">✕ Remove</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-c text-muted">No players on any roster yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// Tab switching
+document.querySelectorAll('.at').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.at').forEach(b => b.classList.remove('on'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('on'));
+    btn.classList.add('on');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('on');
+  });
+});
+if (location.hash) {
+  const btn = document.querySelector(`.at[data-tab="${location.hash.slice(1)}"]`);
+  if (btn) btn.click();
+}
+
+function editPlayer(id, name, pos, nfl) {
+  document.getElementById('ep-id').value   = id;
+  document.getElementById('ep-name').value = name;
+  document.getElementById('ep-nfl').value  = nfl;
+  const sel = document.getElementById('ep-pos');
+  for (let o of sel.options) o.selected = (o.value === pos);
+  const form = document.getElementById('edit-player-form');
+  form.style.display = 'block';
+  form.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function editTeam(id, name, owner) {
+  document.getElementById('et-id').value   = id;
+  document.getElementById('et-name').value = name;
+  const sel = document.getElementById('et-owner');
+  for (let o of sel.options) o.selected = (o.value === owner);
+  const form = document.getElementById('edit-team-form');
+  form.style.display = 'block';
+  form.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+// Live score preview
+const SCORING = {
+  receptions:1, receiving_yards:.1, rushing_yards:.1, return_yards:.1,
+  passing_yards:.04, total_tds:6, fumbles_lost:-2, interceptions:-2
+};
+const scoreFields = Object.keys(SCORING);
+const previewEl  = document.getElementById('score-preview');
+const previewPts = document.getElementById('preview-pts');
+function updatePreview() {
+  const ov = document.querySelector('[name="override_points"]')?.value;
+  if (ov?.trim()) {
+    previewPts.textContent = parseFloat(ov).toFixed(2);
+    previewEl.style.display = 'block'; return;
+  }
+  let total = 0;
+  scoreFields.forEach(f => {
+    const el = document.querySelector(`[name="${f}"]`);
+    if (el) total += (parseFloat(el.value)||0) * SCORING[f];
+  });
+  previewPts.textContent = total.toFixed(2);
+  previewEl.style.display = 'block';
+}
+scoreFields.forEach(f => document.querySelector(`[name="${f}"]`)?.addEventListener('input', updatePreview));
+document.querySelector('[name="override_points"]')?.addEventListener('input', updatePreview);
+
+function copyInvite(code, btn) {
+  navigator.clipboard.writeText(code).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1800);
+  });
+}
+// ── Multiplier lock: fetch kickoff times from ESPN ────────────────────────
+const LEAGUE_ID_MGR = {{ league.id }};
+const ROUND_NAMES_MGR = {1:"Wild Card",2:"Divisional",3:"Conf. Champ.",4:"Super Bowl"};
+
+async function loadKickoffs() {
+  const btn = document.getElementById('load-kickoffs-btn');
+  btn.textContent = '⏳ Loading…';
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/league/${LEAGUE_ID_MGR}/playoff-kickoffs`);
+    const data = await r.json();
+    const grid = document.getElementById('kickoff-grid');
+    const box  = document.getElementById('kickoff-results');
+    grid.innerHTML = '';
+    Object.entries(data.rounds || {}).forEach(([week, info]) => {
+      const card = document.createElement('div');
+      card.style.cssText = 'background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:.75rem .9rem';
+      if (info.error || !info.first_kickoff) {
+        card.innerHTML = `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;text-transform:uppercase;color:var(--muted)">${ROUND_NAMES_MGR[week]||'Week '+week}</div><div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">${info.error||'No games scheduled yet'}</div>`;
+      } else {
+        const dt = new Date(info.first_kickoff);
+        const localStr = dt.toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+        // Format for datetime-local input (local time, no tz)
+        const pad = n => String(n).padStart(2,'0');
+        const dtLocal = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        card.innerHTML = `
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;text-transform:uppercase;color:var(--gold)">${ROUND_NAMES_MGR[week]||'Week '+week}</div>
+          <div style="font-size:.78rem;margin:.3rem 0 .6rem;color:var(--text)">${localStr}</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:.5rem">${info.game_count} game${info.game_count!==1?'s':''} · first kickoff</div>
+          <button class="btn btn-ghost btn-xs" onclick="setLockToKickoff('${dt.toISOString()}','${dtLocal}')">
+            Use for Week ${week}
+          </button>`;
+      }
+      grid.appendChild(card);
+    });
+    box.style.display = 'block';
+    btn.textContent = '🔄 Refresh';
+  } catch(e) {
+    btn.textContent = '⚠ Failed — retry';
+  }
+  btn.disabled = false;
+}
+
+function setLockToKickoff(isoUtc, dtLocal) {
+  // Fill the datetime-local input with local time (browser handles tz)
+  const inp = document.getElementById('lock-dt-input');
+  if (inp) inp.value = dtLocal;
+  inp.closest('form').scrollIntoView({behavior:'smooth', block:'center'});
+  inp.style.borderColor = 'var(--gold)';
+  setTimeout(() => inp.style.borderColor = '', 2000);
+}
+
+// Convert datetime-local (local time) to UTC ISO before submit
+document.querySelectorAll('form[action*="multiplier-lock"]').forEach(form => {
+  if (!form.querySelector('[name="lock_ts"]')) return;
+  form.addEventListener('submit', e => {
+    const inp = form.querySelector('[name="lock_ts"]');
+    if (!inp || !inp.value) return;
+    // datetime-local value is in local time; convert to UTC ISO
+    const d = new Date(inp.value);
+    inp.value = d.toISOString();
+  });
+});
+
+function filterMoveRoster() {
+  const teamId = document.getElementById('move-team-filter')?.value || '';
+  const pos    = document.getElementById('move-pos-filter')?.value  || '';
+  document.querySelectorAll('#move-roster-table tbody tr').forEach(row => {
+    const teamMatch = !teamId || row.dataset.teamId === teamId;
+    const posMatch  = !pos    || row.dataset.pos    === pos;
+    row.style.display = (teamMatch && posMatch) ? '' : 'none';
+  });
+}
+
+</script>
+{% endblock %}

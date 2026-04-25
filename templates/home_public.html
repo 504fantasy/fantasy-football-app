@@ -1,0 +1,2273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>504 Fantasy — Play Like a Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,700;1,800&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ════════════════════════════════════════════════════
+   DESIGN TOKENS
+════════════════════════════════════════════════════ */
+:root {
+  --bg:      #080a0e;
+  --s1:      #0f1218;
+  --s2:      #161b24;
+  --s3:      #1d2330;
+  --border:  #232a38;
+  --border2: #2e3848;
+  --gold:    #e8b84b;
+  --gold2:   #f5d06a;
+  --gold3:   #c49a2e;
+  --ember:   #c9451a;
+  --ember2:  #e05820;
+  --green:   #22c55e;
+  --red:     #ef4444;
+  --text:    #eaecf2;
+  --muted:   #5e6e88;
+  --muted2:  #8898b0;
+  --r:       8px;
+  --rr:      14px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Barlow', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ════════════════════════════════════════════════════
+   PAGE ROUTING
+════════════════════════════════════════════════════ */
+.page { display: none; min-height: 100vh }
+.page.active { display: block }
+
+/* ════════════════════════════════════════════════════
+   SCROLLBAR
+════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px }
+::-webkit-scrollbar-track { background: var(--bg) }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px }
+
+/* ════════════════════════════════════════════════════
+   NAV
+════════════════════════════════════════════════════ */
+.site-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 999;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 2.5rem;
+  background: rgba(8,10,14,0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(232,184,75,0.18);
+  transition: background 0.3s;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nav-logo-text {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.nav-logo-text em {
+  font-style: normal;
+  color: var(--gold);
+}
+
+.nav-links {
+  display: flex;
+  gap: .25rem;
+  margin-left: 2.5rem;
+  flex: 1;
+}
+.nav-link {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted2);
+  text-decoration: none;
+  padding: .38rem .9rem;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: all .15s;
+  background: none;
+  border: none;
+}
+.nav-link:hover { color: var(--text); background: var(--s2) }
+.nav-link.active { color: var(--gold) }
+
+.nav-end {
+  margin-left: auto;
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+}
+
+/* ════════════════════════════════════════════════════
+   BUTTONS
+════════════════════════════════════════════════════ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .52rem 1.25rem;
+  border: none;
+  border-radius: var(--r);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all .18s;
+  white-space: nowrap;
+  line-height: 1;
+}
+.btn-gold { background: var(--gold); color: #080a0e }
+.btn-gold:hover { background: var(--gold2); transform: translateY(-1px) }
+.btn-ghost {
+  background: transparent;
+  color: var(--muted2);
+  border: 1px solid var(--border2);
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--muted) }
+.btn-ember { background: var(--ember); color: #fff }
+.btn-ember:hover { background: var(--ember2) }
+.btn-outline-gold {
+  background: transparent;
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+}
+.btn-outline-gold:hover { background: rgba(232,184,75,.1) }
+.btn-lg { padding: .85rem 2.2rem; font-size: 1rem }
+.btn-xl { padding: 1rem 2.8rem; font-size: 1.1rem; border-radius: 10px }
+.btn-sm { padding: .32rem .75rem; font-size: .75rem }
+
+/* ════════════════════════════════════════════════════
+   FORMS
+════════════════════════════════════════════════════ */
+.fg { margin-bottom: 1.1rem }
+.fg label {
+  display: block;
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted2);
+  margin-bottom: .38rem;
+}
+.fg input, .fg select, .fg textarea {
+  width: 100%;
+  background: var(--s2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  padding: .62rem .85rem;
+  font-family: 'Barlow', sans-serif;
+  font-size: .92rem;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+}
+.fg input:focus, .fg select:focus, .fg textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(232,184,75,.12);
+}
+.fg input::placeholder { color: var(--muted) }
+.fg select option { background: var(--s2) }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem }
+
+/* ════════════════════════════════════════════════════
+   UTILITY
+════════════════════════════════════════════════════ */
+.text-gold   { color: var(--gold) }
+.text-muted  { color: var(--muted2) }
+.text-ember  { color: var(--ember) }
+.text-green  { color: var(--green) }
+.text-c      { text-align: center }
+.fw9 { font-weight: 900 }
+.font-c {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.mono { font-family: 'DM Mono', monospace }
+
+/* alert */
+.alert {
+  padding: .7rem 1rem;
+  border-radius: var(--r);
+  font-size: .855rem;
+  margin-bottom: 1.1rem;
+  border-left: 3px solid;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.alert-success { background: rgba(34,197,94,.08); border-color: var(--green); color: var(--green) }
+.alert-danger  { background: rgba(239,68,68,.08); border-color: var(--red);   color: #fca5a5 }
+.alert-warning { background: rgba(232,184,75,.08); border-color: var(--gold); color: var(--gold) }
+
+
+/* ════════════════════════════════════════════════════
+
+   PAGE 1: HOME / LANDING
+
+════════════════════════════════════════════════════ */
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 9rem 2.5rem 5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Field grid background */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(232,184,75,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232,184,75,0.04) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 80%);
+  pointer-events: none;
+}
+/* Glow blob */
+.hero-glow {
+  position: absolute;
+  width: 900px; height: 600px;
+  top: -100px; left: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(232,184,75,.07) 0%, rgba(201,69,26,.04) 40%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: center;
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  background: rgba(232,184,75,.1);
+  border: 1px solid rgba(232,184,75,.25);
+  border-radius: 100px;
+  padding: .3rem .9rem;
+  font-family: 'DM Mono', monospace;
+  font-size: .72rem;
+  color: var(--gold);
+  letter-spacing: .06em;
+  margin-bottom: 1.5rem;
+}
+.eyebrow-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1) }
+  50% { opacity: .4; transform: scale(.7) }
+}
+
+.hero-headline {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(3.2rem, 6vw, 5.5rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: .95;
+  letter-spacing: -.01em;
+  margin-bottom: 1.5rem;
+}
+.hero-headline .line-gold {
+  color: var(--gold);
+  font-style: italic;
+}
+.hero-headline .line-stroke {
+  -webkit-text-stroke: 1.5px rgba(232,184,75,.4);
+  color: transparent;
+}
+
+.hero-body {
+  font-size: 1.1rem;
+  color: var(--muted2);
+  line-height: 1.65;
+  margin-bottom: 2.2rem;
+  max-width: 460px;
+}
+
+.hero-cta {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hero-trust {
+  display: flex;
+  gap: 2rem;
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+.trust-stat { }
+.trust-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--gold);
+  line-height: 1;
+}
+.trust-label {
+  font-size: .75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-top: .15rem;
+}
+
+/* Hero right: mock app card */
+.hero-mockup {
+  position: relative;
+}
+.mockup-card {
+  background: var(--s1);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(232,184,75,.06),
+    0 40px 80px rgba(0,0,0,.6),
+    0 0 60px rgba(232,184,75,.04);
+  transform: perspective(1000px) rotateY(-6deg) rotateX(2deg);
+  transition: transform .4s ease;
+}
+.mockup-card:hover {
+  transform: perspective(1000px) rotateY(-2deg) rotateX(1deg);
+}
+.mockup-header {
+  background: var(--s2);
+  border-bottom: 1px solid var(--border);
+  padding: .8rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.mock-dot { width: 10px; height: 10px; border-radius: 50% }
+.mock-d1 { background: #ff5f57 }
+.mock-d2 { background: #ffbd2e }
+.mock-d3 { background: #28c840 }
+.mockup-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin-left: .5rem;
+}
+.mockup-body { padding: 1.2rem }
+.mock-clock {
+  background: linear-gradient(135deg, rgba(232,184,75,.15), rgba(201,69,26,.08));
+  border: 1px solid rgba(232,184,75,.25);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1rem;
+}
+.mock-clock-label { font-size: .65rem; color: var(--gold); font-weight: 700; text-transform: uppercase; letter-spacing: .1em }
+.mock-clock-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-top: .1rem;
+}
+.mock-pick-row {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .55rem .65rem;
+  border-radius: 7px;
+  margin-bottom: .4rem;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  font-size: .82rem;
+}
+.mock-pick-row.highlight {
+  background: rgba(232,184,75,.08);
+  border-color: rgba(232,184,75,.2);
+}
+.mock-pos {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .65rem;
+  font-weight: 700;
+  padding: .15rem .4rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.pos-qb { background: rgba(124,58,237,.2); color: #c4b5fd; border: 1px solid rgba(124,58,237,.3) }
+.pos-rb { background: rgba(22,163,74,.2); color: #86efac; border: 1px solid rgba(22,163,74,.3) }
+.pos-wr { background: rgba(3,105,161,.2); color: #7dd3fc; border: 1px solid rgba(3,105,161,.3) }
+.pos-te { background: rgba(180,83,0,.2);  color: #fdba74; border: 1px solid rgba(180,83,0,.3) }
+.pos-k  { background: rgba(113,113,122,.2); color: #d4d4d8; border: 1px solid rgba(113,113,122,.3) }
+.mock-pick-name { flex: 1; font-weight: 500 }
+.mock-pick-pts {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.mock-badge {
+  font-size: .62rem; font-weight: 700; text-transform: uppercase;
+  padding: .12rem .4rem; border-radius: 4px;
+  background: rgba(201,69,26,.2); color: #fb923c; border: 1px solid rgba(201,69,26,.3);
+}
+
+/* floating decorations */
+.hero-float-1, .hero-float-2 {
+  position: absolute;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  background: var(--s1);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: .5rem .85rem;
+  color: var(--muted2);
+  box-shadow: 0 8px 20px rgba(0,0,0,.4);
+  animation: floatCard 4s ease-in-out infinite;
+}
+.hero-float-1 { top: -20px; right: -20px; animation-delay: 0s }
+.hero-float-2 { bottom: 30px; left: -30px; animation-delay: 2s }
+.float-val {
+  font-size: 1.2rem; font-weight: 900;
+  color: var(--gold);
+  display: block;
+  margin-bottom: .1rem;
+}
+@keyframes floatCard {
+  0%,100% { transform: translateY(0) }
+  50% { transform: translateY(-8px) }
+}
+
+/* ── FEATURES STRIP ── */
+.features-strip {
+  background: var(--s1);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 3.5rem 2.5rem;
+}
+.features-strip-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+}
+.feat-item {
+  padding: 1.5rem 2rem;
+  border-right: 1px solid var(--border);
+  transition: background .2s;
+}
+.feat-item:last-child { border-right: none }
+.feat-item:hover { background: var(--s2) }
+.feat-icon {
+  font-size: 1.8rem;
+  margin-bottom: .75rem;
+}
+.feat-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: .4rem;
+}
+.feat-desc {
+  font-size: .82rem;
+  color: var(--muted2);
+  line-height: 1.55;
+}
+
+/* ── HOW IT WORKS ── */
+.section {
+  padding: 6rem 2.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.section-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: .72rem;
+  color: var(--gold);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: .75rem;
+}
+.section-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: clamp(2.2rem, 4vw, 3.5rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1;
+  letter-spacing: -.01em;
+  margin-bottom: 1rem;
+}
+.section-title em { font-style: italic; color: var(--gold) }
+.section-sub {
+  font-size: 1rem;
+  color: var(--muted2);
+  max-width: 520px;
+  line-height: 1.6;
+  margin-bottom: 3.5rem;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+.step-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rr);
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s, transform .2s;
+}
+.step-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(232,184,75,.04) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity .3s;
+}
+.step-card:hover { border-color: rgba(232,184,75,.3); transform: translateY(-3px) }
+.step-card:hover::before { opacity: 1 }
+.step-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 5rem;
+  font-weight: 900;
+  line-height: 1;
+  color: rgba(232,184,75,.1);
+  position: absolute;
+  top: 1rem; right: 1.5rem;
+  letter-spacing: -.02em;
+}
+.step-icon { font-size: 2rem; margin-bottom: 1rem }
+.step-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: .5rem;
+}
+.step-desc { font-size: .875rem; color: var(--muted2); line-height: 1.6 }
+
+/* ── SCORING SECTION ── */
+.scoring-section {
+  padding: 6rem 2.5rem;
+  background: var(--s1);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.scoring-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5rem;
+  align-items: center;
+}
+.scoring-table-wrap {
+  background: var(--s2);
+  border: 1px solid var(--border2);
+  border-radius: var(--rr);
+  overflow: hidden;
+}
+.scoring-table-header {
+  background: var(--s3);
+  padding: .85rem 1.2rem;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--muted2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+}
+.sc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .7rem 1.2rem;
+  border-bottom: 1px solid rgba(35,42,56,.7);
+  font-size: .875rem;
+  transition: background .15s;
+}
+.sc-row:last-child { border-bottom: none }
+.sc-row:hover { background: rgba(232,184,75,.04) }
+.sc-cat {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--gold);
+  padding: .2rem 0 .8rem;
+  border-bottom: 1px solid var(--border);
+  margin: .3rem 1.2rem;
+  display: block;
+}
+.sc-name { color: var(--muted2) }
+.sc-pts {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.sc-pts.neg { color: var(--red) }
+.sc-pts.gold { color: var(--gold) }
+
+/* ── TESTIMONIALS ── */
+.testimonials-section { padding: 6rem 2.5rem }
+.testi-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-top: 3.5rem;
+}
+.testi-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rr);
+  padding: 1.8rem;
+  transition: border-color .2s;
+}
+.testi-card:hover { border-color: rgba(232,184,75,.25) }
+.testi-stars {
+  color: var(--gold);
+  font-size: 1rem;
+  letter-spacing: .1em;
+  margin-bottom: .85rem;
+}
+.testi-text {
+  font-size: .925rem;
+  color: var(--muted2);
+  line-height: 1.65;
+  margin-bottom: 1.25rem;
+  font-style: italic;
+}
+.testi-author {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.testi-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: .95rem;
+  flex-shrink: 0;
+}
+.testi-name { font-weight: 600; font-size: .875rem }
+.testi-league { font-size: .775rem; color: var(--muted) }
+
+/* ── CTA BANNER ── */
+.cta-banner {
+  margin: 0 2.5rem 6rem;
+  background: linear-gradient(135deg, var(--s2) 0%, rgba(232,184,75,.08) 100%);
+  border: 1px solid rgba(232,184,75,.2);
+  border-radius: 20px;
+  padding: 4rem 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  overflow: hidden;
+}
+.cta-banner::before {
+  content: '🏈';
+  position: absolute;
+  font-size: 14rem;
+  right: -2rem;
+  top: -2rem;
+  opacity: .04;
+  line-height: 1;
+}
+.cta-banner-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 2.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1;
+  margin-bottom: .75rem;
+}
+.cta-banner-title em { font-style: italic; color: var(--gold) }
+.cta-banner-sub { color: var(--muted2); font-size: .95rem }
+.cta-banner-btns { display: flex; gap: .85rem; flex-shrink: 0 }
+
+/* ── FOOTER ── */
+.site-footer {
+  background: var(--s1);
+  border-top: 1px solid var(--border);
+  padding: 3rem 2.5rem 2rem;
+}
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.footer-top {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 3rem;
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.footer-brand-desc {
+  font-size: .875rem;
+  color: var(--muted);
+  line-height: 1.65;
+  margin-top: .75rem;
+  margin-bottom: 1.25rem;
+}
+.footer-col-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--muted2);
+  margin-bottom: 1rem;
+}
+.footer-links { display: flex; flex-direction: column; gap: .5rem }
+.footer-link {
+  font-size: .875rem;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color .15s;
+}
+.footer-link:hover { color: var(--gold) }
+.footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 1.5rem;
+  font-size: .8rem;
+  color: var(--muted);
+}
+
+
+/* ════════════════════════════════════════════════════
+
+   PAGE 2: SIGN UP
+
+════════════════════════════════════════════════════ */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+}
+.auth-left {
+  flex: 1;
+  background: linear-gradient(160deg, var(--s1) 0%, rgba(232,184,75,.06) 100%);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6rem 4rem;
+  position: relative;
+  overflow: hidden;
+}
+.auth-left::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(232,184,75,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232,184,75,.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+.auth-left-content { position: relative; max-width: 420px }
+.auth-left-headline {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 3rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: .95;
+  letter-spacing: -.01em;
+  margin-bottom: 1.2rem;
+  margin-top: 1.5rem;
+}
+.auth-left-headline em { font-style: italic; color: var(--gold) }
+.auth-left-body {
+  font-size: .925rem;
+  color: var(--muted2);
+  line-height: 1.65;
+  margin-bottom: 2.5rem;
+}
+.auth-perks { display: flex; flex-direction: column; gap: .75rem }
+.auth-perk {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  font-size: .875rem;
+  color: var(--muted2);
+}
+.perk-check {
+  width: 22px; height: 22px;
+  background: rgba(34,197,94,.15);
+  border: 1px solid rgba(34,197,94,.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .7rem;
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.auth-right {
+  width: 520px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6rem 3.5rem;
+}
+.auth-form-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: .4rem;
+}
+.auth-form-sub {
+  font-size: .875rem;
+  color: var(--muted2);
+  margin-bottom: 2rem;
+}
+.auth-form-sub a {
+  color: var(--gold);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  color: var(--muted);
+  font-size: .78rem;
+}
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border2);
+}
+
+.sso-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .65rem;
+  width: 100%;
+  padding: .65rem;
+  background: var(--s2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--muted2);
+  font-size: .875rem;
+  font-family: 'Barlow', sans-serif;
+  cursor: pointer;
+  transition: all .15s;
+  margin-bottom: .6rem;
+}
+.sso-btn:hover { border-color: var(--muted); color: var(--text); background: var(--s3) }
+
+.terms-note {
+  font-size: .75rem;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 1.25rem;
+  line-height: 1.55;
+}
+.terms-note a { color: var(--muted2); cursor: pointer }
+
+
+/* ════════════════════════════════════════════════════
+
+   PAGE 3: LOG IN
+
+════════════════════════════════════════════════════ */
+/* reuses auth-page layout */
+
+
+/* ════════════════════════════════════════════════════
+
+   PAGE 4: HOW IT WORKS (full page)
+
+════════════════════════════════════════════════════ */
+.hiw-hero {
+  padding: 9rem 2.5rem 4rem;
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.hiw-hero .section-title { font-size: clamp(2.5rem, 5vw, 4rem) }
+
+.hiw-full-steps {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2.5rem 6rem;
+}
+.hiw-step-big {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: center;
+  padding: 4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.hiw-step-big:last-child { border-bottom: none }
+.hiw-step-big.flip { direction: rtl }
+.hiw-step-big.flip > * { direction: ltr }
+.hiw-step-number {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--gold);
+  margin-bottom: .75rem;
+}
+.hiw-step-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1;
+  margin-bottom: .75rem;
+}
+.hiw-step-desc {
+  font-size: .95rem;
+  color: var(--muted2);
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+}
+.hiw-step-points { display: flex; flex-direction: column; gap: .5rem }
+.hiw-point {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  font-size: .875rem;
+  color: var(--muted2);
+}
+.hiw-point::before {
+  content: '▸';
+  color: var(--gold);
+  font-size: .75rem;
+  flex-shrink: 0;
+}
+.hiw-visual {
+  background: var(--s1);
+  border: 1px solid var(--border2);
+  border-radius: var(--rr);
+  padding: 1.5rem;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+
+/* ════════════════════════════════════════════════════
+
+   PAGE 5: PRICING
+
+════════════════════════════════════════════════════ */
+.pricing-hero {
+  padding: 9rem 2.5rem 4rem;
+  text-align: center;
+  max-width: 700px;
+  margin: 0 auto;
+}
+.pricing-grid {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 2.5rem 6rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.pricing-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rr);
+  padding: 2.2rem;
+  position: relative;
+  transition: border-color .2s, transform .2s;
+}
+.pricing-card:hover { border-color: rgba(232,184,75,.25); transform: translateY(-4px) }
+.pricing-card.featured {
+  border-color: var(--gold);
+  background: linear-gradient(160deg, var(--s2) 0%, rgba(232,184,75,.06) 100%);
+  transform: scale(1.03);
+}
+.pricing-card.featured:hover { transform: scale(1.03) translateY(-4px) }
+.pricing-badge {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--gold);
+  color: #080a0e;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  padding: .25rem .85rem;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+.pricing-tier {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--muted2);
+  margin-bottom: .5rem;
+}
+.pricing-price {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 3.5rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: .25rem;
+}
+.pricing-price sup {
+  font-size: 1.5rem;
+  vertical-align: super;
+  line-height: 0;
+  color: var(--muted2);
+}
+.pricing-price .per {
+  font-size: 1rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+.pricing-desc {
+  font-size: .83rem;
+  color: var(--muted2);
+  margin-bottom: 1.75rem;
+  line-height: 1.55;
+}
+.pricing-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 1.5rem 0;
+}
+.pricing-features { display: flex; flex-direction: column; gap: .65rem; margin-bottom: 2rem }
+.pricing-feature {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-size: .875rem;
+  color: var(--muted2);
+}
+.pf-check { color: var(--green); font-size: .8rem; flex-shrink: 0 }
+.pf-x     { color: var(--muted); font-size: .8rem; flex-shrink: 0 }
+
+.pricing-faq {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 2.5rem 6rem;
+}
+.faq-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  padding: 1.25rem 0;
+}
+.faq-q {
+  font-weight: 600;
+  font-size: .95rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text);
+  user-select: none;
+}
+.faq-q:hover { color: var(--gold) }
+.faq-a {
+  font-size: .875rem;
+  color: var(--muted2);
+  line-height: 1.65;
+  margin-top: .75rem;
+  display: none;
+}
+.faq-a.open { display: block }
+.faq-arrow { transition: transform .2s; color: var(--muted); font-size: .8rem }
+.faq-arrow.open { transform: rotate(180deg) }
+
+
+/* ════════════════════════════════════════════════════
+
+   PAGE 6: CONTACT
+
+════════════════════════════════════════════════════ */
+.contact-page {
+  min-height: 100vh;
+  padding: 9rem 2.5rem 6rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 4rem;
+  align-items: start;
+}
+.contact-info-block {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rr);
+  padding: 2rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.ci-icon {
+  width: 42px; height: 42px;
+  background: rgba(232,184,75,.1);
+  border: 1px solid rgba(232,184,75,.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.ci-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted2);
+  margin-bottom: .25rem;
+}
+.ci-val { font-size: .9rem }
+
+.contact-form-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rr);
+  padding: 2.5rem;
+}
+.contact-form-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-bottom: .4rem;
+}
+.contact-form-sub { font-size: .875rem; color: var(--muted2); margin-bottom: 2rem }
+
+
+/* ════════════════════════════════════════════════════
+   MOBILE
+════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .hero-inner            { grid-template-columns: 1fr; }
+  .hero-mockup           { display: none }
+  .features-strip-inner  { grid-template-columns: repeat(2, 1fr) }
+  .feat-item:nth-child(2){ border-right: none }
+  .steps-grid            { grid-template-columns: 1fr }
+  .scoring-inner         { grid-template-columns: 1fr }
+  .testi-grid            { grid-template-columns: 1fr }
+  .hiw-step-big          { grid-template-columns: 1fr }
+  .hiw-step-big.flip     { direction: ltr }
+  .pricing-grid          { grid-template-columns: 1fr }
+  .pricing-card.featured { transform: none }
+  .contact-grid          { grid-template-columns: 1fr }
+  .auth-left             { display: none }
+  .auth-right            { width: 100%; padding: 6rem 2rem }
+  .footer-top            { grid-template-columns: 1fr 1fr }
+}
+@media (max-width: 640px) {
+  .site-nav { padding: 0 1.25rem }
+  .nav-links { display: none }
+  .hero { padding: 7rem 1.25rem 3rem }
+  .hero-trust { gap: 1.2rem }
+  .cta-banner { flex-direction: column; text-align: center }
+  .cta-banner-btns { flex-wrap: wrap; justify-content: center }
+  .form-row-2 { grid-template-columns: 1fr }
+  .features-strip { padding: 2rem 1.25rem }
+  .features-strip-inner { grid-template-columns: 1fr }
+  .feat-item { border-right: none; border-bottom: 1px solid var(--border) }
+}
+</style>
+</head>
+
+<body>
+
+<!-- ════════════════════════════
+     NAV (shared across all pages)
+════════════════════════════ -->
+<nav class="site-nav" id="site-nav">
+  <div class="nav-logo" onclick="showPage('home')">
+    <span class="nav-logo-text">504 <em>Fantasy</em></span>
+  </div>
+  <div class="nav-links">
+    <button class="nav-link active" id="nl-home"     onclick="showPage('home')">Home</button>
+    <button class="nav-link"        id="nl-how"      onclick="showPage('how')">How It Works</button>
+    <button class="nav-link"        id="nl-pricing"  onclick="showPage('pricing')">Pricing</button>
+    <button class="nav-link"        id="nl-contact"  onclick="showPage('contact')">Contact</button>
+  </div>
+  <div class="nav-end">
+    <button class="btn btn-ghost btn-sm" onclick="window.location.href='/login'">Log In</button>
+    <button class="btn btn-gold  btn-sm" onclick="window.location.href='/register'">Sign Up Free</button>
+  </div>
+</nav>
+
+
+<!-- ════════════════════════════════════════════════════
+     PAGE: HOME
+════════════════════════════════════════════════════ -->
+<div class="page active" id="page-home">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-inner">
+      <div>
+        <div class="hero-eyebrow">
+          <span class="eyebrow-dot"></span>
+          NFL Playoffs — Live Now
+        </div>
+        <h1 class="hero-headline">
+          <span>504</span><br>
+          <span class="line-gold">Fantasy</span><br>
+          <span class="line-stroke">Sports</span>
+        </h1>
+        <p class="hero-body">
+          New Orleans–born fantasy sports for people who take their league seriously. Playoff drafts, secret pony picks, multipliers, and live scoring — all in one place.
+        </p>
+        <div class="hero-cta">
+          <button class="btn btn-gold btn-xl" onclick="window.location.href='/register'">Join the League</button>
+          <button class="btn btn-ghost btn-lg" onclick="showPage('how')">See How It Works →</button>
+        </div>
+        <div class="hero-trust">
+<div class="trust-stat">
+            <div class="trust-num">🏈</div>
+            <div class="trust-label">NFL Playoffs</div>
+          </div>
+          <div class="trust-stat">
+            <div class="trust-num">100%</div>
+            <div class="trust-label">Free to Join</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mockup card -->
+      <div class="hero-mockup">
+        <div class="mockup-card">
+          <div class="mockup-header">
+            <div class="mock-dot mock-d1"></div>
+            <div class="mock-dot mock-d2"></div>
+            <div class="mock-dot mock-d3"></div>
+            <span class="mockup-title">Draft Room — Playoff Challenge</span>
+          </div>
+          <div class="mockup-body">
+            <div class="mock-clock">
+              <div class="mock-clock-label">🕒 On the Clock</div>
+              <div class="mock-clock-name">Thunderbirds</div>
+            </div>
+            <div class="mock-pick-row highlight">
+              <span class="mock-pos pos-wr">WR</span>
+              <span class="mock-pick-name">Tyreek Hill</span>
+              <span class="mock-badge">🐴 Pony</span>
+              <span class="mock-pick-pts">×2.0</span>
+            </div>
+            <div class="mock-pick-row">
+              <span class="mock-pos pos-qb">QB</span>
+              <span class="mock-pick-name">Josh Allen</span>
+              <span class="mock-pick-pts">32.3</span>
+            </div>
+            <div class="mock-pick-row">
+              <span class="mock-pos pos-rb">RB</span>
+              <span class="mock-pick-name">James Cook</span>
+              <span class="mock-pick-pts">21.0</span>
+            </div>
+            <div class="mock-pick-row">
+              <span class="mock-pos pos-te">TE</span>
+              <span class="mock-pick-name">Travis Kelce</span>
+              <span class="mock-pick-pts">18.4</span>
+            </div>
+            <div class="mock-pick-row">
+              <span class="mock-pos pos-k">K</span>
+              <span class="mock-pick-name">Tyler Bass</span>
+              <span class="mock-pick-pts">13.8</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-float-1">
+          <span class="float-val">+24.0</span>
+          🐴 Pony scored
+        </div>
+        <div class="hero-float-2">
+          <span class="float-val">R4 P2</span>
+          Snake Draft Live
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURE STRIP -->
+  <div class="features-strip">
+    <div class="features-strip-inner">
+      <div class="feat-item">
+        <div class="feat-icon">🐍</div>
+        <div class="feat-title">Snake Draft</div>
+        <div class="feat-desc">Live snake-order drafting with real-time pick confirmation and full roster tracking.</div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon">🐴</div>
+        <div class="feat-title">Pony System</div>
+        <div class="feat-desc">Designate up to 4 pony players per team for bonus scoring in high-stakes moments.</div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon">✖</div>
+        <div class="feat-title">Multipliers</div>
+        <div class="feat-desc">Apply 1.5× or 2× multipliers to any player. Set them before the lock and let it ride.</div>
+      </div>
+      <div class="feat-item">
+        <div class="feat-icon">🏟</div>
+        <div class="feat-title">Multi-League</div>
+        <div class="feat-desc">Run multiple leagues across different game types — all with invite codes, isolated rosters, and separate scoring.</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       GAMES SECTION
+  ════════════════════════════════════════════ -->
+  <div style="padding:6rem 2.5rem 0; max-width:1200px; margin:0 auto">
+    <div class="section-eyebrow">Choose Your Game</div>
+    <h2 class="section-title">Every Season.<br><em>One Platform.</em></h2>
+    <p class="section-sub">Start with NFL playoffs and stay for everything else — more games are coming to 504 Fantasy throughout the year.</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:3rem">
+
+      <!-- NFL Playoff Challenge — LIVE -->
+      <div style="background:var(--s1);border:1px solid rgba(232,184,75,.35);border-radius:var(--rr);overflow:hidden;transition:border-color .2s,transform .2s;cursor:pointer" onmouseenter="this.style.transform='translateY(-4px)'" onmouseleave="this.style.transform=''" onclick="window.location.href='/register'">
+        <div style="height:3px;background:linear-gradient(90deg,var(--gold),var(--ember))"></div>
+        <div style="padding:1.75rem">
+          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.25);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:1rem">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 2s infinite;display:inline-block"></span>
+            Live Now
+          </div>
+          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🏈</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">NFL Fantasy<br>Playoff Challenge</div>
+          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Snake draft your NFL postseason roster before Wild Card weekend. Set multipliers, lock in your secret pony pick, and score points as your players advance round by round to the Super Bowl.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Snake Draft</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Live Scores</span>
+          </div>
+        </div>
+        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">4 Rounds · Wild Card → Super Bowl</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold)">Play Now →</span>
+        </div>
+      </div>
+
+      <!-- NFL Survivor Challenge — LIVE -->
+      <div style="background:var(--s1);border:1px solid rgba(201,69,26,.35);border-radius:var(--rr);overflow:hidden;transition:border-color .2s,transform .2s;cursor:pointer" onmouseenter="this.style.transform='translateY(-4px)'" onmouseleave="this.style.transform=''" onclick="window.location.href='/survivor/'">
+        <div style="height:3px;background:linear-gradient(90deg,var(--ember),var(--ember2))"></div>
+        <div style="padding:1.75rem">
+          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(201,69,26,.1);border:1px solid rgba(201,69,26,.25);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ember);margin-bottom:1rem">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--ember);animation:pulse 2s infinite;display:inline-block"></span>
+            Live Now
+          </div>
+          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🎯</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">NFL Survivor<br>Challenge</div>
+          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Pick 1 QB, 1 RB, 1 WR, 1 TE, 1 DST, and 1 K every week of the NFL regular season. Once you use a player, they're gone from your pool for the rest of the year. No draft — just 18 weeks of survival strategy.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">18 Weeks</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">No Draft</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Once-Used Players</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Live Scores</span>
+          </div>
+        </div>
+        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">Weeks 1–18 · Regular Season</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ember)">Play Now →</span>
+        </div>
+      </div>
+
+      <!-- NBA Playoff Challenge — Coming Soon -->
+      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--rr);overflow:hidden;opacity:.65">
+        <div style="height:3px;background:linear-gradient(90deg,#3b82f6,#6366f1)"></div>
+        <div style="padding:1.75rem">
+          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(100,116,139,.1);border:1px solid var(--border2);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:1rem">
+            Coming Soon
+          </div>
+          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🏀</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">NBA Fantasy<br>Playoff Challenge</div>
+          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Same format, different sport. Draft your NBA postseason roster and score points as your players light it up from the first round through the Finals.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Snake Draft</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
+          </div>
+        </div>
+        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">4 Rounds · First Round → Finals</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Notify Me</span>
+        </div>
+      </div>
+
+      <!-- MLB Postseason Challenge — Coming Soon -->
+      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--rr);overflow:hidden;opacity:.65">
+        <div style="height:3px;background:linear-gradient(90deg,#22c55e,#10b981)"></div>
+        <div style="padding:1.75rem">
+          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(100,116,139,.1);border:1px solid var(--border2);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:1rem">
+            Coming Soon
+          </div>
+          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">⚾</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">MLB Postseason<br>Challenge</div>
+          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Wild Card through the World Series. Draft your hitters and pitchers and rack up points in October. The longest run, the deepest strategy.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Snake Draft</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
+          </div>
+        </div>
+        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">Wild Card → World Series</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Notify Me</span>
+        </div>
+      </div>
+
+      <!-- College Football — Coming Soon -->
+      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--rr);overflow:hidden;opacity:.65">
+        <div style="height:3px;background:linear-gradient(90deg,#f97316,#eab308)"></div>
+        <div style="padding:1.75rem">
+          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(100,116,139,.1);border:1px solid var(--border2);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:1rem">
+            Coming Soon
+          </div>
+          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🎓</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">CFB Playoff<br>Challenge</div>
+          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">The College Football Playoff expanded to 12 teams — and now you can draft it. More rounds, more upsets, more chaos. Built for die-hard CFB fans.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">12-Team Bracket</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
+            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
+          </div>
+        </div>
+        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">12 Teams · First Round → Championship</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Notify Me</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS (condensed) -->
+  <div style="padding: 6rem 2.5rem 0; max-width:1200px; margin:0 auto">
+    <div class="section-eyebrow">The Process</div>
+    <h2 class="section-title">Up & Running<br><em>In Minutes</em></h2>
+    <p class="section-sub">No spreadsheets. No group chats for picks. One invite code and your whole crew is in.</p>
+    <div class="steps-grid">
+      <div class="step-card">
+        <span class="step-num">01</span>
+        <div class="step-icon">🏗</div>
+        <div class="step-title">Create Your League</div>
+        <div class="step-desc">Sign up free, name your league, and get a unique 8-character invite code in seconds.</div>
+      </div>
+      <div class="step-card">
+        <span class="step-num">02</span>
+        <div class="step-icon">🤝</div>
+        <div class="step-title">Invite Your Squad</div>
+        <div class="step-desc">Share your invite code — friends join instantly, create their team, and you're draft-ready.</div>
+      </div>
+      <div class="step-card">
+        <span class="step-num">03</span>
+        <div class="step-icon">⚡</div>
+        <div class="step-title">Draft, Score, Win</div>
+        <div class="step-desc">Run your snake draft, lock multipliers, add ponies, and watch the live leaderboard every week.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCORING SECTION -->
+  <div class="scoring-section" style="margin-top: 6rem">
+    <div class="scoring-inner">
+      <div>
+        <div class="section-eyebrow">Scoring System</div>
+        <h2 class="section-title">Real Scoring.<br><em>Real Stakes.</em></h2>
+        <p style="font-size:.95rem; color:var(--muted2); line-height:1.7; margin-bottom: 1.5rem">
+          Full PPR with yardage-based scoring, distance kickers, and defensive return scoring.
+          Plus our signature pony and multiplier mechanics that make every draft pick matter more.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:.65rem">
+          <div class="hiw-point">PPR — every reception counts for 1.0 pt</div>
+          <div class="hiw-point">Yardage — 0.1 pts per yard (rush/rec/return), 0.04 per pass yard</div>
+          <div class="hiw-point">Kickers — scored by distance: 55-yd FG = 5.5 pts</div>
+          <div class="hiw-point">Ponies — any of your 4 pony slots can receive a 2× multiplier</div>
+        </div>
+        <button class="btn btn-outline-gold" style="margin-top:2rem" onclick="showPage('how')">Full Scoring Details →</button>
+      </div>
+      <div class="scoring-table-wrap">
+        <div class="scoring-table-header">
+          <span>Scoring Action</span>
+          <span>Points</span>
+        </div>
+        <span class="sc-cat">Skill Players</span>
+        <div class="sc-row"><span class="sc-name">Reception (PPR)</span><span class="sc-pts gold">+1.0</span></div>
+        <div class="sc-row"><span class="sc-name">Receiving Yard</span><span class="sc-pts">+0.1</span></div>
+        <div class="sc-row"><span class="sc-name">Rushing Yard</span><span class="sc-pts">+0.1</span></div>
+        <div class="sc-row"><span class="sc-name">Return Yard</span><span class="sc-pts">+0.1</span></div>
+        <div class="sc-row"><span class="sc-name">Passing Yard</span><span class="sc-pts">+0.04</span></div>
+        <div class="sc-row"><span class="sc-name">Any Touchdown</span><span class="sc-pts gold">+6.0</span></div>
+        <div class="sc-row"><span class="sc-name">Fumble Lost</span><span class="sc-pts neg">−2.0</span></div>
+        <div class="sc-row"><span class="sc-name">Interception Thrown</span><span class="sc-pts neg">−2.0</span></div>
+        <span class="sc-cat">Kicker</span>
+        <div class="sc-row"><span class="sc-name">FG — per yard of distance</span><span class="sc-pts">+0.1</span></div>
+        <span class="sc-cat">Defense / ST</span>
+        <div class="sc-row"><span class="sc-name">Return Yard</span><span class="sc-pts">+0.1</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TESTIMONIALS -->
+  <div class="testimonials-section">
+    <div style="max-width:1200px; margin:0 auto">
+      <div class="section-eyebrow" style="text-align:center">What Leagues Are Saying</div>
+      <h2 class="section-title" style="text-align:center">Built by <em>Players.</em></h2>
+    </div>
+    <div class="testi-grid">
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"The pony system completely changed how our draft goes. Everyone is scheming multipliers two rounds ahead. Best league upgrade we've made."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:rgba(232,184,75,.15); color:var(--gold)">MJ</div>
+          <div>
+            <div class="testi-name">Marcus J.</div>
+            <div class="testi-league">Commissioner — The 504 Cartel</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Distance-based kicker scoring sounds niche until your team wins by 0.3 points because Tyler Bass drilled a 63-yarder. Absolutely unhinged."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:rgba(59,130,246,.15); color:#93c5fd">SR</div>
+          <div>
+            <div class="testi-name">Sofia R.</div>
+            <div class="testi-league">Manager — Sunday Destruction Co.</div>
+          </div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"We run 3 separate leagues for different friend groups. One invite code per league, isolated scores, no bleed-through. It just works exactly right."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:rgba(34,197,94,.15); color:var(--green)">TK</div>
+          <div>
+            <div class="testi-name">Tyler K.</div>
+            <div class="testi-league">Multi-League Commissioner</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA BANNER -->
+  <div style="padding:0 2.5rem; max-width:1200px; margin: 0 auto 6rem">
+    <div class="cta-banner">
+      <div>
+        <div class="cta-banner-title">Ready to<br><em>Ball Out?</em></div>
+        <div class="cta-banner-sub">Free to join. Your league. Your rules. New Orleans' home for fantasy sports.</div>
+      </div>
+      <div class="cta-banner-btns">
+        <button class="btn btn-gold btn-xl" onclick="window.location.href='/register'">Create Your League</button>
+        <button class="btn btn-ghost btn-lg" onclick="window.location.href='/login'">Log In</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div>
+          <div class="nav-logo" style="pointer-events:none">
+            <span class="nav-logo-text">504 <em>Fantasy</em></span>
+          </div>
+          <p class="footer-brand-desc">New Orleans' home for fantasy sports. Built for leagues that actually care about how scoring works.</p>
+          <div style="display:flex; gap:.5rem">
+            <button class="btn btn-ghost btn-sm">Twitter/X</button>
+            <button class="btn btn-ghost btn-sm">Discord</button>
+          </div>
+        </div>
+        <div>
+          <div class="footer-col-title">Product</div>
+          <div class="footer-links">
+            <a class="footer-link" onclick="showPage('how')">How It Works</a>
+            <a class="footer-link" onclick="showPage('pricing')">Pricing</a>
+            <a class="footer-link" onclick="showPage('home')">Scoring Rules</a>
+            <a class="footer-link">Changelog</a>
+          </div>
+        </div>
+        <div>
+          <div class="footer-col-title">Support</div>
+          <div class="footer-links">
+            <a class="footer-link" onclick="showPage('contact')">Contact Us</a>
+            <a class="footer-link">Documentation</a>
+            <a class="footer-link">Commissioner Guide</a>
+            <a class="footer-link">Status</a>
+          </div>
+        </div>
+        <div>
+          <div class="footer-col-title">Legal</div>
+          <div class="footer-links">
+            <a class="footer-link">Privacy Policy</a>
+            <a class="footer-link">Terms of Service</a>
+            <a class="footer-link">Cookie Policy</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 504 Fantasy. All rights reserved.</span>
+        <span>Made in New Orleans 🌶️</span>
+      </div>
+    </div>
+  </footer>
+
+</div><!-- /page-home -->
+
+
+
+
+
+
+
+
+<!-- ════════════════════════════════════════════════════
+     PAGE: HOW IT WORKS
+════════════════════════════════════════════════════ -->
+<div class="page" id="page-how" style="padding-top:64px">
+  <div class="hiw-hero">
+    <div class="section-eyebrow">The Full Picture</div>
+    <h1 class="section-title" style="font-size:clamp(2.5rem,5vw,4rem)">
+      How 504 Fantasy<br><em>Works</em>
+    </h1>
+    <p style="font-size:1rem; color:var(--muted2); line-height:1.7; margin-top:1rem">
+      From creating your first league to watching Week 17 scores roll in —
+      here's everything you need to know.
+    </p>
+  </div>
+
+  <div class="hiw-full-steps">
+
+    <div class="hiw-step-big">
+      <div>
+        <div class="hiw-step-number">Step 01</div>
+        <h3 class="hiw-step-title">Create a League & Invite Everyone</h3>
+        <p class="hiw-step-desc">
+          Sign up, hit "Create League," give it a name, and you'll instantly get an
+          8-character invite code. Share that code — everyone who enters it joins your
+          league and can create their team immediately.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">One commissioner per league (the creator)</div>
+          <div class="hiw-point">Unlimited members with the invite code</div>
+          <div class="hiw-point">You can run multiple leagues simultaneously</div>
+          <div class="hiw-point">Each league has a completely isolated player pool and roster</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div style="text-align:center; margin-bottom:1rem">
+          <div style="font-family:'Barlow Condensed',sans-serif; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin-bottom:.5rem">Your Invite Code</div>
+          <div style="font-family:'Barlow Condensed',sans-serif; font-size:3rem; font-weight:900; letter-spacing:.28em; color:var(--gold)">GRD7X2K9</div>
+        </div>
+        <div style="background:var(--s2); border:1px solid var(--border); border-radius:8px; padding:.75rem 1rem; font-size:.82rem; color:var(--muted2); text-align:center">
+          Share this code and anyone can join your league instantly
+        </div>
+      </div>
+    </div>
+
+    <div class="hiw-step-big flip">
+      <div>
+        <div class="hiw-step-number">Step 02</div>
+        <h3 class="hiw-step-title">Run Your Snake Draft</h3>
+        <p class="hiw-step-desc">
+          When you're ready, the commissioner kicks off the snake draft. Teams take turns
+          picking in snake order — picks reverse at the end of each round. The draft room
+          shows all rostered players and available players filtered by position.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">Live snake order shown for the current round</div>
+          <div class="hiw-point">Position-filtered player search with autocomplete</div>
+          <div class="hiw-point">Commissioner can rewind or fully reset the draft</div>
+          <div class="hiw-point">All picks logged in the audit trail</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div class="mock-clock" style="margin-bottom:.75rem">
+          <div class="mock-clock-label">🕒 On the Clock — Round 4</div>
+          <div class="mock-clock-name">Team Chaos</div>
+        </div>
+        <div class="mock-pick-row" style="background:var(--s3)">
+          <span class="mock-pos pos-wr">WR</span>
+          <span class="mock-pick-name">CeeDee Lamb</span>
+          <span style="font-size:.72rem; color:var(--muted)">Available</span>
+        </div>
+        <div class="mock-pick-row" style="margin-top:.35rem; background:var(--s3)">
+          <span class="mock-pos pos-rb">RB</span>
+          <span class="mock-pick-name">Saquon Barkley</span>
+          <span style="font-size:.72rem; color:var(--muted)">Available</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="hiw-step-big">
+      <div>
+        <div class="hiw-step-number">Step 03</div>
+        <h3 class="hiw-step-title">Assign Ponies</h3>
+        <p class="hiw-step-desc">
+          Each team can designate up to 4 "pony" players. Ponies are your special
+          designated scorers — only one player per pony slot, and every pony must be
+          unique across your whole roster. No doubling up.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">Up to 4 pony slots per team (commissioner can configure)</div>
+          <div class="hiw-point">Each pony must be a unique player across your roster</div>
+          <div class="hiw-point">Commissioner can lock pony additions at a set time</div>
+          <div class="hiw-point">Ponies can receive their own multiplier assignments</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div style="font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--ember); margin-bottom:.65rem">🐴 Pony Slots</div>
+        <div class="mock-pick-row highlight" style="margin-bottom:.35rem">
+          <span class="mock-pos pos-wr">WR</span>
+          <span class="mock-pick-name">Tyreek Hill</span>
+          <span class="mock-badge">🐴 Pony 1</span>
+        </div>
+        <div class="mock-pick-row highlight" style="margin-bottom:.35rem">
+          <span class="mock-pos pos-rb">RB</span>
+          <span class="mock-pick-name">De'Von Achane</span>
+          <span class="mock-badge">🐴 Pony 2</span>
+        </div>
+        <div style="background:var(--s2); border:1px dashed rgba(201,69,26,.3); border-radius:7px; padding:.55rem .65rem; font-size:.78rem; color:var(--muted); text-align:center">+ Add Pony 3…</div>
+      </div>
+    </div>
+
+    <div class="hiw-step-big flip">
+      <div>
+        <div class="hiw-step-number">Step 04</div>
+        <h3 class="hiw-step-title">Set Your Multipliers</h3>
+        <p class="hiw-step-desc">
+          Before the multiplier lock time set by your commissioner, each team can assign
+          multipliers to players. You get limited 1.5× slots and limited 2× slots —
+          use them wisely. Multipliers apply to both regular players and ponies.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">2 × the 1.5× multiplier available per team</div>
+          <div class="hiw-point">1 × the 2× multiplier available per team</div>
+          <div class="hiw-point">Lock time set per-league by commissioner</div>
+          <div class="hiw-point">Cannot change after the lock — plan ahead</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div class="mock-pick-row highlight" style="margin-bottom:.35rem">
+          <span class="mock-pos pos-qb">QB</span>
+          <span class="mock-pick-name">Josh Allen</span>
+          <span style="background:rgba(232,184,75,.2);color:var(--gold);border:1px solid rgba(232,184,75,.35); font-size:.72rem; font-weight:700; padding:.15rem .45rem; border-radius:4px">×2.0</span>
+        </div>
+        <div class="mock-pick-row" style="margin-bottom:.35rem; background:var(--s3)">
+          <span class="mock-pos pos-wr">WR</span>
+          <span class="mock-pick-name">Stefon Diggs</span>
+          <span style="background:rgba(232,184,75,.12);color:var(--gold);border:1px solid rgba(232,184,75,.2); font-size:.72rem; font-weight:700; padding:.15rem .45rem; border-radius:4px">×1.5</span>
+        </div>
+        <div style="font-size:.75rem; color:var(--muted); text-align:center; margin-top:.75rem">
+          🔒 Locks Jan 11 · 6:00 PM UTC
+        </div>
+      </div>
+    </div>
+
+    <div class="hiw-step-big">
+      <div>
+        <div class="hiw-step-number">Step 05</div>
+        <h3 class="hiw-step-title">Score Each Week</h3>
+        <p class="hiw-step-desc">
+          After each NFL game, the commissioner enters player stats. The scoring
+          engine automatically calculates base points, applies multipliers, and
+          updates the weekly and season-long leaderboards.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">Full PPR with per-yard yardage scoring</div>
+          <div class="hiw-point">Kickers scored by FG distance (not just make/miss)</div>
+          <div class="hiw-point">Override available for any stat discrepancy</div>
+          <div class="hiw-point">Live leaderboard sorted by total season points</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.85rem">
+          <span style="font-family:'Barlow Condensed',sans-serif; font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em">Week 8 Leaderboard</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.3rem">
+          <div style="display:flex; align-items:center; gap:.65rem; padding:.45rem .65rem; background:rgba(232,184,75,.07); border:1px solid rgba(232,184,75,.18); border-radius:7px; font-size:.82rem">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;color:var(--gold)">#1</span>
+            <span>Team Chaos</span>
+            <span style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:var(--gold)">148.2</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:.65rem; padding:.45rem .65rem; background:var(--s2); border:1px solid var(--border); border-radius:7px; font-size:.82rem">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;color:#c0c0c0">#2</span>
+            <span>Thunderbirds</span>
+            <span style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800">141.7</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:.65rem; padding:.45rem .65rem; background:var(--s2); border:1px solid var(--border); border-radius:7px; font-size:.82rem">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;color:#cd7f32">#3</span>
+            <span>504 Cartel</span>
+            <span style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800">138.4</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="padding:0 2.5rem; max-width:1200px; margin: 0 auto 6rem">
+    <div class="cta-banner">
+      <div>
+        <div class="cta-banner-title">Got It.<br><em>Let's Go.</em></div>
+        <div class="cta-banner-sub">Create your league and send out invite codes today.</div>
+      </div>
+      <div class="cta-banner-btns">
+        <button class="btn btn-gold btn-xl" onclick="window.location.href='/register'">Start Free</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-bottom" style="border-top:none; padding-top:0">
+        <span>© 2026 504 Fantasy.</span>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-ghost btn-sm" onclick="showPage('home')">Home</button>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('pricing')">Pricing</button>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('contact')">Contact</button>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════
+     PAGE: PRICING
+════════════════════════════════════════════════════ -->
+<div class="page" id="page-pricing" style="padding-top:64px">
+  <div class="pricing-hero">
+    <div class="section-eyebrow">Pricing</div>
+    <h1 class="section-title" style="font-size:clamp(2.5rem,5vw,4rem)">
+      Simple Pricing.<br><em>No Surprises.</em>
+    </h1>
+    <p style="font-size:1rem; color:var(--muted2); line-height:1.7; margin-top:1rem">
+      Start free. Upgrade when your league gets serious.
+    </p>
+  </div>
+
+  <div class="pricing-grid">
+
+    <!-- Free -->
+    <div class="pricing-card">
+      <div class="pricing-tier">Rookie</div>
+      <div class="pricing-price">$<span>0</span><span class="per"> / mo</span></div>
+      <div class="pricing-desc">Everything you need to run a real league with your friends. No card required.</div>
+      <button class="btn btn-ghost" style="width:100%" onclick="window.location.href='/register'">Get Started Free</button>
+      <div class="pricing-divider"></div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="pf-check">✓</span>1 active league</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Up to 12 managers</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Snake draft</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Pony system (up to 2 ponies)</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Multipliers (1.5× and 2×)</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Weekly scoring & leaderboard</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Audit log (last 50 entries)</div>
+        <div class="pricing-feature"><span class="pf-x">✗</span><span style="color:var(--muted)">Multiple leagues</span></div>
+        <div class="pricing-feature"><span class="pf-x">✗</span><span style="color:var(--muted)">Priority support</span></div>
+      </div>
+    </div>
+
+    <!-- Pro -->
+    <div class="pricing-card featured">
+      <div class="pricing-badge">Most Popular</div>
+      <div class="pricing-tier" style="color:var(--gold)">Pro Commissioner</div>
+      <div class="pricing-price" style="color:var(--gold)">$<span>9</span><span class="per">.99 / mo</span></div>
+      <div class="pricing-desc">For commissioners running serious leagues all season long.</div>
+      <button class="btn btn-gold" style="width:100%" onclick="window.location.href='/register'">Start Pro Free Trial</button>
+      <div class="pricing-divider"></div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>Unlimited leagues</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>Up to 20 managers per league</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Snake draft + draft history</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>Ponies up to 4 per team</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Full multiplier control</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Weekly scoring & standings</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>Full audit log (unlimited)</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>CSV export of scores & rosters</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Email support within 24h</div>
+      </div>
+    </div>
+
+    <!-- Enterprise -->
+    <div class="pricing-card">
+      <div class="pricing-tier">Enterprise</div>
+      <div class="pricing-price">$<span>29</span><span class="per"> / mo</span></div>
+      <div class="pricing-desc">Running a media brand, sports bar league, or large organization? This is yours.</div>
+      <button class="btn btn-outline-gold" style="width:100%" onclick="showPage('contact')">Contact Us</button>
+      <div class="pricing-divider"></div>
+      <div class="pricing-features">
+        <div class="pricing-feature"><span class="pf-check">✓</span>Everything in Pro</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>Unlimited managers per league</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>Custom domain (yourleague.com)</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span><strong>Branded invite page</strong></div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>API access for custom integrations</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Dedicated support manager</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>SLA uptime guarantee</div>
+        <div class="pricing-feature"><span class="pf-check">✓</span>Bulk account management</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FAQ -->
+  <div class="pricing-faq">
+    <div class="faq-title">Frequently Asked Questions</div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        Is the free plan really free? <span class="faq-arrow">▼</span>
+      </div>
+      <div class="faq-a">Yes — no credit card, no trial period, no gotchas. The Rookie plan is free forever. You can run one full league with up to 12 managers, the snake draft, ponies, and multipliers.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        Can I switch plans mid-season? <span class="faq-arrow">▼</span>
+      </div>
+      <div class="faq-a">Yes. Upgrading takes effect immediately. Downgrading takes effect at the end of your billing period — all your data is preserved.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        What happens to my leagues if I cancel Pro? <span class="faq-arrow">▼</span>
+      </div>
+      <div class="faq-a">You keep one active league (the most recently active one) on the free tier. All data for additional leagues is archived and accessible for 90 days, giving you time to export or reactivate.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        Do managers need to pay? <span class="faq-arrow">▼</span>
+      </div>
+      <div class="faq-a">No — managers join for free. Only the commissioner needs a Pro account if you want features beyond the free tier.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        Is there a money-back guarantee? <span class="faq-arrow">▼</span>
+      </div>
+      <div class="faq-a">Absolutely. If you're not happy within the first 30 days, reach out and we'll make it right.</div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-bottom" style="border-top:none; padding-top:0">
+        <span>© 2026 504 Fantasy.</span>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-ghost btn-sm" onclick="showPage('home')">Home</button>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('how')">How It Works</button>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('contact')">Contact</button>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════
+     PAGE: CONTACT
+════════════════════════════════════════════════════ -->
+<div class="page" id="page-contact" style="padding-top:64px">
+  <div class="contact-page">
+    <div style="margin-bottom:3rem">
+      <div class="section-eyebrow">Get In Touch</div>
+      <h1 class="section-title">We're <em>Here</em> For You</h1>
+      <p style="font-size:1rem; color:var(--muted2); line-height:1.65; margin-top:.75rem; max-width:520px">
+        Questions about scoring, commissioner issues, or enterprise pricing?
+        We respond fast — usually the same day.
+      </p>
+    </div>
+
+    <div class="contact-grid">
+      <!-- Left: info -->
+      <div>
+        <div class="contact-info-block">
+          <div class="ci-icon">📧</div>
+          <div>
+            <div class="ci-title">Email Support</div>
+            <div class="ci-val"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="37444247475845437750455e535e455859195050">[email&#160;protected]</a></div>
+            <div style="font-size:.78rem; color:var(--muted); margin-top:.2rem">Replies within 24 hours</div>
+          </div>
+        </div>
+        <div class="contact-info-block">
+          <div class="ci-icon">💬</div>
+          <div>
+            <div class="ci-title">Discord Community</div>
+            <div class="ci-val">discord.gg/504fantasy</div>
+            <div style="font-size:.78rem; color:var(--muted); margin-top:.2rem">Real-time chat with the team & other commissioners</div>
+          </div>
+        </div>
+        <div class="contact-info-block">
+          <div class="ci-icon">🏢</div>
+          <div>
+            <div class="ci-title">Enterprise Sales</div>
+            <div class="ci-val"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="b7d2d9c3d2c5c7c5dec4d2f7d0c5ded3dec5d8d999d0d0">[email&#160;protected]</a></div>
+            <div style="font-size:.78rem; color:var(--muted); margin-top:.2rem">Custom plans for organizations & media brands</div>
+          </div>
+        </div>
+        <div class="contact-info-block">
+          <div class="ci-icon">🐛</div>
+          <div>
+            <div class="ci-title">Bug Reports</div>
+            <div class="ci-val">GitHub Issues</div>
+            <div style="font-size:.78rem; color:var(--muted); margin-top:.2rem">For technical issues and feature requests</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: form -->
+      <div class="contact-form-card">
+        <div class="contact-form-title">Send a Message</div>
+        <div class="contact-form-sub">We'll get back to you within one business day.</div>
+
+        <div id="contact-success" class="alert alert-success" style="display:none">
+          ✅ Message sent! We'll be in touch shortly.
+        </div>
+
+        <form id="contact-form" onsubmit="handleContact(event)">
+          <div class="form-row-2">
+            <div class="fg">
+              <label>Your Name</label>
+              <input type="text" placeholder="Marcus Johnson" required/>
+            </div>
+            <div class="fg">
+              <label>Email</label>
+              <input type="email" placeholder="you@example.com" required/>
+            </div>
+          </div>
+          <div class="fg">
+            <label>Subject</label>
+            <select>
+              <option>General Question</option>
+              <option>Scoring / Rules Issue</option>
+              <option>Commissioner Help</option>
+              <option>Bug Report</option>
+              <option>Enterprise / Pricing</option>
+              <option>Account Issue</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>League Name (if applicable)</label>
+            <input type="text" placeholder="The 504 Cartel"/>
+          </div>
+          <div class="fg">
+            <label>Message</label>
+            <textarea rows="5" placeholder="Tell us what's going on…" required style="resize:vertical"></textarea>
+          </div>
+          <button type="submit" class="btn btn-gold" style="width:100%; padding:.75rem">
+            Send Message
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-bottom" style="border-top:none; padding-top:0">
+        <span>© 2026 504 Fantasy.</span>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-ghost btn-sm" onclick="showPage('home')">Home</button>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('pricing')">Pricing</button>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('how')">How It Works</button>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════ */
+<script>
+// ── Page routing ──────────────────────────────────
+const PAGE_MAP = {
+  home:    'page-home',
+  how:     'page-how',
+  pricing: 'page-pricing',
+  contact: 'page-contact',
+};
+const NAV_IDS = ['home','how','pricing','contact'];
+
+function showPage(name) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Show target
+  const el = document.getElementById(PAGE_MAP[name]);
+  if (el) {
+    el.classList.add('active');
+
+  }
+  // Update nav active state
+  NAV_IDS.forEach(id => {
+    const btn = document.getElementById('nl-' + id);
+    if (btn) btn.classList.toggle('active', id === name);
+  });
+}
+
+// ── Nav scroll shadow ─────────────────────────────
+window.addEventListener('scroll', () => {
+  const nav = document.getElementById('site-nav');
+  nav.style.background = window.scrollY > 20
+    ? 'rgba(8,10,14,0.97)'
+    : 'rgba(8,10,14,0.88)';
+}, { passive: true });
+
+// ── Sign-up form — submits directly to FastAPI /register ─
+function handleSignup(e) {
+  // Allow normal form submission — no interception needed
+}
+
+// ── Log-in form — submits directly to FastAPI /login ─
+function handleLogin(e) {
+  // Allow normal form submission — no interception needed
+}
+
+// ── Contact form ──────────────────────────────────
+function handleContact(e) {
+  e.preventDefault();
+  document.getElementById('contact-success').style.display = 'flex';
+  document.getElementById('contact-form').reset();
+  setTimeout(() => {
+    document.getElementById('contact-success').style.display = 'none';
+  }, 5000);
+}
+
+// ── FAQ accordion ─────────────────────────────────
+function toggleFaq(qEl) {
+  const answer = qEl.nextElementSibling;
+  const arrow  = qEl.querySelector('.faq-arrow');
+  const isOpen = answer.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.faq-a').forEach(a => a.classList.remove('open'));
+  document.querySelectorAll('.faq-arrow').forEach(a => a.classList.remove('open'));
+  // Open this one if it was closed
+  if (!isOpen) {
+    answer.classList.add('open');
+    arrow.classList.add('open');
+  }
+}
+
+// ── Stagger entrance animations ───────────────────
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.opacity    = '1';
+      entry.target.style.transform  = 'translateY(0)';
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.step-card, .testi-card, .pricing-card, .hiw-s

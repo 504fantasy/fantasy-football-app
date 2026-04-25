@@ -1,0 +1,18 @@
+<!-- home_public.html -->
+{% extends "base.html" %}
+{% block title %}504 Fantasy Survivor{% endblock %}
+{% block content %}
+<div style="text-align:center;padding:60px 20px;">
+  <h1 style="font-size:36px;font-weight:700;margin-bottom:12px;">
+    504 Fantasy <span style="color:var(--accent-hover)">Survivor</span>
+  </h1>
+  <p style="color:var(--muted);font-size:16px;max-width:520px;margin:0 auto 32px;">
+    Pick 1 QB · 1 RB · 1 WR · 1 TE · 1 DST · 1 K every week of the NFL regular season.
+    Once you use a player, they're gone from your pool for the rest of the year.
+  </p>
+  <div style="display:flex;gap:12px;justify-content:center;">
+    <a href="/survivor/register" class="btn btn-primary">Create Account</a>
+    <a href="/survivor/login"    class="btn btn-secondary">Sign In</a>
+  </div>
+</div>
+{% endblock %}

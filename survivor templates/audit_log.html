@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — {{ league.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Audit Log</h1>
+  <p>{{ league.name }} — {{ total }} entries shown</p>
+</div>
+<a href="/survivor/{{ league.id }}/manage" class="btn btn-secondary btn-sm" style="margin-bottom:16px;">← Back to Manage</a>
+
+<div class="card">
+  <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+    <select name="action" style="width:auto;">
+      <option value="ALL">All Actions</option>
+      {% for a in action_types %}
+        <option value="{{ a }}" {% if filter_action == a %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="search" value="{{ filter_search }}" placeholder="Search…" style="flex:1;min-width:160px;">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+  </form>
+
+  <table style="font-size:12px;">
+    <thead>
+      <tr><th>Time</th><th>Actor</th><th>Action</th><th>Team</th><th>Player</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td style="color:var(--muted);white-space:nowrap">{{ log.ts }}</td>
+        <td>{{ log.actor }}</td>
+        <td><span class="badge badge-muted">{{ log.action }}</span></td>
+        <td>{{ log.team or '' }}</td>
+        <td>{{ log.player or '' }}</td>
+        <td style="color:var(--muted)">{{ log.details or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted);">No log entries.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

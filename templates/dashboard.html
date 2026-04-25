@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}My Leagues — 504 Fantasy{% endblock %}
+
+{% block head %}
+<style>
+.dash-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
+  align-items: start;
+}
+/* league cards */
+.league-grid { display: flex; flex-direction: column; gap: .85rem; }
+.league-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.1rem 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color .15s, background .15s;
+}
+.league-card:hover { border-color: rgba(232,184,75,.4); background: var(--s2); }
+.league-card.is-comm { border-left: 3px solid var(--gold); }
+.lc-icon {
+  font-size: 1.8rem;
+  width: 2.5rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+.lc-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.lc-meta { font-size: .78rem; color: var(--muted); margin-top: .15rem; }
+.lc-actions { margin-left: auto; display: flex; gap: .4rem; flex-shrink: 0; }
+
+/* invite code box */
+.invite-box {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: .65rem .9rem;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-top: .5rem;
+}
+.invite-code {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: .18em;
+  color: var(--gold);
+  flex: 1;
+}
+.copy-btn {
+  font-size: .72rem;
+  padding: .2rem .55rem;
+  cursor: pointer;
+}
+
+/* empty state */
+.empty-dash {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--s1);
+  border: 1px dashed var(--border);
+  border-radius: var(--r);
+}
+.empty-dash .ed-icon { font-size: 3rem; margin-bottom: .75rem; }
+
+@media(max-width: 768px) {
+  .dash-layout { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">⚡ My <em>Leagues</em></div>
+  <span class="page-sub">{{ user.username }}</span>
+</div>
+
+{% if msg == 'league_created' %}
+<div class="alert alert-success">✅ League created! Share the invite code with your players.</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger">⚠ {{ error }}</div>
+{% endif %}
+
+<div class="dash-layout">
+
+  <!-- ── Left: league list ── -->
+  <div>
+
+    <!-- Game type tabs -->
+    <div style="display:flex;gap:.4rem;margin-bottom:1.1rem">
+      <button id="tab-playoff"  class="btn btn-gold btn-sm"  onclick="switchTab('playoff')">🏈 Playoff Challenge</button>
+      <button id="tab-survivor" class="btn btn-ghost btn-sm" onclick="switchTab('survivor')">🎯 Survivor</button>
+    </div>
+
+    <!-- ── PLAYOFF LEAGUES ── -->
+    <div id="panel-playoff">
+      {% if leagues %}
+      <div class="league-grid">
+        {% for lg in leagues %}
+        <a href="/league/{{ lg.id }}/draft" class="league-card {% if lg.is_commissioner %}is-comm{% endif %}">
+          <div class="lc-icon">🏈</div>
+          <div>
+            <div class="lc-name">{{ lg.name }}</div>
+            <div class="lc-meta">
+              {% if lg.is_commissioner %}
+              <span class="badge b-gold">Commissioner</span>
+              {% else %}
+              <span class="badge b-green">Member</span>
+              {% endif %}
+              &nbsp;Joined {{ lg.joined_at[:10] }}
+            </div>
+            {% if lg.is_commissioner %}
+            <div class="invite-box" onclick="event.preventDefault()">
+              <span class="invite-code">{{ lg.invite_code }}</span>
+              <button class="btn btn-ghost copy-btn"
+                      onclick="copyCode('{{ lg.invite_code }}', this)">Copy</button>
+            </div>
+            {% endif %}
+          </div>
+          <div class="lc-actions">
+            <a href="/league/{{ lg.id }}/draft"  class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Draft</a>
+            <a href="/league/{{ lg.id }}/scores" class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Scores</a>
+            {% if lg.is_commissioner %}
+            <a href="/league/{{ lg.id }}/manage" class="btn btn-gold btn-sm"  onclick="event.stopPropagation()">Manage</a>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-dash">
+        <div class="ed-icon">🏟</div>
+        <p class="fw7 mb-1">No Playoff leagues yet.</p>
+        <p class="text-sm text-muted">Create one or enter an invite code to join.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── SURVIVOR LEAGUES ── -->
+    <div id="panel-survivor" style="display:none">
+      {% if survivor_leagues %}
+      <div class="league-grid">
+        {% for lg in survivor_leagues %}
+        <a href="/survivor/{{ lg.id }}" class="league-card {% if lg.is_commissioner %}is-comm{% endif %}"
+           style="border-left-color:var(--ember)">
+          <div class="lc-icon">🎯</div>
+          <div>
+            <div class="lc-name">{{ lg.name }}</div>
+            <div class="lc-meta">
+              {% if lg.is_commissioner %}
+              <span class="badge b-gold">Commissioner</span>
+              {% else %}
+              <span class="badge b-green">Member</span>
+              {% endif %}
+              &nbsp;Season {{ lg.season }} · Week {{ lg.current_week }}/18
+            </div>
+            {% if lg.is_commissioner %}
+            <div class="invite-box" onclick="event.preventDefault()">
+              <span class="invite-code">{{ lg.invite_code }}</span>
+              <button class="btn btn-ghost copy-btn"
+                      onclick="copyCode('{{ lg.invite_code }}', this)">Copy</button>
+            </div>
+            {% endif %}
+          </div>
+          <div class="lc-actions">
+            <a href="/survivor/{{ lg.id }}/lineup"  class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Lineup</a>
+            <a href="/survivor/{{ lg.id }}/scores"  class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Scores</a>
+            {% if lg.is_commissioner %}
+            <a href="/survivor/{{ lg.id }}/manage"  class="btn btn-sm"
+               style="background:var(--ember);color:#fff" onclick="event.stopPropagation()">Manage</a>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-dash">
+        <div class="ed-icon">🎯</div>
+        <p class="fw7 mb-1">No Survivor leagues yet.</p>
+        <p class="text-sm text-muted">Create one or enter a Survivor invite code to join.</p>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- ── Right: actions sidebar ── -->
+  <div>
+    <!-- Playoff: Create league -->
+    <div class="card mb-2" id="sidebar-playoff">
+      <div class="card-title">🏈 Playoff Challenge</div>
+      <form method="post" action="/league/create" style="margin-bottom:1rem">
+        <div class="fg">
+          <label>Create League</label>
+          <input name="league_name" required placeholder="e.g. Friday Night Lights"/>
+        </div>
+        <button class="btn btn-gold" style="width:100%">Create Playoff League</button>
+      </form>
+      <form method="post" action="/league/join">
+        <div class="fg">
+          <label>Join with Invite Code</label>
+          <input name="invite_code" required placeholder="8-character code"
+                 style="text-transform:uppercase;letter-spacing:.12em;font-family:'Barlow Condensed',sans-serif;font-size:1rem"/>
+        </div>
+        <button class="btn btn-ghost" style="width:100%">Join Playoff League</button>
+      </form>
+    </div>
+
+    <!-- Survivor: Create / Join league -->
+    <div class="card mb-2" id="sidebar-survivor" style="display:none;border-color:rgba(201,69,26,.3)">
+      <div class="card-title" style="color:var(--ember)">🎯 Survivor Challenge</div>
+      <form method="post" action="/survivor/league/create" style="margin-bottom:1rem">
+        <div class="fg">
+          <label>Create Survivor League</label>
+          <input name="league_name" required placeholder="e.g. The 504 Survivors"/>
+        </div>
+        <div class="fg">
+          <label>NFL Season Year</label>
+          <input name="season" type="number" value="2025" min="2020" max="2040"/>
+        </div>
+        <button class="btn btn-sm" style="width:100%;background:var(--ember);color:#fff">Create Survivor League</button>
+      </form>
+      <form method="post" action="/survivor/league/join">
+        <div class="fg">
+          <label>Join with Invite Code</label>
+          <input name="invite_code" required placeholder="8-character code"
+                 style="text-transform:uppercase;letter-spacing:.12em;font-family:'Barlow Condensed',sans-serif;font-size:1rem"/>
+        </div>
+        <button class="btn btn-ghost" style="width:100%">Join Survivor League</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function switchTab(tab) {
+  const isPlayoff = tab === 'playoff';
+  document.getElementById('panel-playoff').style.display    = isPlayoff ? '' : 'none';
+  document.getElementById('panel-survivor').style.display   = isPlayoff ? 'none' : '';
+  document.getElementById('sidebar-playoff').style.display  = isPlayoff ? '' : 'none';
+  document.getElementById('sidebar-survivor').style.display = isPlayoff ? 'none' : '';
+  document.getElementById('tab-playoff').className  = isPlayoff
+    ? 'btn btn-gold btn-sm' : 'btn btn-ghost btn-sm';
+  const st = document.getElementById('tab-survivor');
+  st.className = 'btn btn-sm';
+  st.style.cssText = isPlayoff
+    ? '' : 'background:var(--ember);color:#fff';
+}
+
+function copyCode(code, btn) {
+  navigator.clipboard.writeText(code).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1800);
+  });
+}
+</script>
+{% endblock %}

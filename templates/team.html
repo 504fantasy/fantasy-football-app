@@ -1,0 +1,708 @@
+{% extends "base.html" %}
+{% block title %}{{ team.name }} — {{ league.name }}{% endblock %}
+
+{% set ROUND_NAMES = {1: "Wild Card", 2: "Divisional", 3: "Conf. Champ.", 4: "Super Bowl"} %}
+{% macro round_name(w) %}{{ ROUND_NAMES.get(w, "Wk " ~ w) }}{% endmacro %}
+
+{% block head %}
+<style>
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.team-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .team-layout { grid-template-columns: 1fr }
+}
+
+/* ── Hero header ─────────────────────────────────────────────────────────── */
+.team-hero {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.team-hero-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  line-height: 1;
+}
+.team-hero-owner {
+  font-size: .82rem;
+  color: var(--muted);
+  margin-top: .3rem;
+}
+.hero-stats {
+  display: flex;
+  gap: 1.5rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.hero-stat {
+  text-align: center;
+}
+.hero-stat-val {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1;
+}
+.hero-stat-val.green { color: var(--green) }
+.hero-stat-val.red   { color: var(--ember) }
+.hero-stat-lbl {
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--muted);
+  margin-top: .2rem;
+}
+
+/* ── Week nav ────────────────────────────────────────────────────────────── */
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.wk-btn {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: .28rem .65rem;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all .15s;
+}
+.wk-btn:hover { background: var(--s3); color: var(--gold); border-color: rgba(232,184,75,.4) }
+.wk-btn.active { background: rgba(232,184,75,.15); color: var(--gold); border-color: rgba(232,184,75,.5) }
+
+.pts-col {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-align: right;
+}
+.pts-gold   { color: var(--gold) }
+.pts-muted  { color: var(--muted) }
+.pts-pony   { color: #fb923c }
+.pts-season { color: var(--muted); font-size: .82rem; font-weight: 500 }
+
+.mult-form {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.mult-input {
+  width: 58px;
+  padding: .22rem .4rem;
+  font-size: .78rem;
+  background: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  text-align: center;
+}
+.mult-input:focus { outline: none; border-color: rgba(232,184,75,.5) }
+.mult-save {
+  font-size: .7rem;
+  padding: .22rem .5rem;
+  background: rgba(232,184,75,.15);
+  border: 1px solid rgba(232,184,75,.3);
+  border-radius: 4px;
+  color: var(--gold);
+  cursor: pointer;
+  transition: background .15s;
+}
+.mult-save:hover { background: rgba(232,184,75,.25) }
+
+.section-divider {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--muted);
+  background: var(--s2);
+  padding: .35rem .75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Sparkline bar chart ─────────────────────────────────────────────────── */
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 40px;
+  padding: .5rem .75rem .25rem;
+}
+.spark-bar.future { background: var(--border); opacity: .5 }
+.spark-bar {
+  flex: 1;
+  background: rgba(232,184,75,.35);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: background .15s;
+  position: relative;
+  cursor: default;
+}
+.spark-bar:hover { background: rgba(232,184,75,.7) }
+.spark-bar.active { background: var(--gold) }
+
+/* ── Pony badge ──────────────────────────────────────────────────────────── */
+.pony-tag {
+  font-size: .65rem;
+  background: rgba(251,146,60,.15);
+  color: #fb923c;
+  border: 1px solid rgba(251,146,60,.3);
+  border-radius: 3px;
+  padding: .1rem .35rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+
+/* ── Saved flash ─────────────────────────────────────────────────────────── */
+.flash-saved {
+  background: rgba(34,197,94,.1);
+  border: 1px solid rgba(34,197,94,.3);
+  color: var(--green);
+  padding: .6rem 1rem;
+  border-radius: var(--r);
+  font-size: .84rem;
+  margin-bottom: 1rem;
+}
+/* ── Eliminated player ─────────────────────────────────────────── */
+.tsb-row.eliminated .tr-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--ember);
+  color: var(--muted);
+  opacity: .75;
+}
+.elim-badge {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .62rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ember);
+  background: rgba(201,69,26,.1);
+  border: 1px solid rgba(201,69,26,.3);
+  border-radius: 3px;
+  padding: .08rem .32rem;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: .4rem;
+}
+
+/* ── Player rows (scores-style) ─────────────────────────────────────────── */
+.tsb-row {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .65rem 1rem;
+  font-size: .9rem;
+  border-bottom: 1px solid rgba(37,42,52,.5);
+  flex-wrap: wrap;
+}
+.tsb-row:last-child { border-bottom: none }
+.tsb-row:hover { background: rgba(255,255,255,.02) }
+.tr-name {
+  font-weight: 600;
+  font-size: .95rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tr-nfl {
+  font-size: .8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tr-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  flex-shrink: 0;
+}
+.tr-final {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.tr-final.pts-pos  { color: var(--gold) }
+.tr-final.pts-pony { color: #fb923c }
+.tr-final.pts-zero { color: var(--muted) }
+.tr-base   { font-size: .78rem; color: var(--muted) }
+.override-note { font-size: .74rem; color: #60a5fa; flex-shrink: 0 }
+.stat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  align-items: center;
+}
+.sc {
+  font-size: .75rem;
+  padding: .15rem .45rem;
+  border-radius: 3px;
+  background: var(--s3);
+  color: var(--muted);
+  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,.05);
+}
+.sc.highlight { color: var(--text); background: rgba(232,184,75,.1); border-color: rgba(232,184,75,.2) }
+.sc.neg       { color: var(--ember); background: rgba(201,69,26,.08); border-color: rgba(201,69,26,.2) }
+.game-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  padding: .18rem .55rem;
+  border-radius: 3px;
+  background: var(--s3);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.game-chip .gc-score { color: var(--text); font-weight: 800 }
+.game-chip .gc-live  { color: var(--green); font-size: .68rem; text-transform: uppercase; letter-spacing: .06em }
+.section-label {
+  padding: .4rem 1rem;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  background: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+.season-pts-chip {
+  font-size: .72rem;
+  color: var(--muted);
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .1rem .4rem;
+  white-space: nowrap;
+}
+
+/* ── Pony picker ─────────────────────────────────────────────────────────── */
+.pony-section {
+  border: 1px solid rgba(201,69,26,.35);
+  border-radius: var(--r);
+  background: rgba(201,69,26,.04);
+  padding: 1rem 1.1rem;
+  margin-top: 1rem;
+}
+.pony-section-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ember);
+  margin-bottom: .65rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.pony-private-row {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .45rem .6rem;
+  background: var(--s2);
+  border: 1px solid rgba(201,69,26,.2);
+  border-radius: var(--r);
+  margin-bottom: .4rem;
+  font-size: .87rem;
+}
+.pony-private-label {
+  font-size: .65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ember);
+  opacity: .7;
+  margin-left: auto;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if msg == 'mult_saved' %}
+<div class="flash-saved">✅ Multiplier saved.</div>
+{% endif %}
+
+<!-- ── Team Hero ─────────────────────────────────────────────────────────── -->
+<div class="team-hero">
+  <div>
+    <div class="team-hero-name">{{ team.name }}</div>
+    <div class="team-hero-owner">
+      Managed by {{ owner.username if owner else "—" }}
+      {% if is_commissioner and not is_owner %}
+        <span style="color:var(--gold);margin-left:.5rem">👁 Commissioner View</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="hero-stat-val">{{ season_total }}</div>
+      <div class="hero-stat-lbl">Season Pts</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-val">{{ week_data.total }}</div>
+      <div class="hero-stat-lbl">{{ round_name(week) }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Week nav ──────────────────────────────────────────────────────────── -->
+<div class="week-nav">
+  {% for w in [1, 2, 3, 4] %}
+  <a href="/league/{{ league.id }}/team/{{ team.id }}?week={{ w }}"
+     class="wk-btn {% if w == week %}active{% endif %}">{{ round_name(w) }}</a>
+  {% endfor %}
+</div>
+
+<div class="team-layout">
+
+  <!-- ── LEFT: Roster + scores ─────────────────────────────────────────── -->
+  <div>
+    <div class="card">
+      <div class="card-title">
+        🏈 {{ round_name(week) }} Roster
+        <span style="float:right;font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;color:var(--gold)">
+          {{ week_data.total }} pts
+        </span>
+      </div>
+
+      {# ── Macro: render one player row ────────────────────────────────── #}
+      {% macro player_row(p) %}
+      <div class="tsb-row" data-nfl="{{ p.nfl_team or '' }}">
+
+        {# Position badge #}
+        <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
+
+        {# Name + tags #}
+        <span class="tr-name player-name">
+          {{ p.name }}
+          {% if p.is_pony %}
+            <span class="badge b-ember" style="font-size:.65rem;margin-left:.3rem">🐴</span>
+            {% if is_owner and not p.pony_revealed %}<span style="font-size:.62rem;color:var(--ember);opacity:.7">🔒</span>{% endif %}
+          {% endif %}
+          {% if p.multiplier %}<span class="badge b-gold" style="font-size:.65rem;margin-left:.2rem">×{{ p.multiplier }}</span>{% endif %}
+        </span>
+
+        {# NFL team #}
+        <span class="tr-nfl">{{ p.nfl_team or '—' }}</span>
+
+        {# Game chip — filled by JS #}
+        <div class="game-score-slot" data-nfl="{{ p.nfl_team or '' }}"></div>
+
+        {# Eliminated badge #}
+        <span class="elim-badge" style="display:none">Eliminated</span>
+
+        {# Stat chips #}
+        {% set pos = p.position or '' %}
+        <div class="stat-chips">
+          {% if pos == 'K' %}
+            {% set fgs = p.field_goals_json | default('[]') %}
+            {% if fgs and fgs != '[]' %}
+            <span class="sc highlight">FG ✓</span>
+            {% endif %}
+          {% elif pos == 'DST' %}
+            {% if p.return_yards and p.return_yards > 0 %}
+            <span class="sc highlight">{{ p.return_yards | int }} ret yds</span>
+            {% endif %}
+          {% else %}
+            {% if p.receptions and p.receptions > 0 %}
+            <span class="sc {% if p.receptions >= 5 %}highlight{% endif %}">{{ p.receptions | int }} rec</span>
+            {% endif %}
+            {% if p.receiving_yards and p.receiving_yards > 0 %}
+            <span class="sc {% if p.receiving_yards >= 50 %}highlight{% endif %}">{{ p.receiving_yards | int }} rec yds</span>
+            {% endif %}
+            {% if p.rushing_yards and p.rushing_yards > 0 %}
+            <span class="sc {% if p.rushing_yards >= 50 %}highlight{% endif %}">{{ p.rushing_yards | int }} rush yds</span>
+            {% endif %}
+            {% if p.passing_yards and p.passing_yards > 0 %}
+            <span class="sc {% if p.passing_yards >= 200 %}highlight{% endif %}">{{ p.passing_yards | int }} pass yds</span>
+            {% endif %}
+            {% if p.total_tds and p.total_tds > 0 %}
+            <span class="sc highlight">{{ p.total_tds | int }} TD{% if p.total_tds > 1 %}s{% endif %}</span>
+            {% endif %}
+            {% if p.return_yards and p.return_yards > 0 %}
+            <span class="sc">{{ p.return_yards | int }} ret yds</span>
+            {% endif %}
+            {% if p.interceptions and p.interceptions > 0 %}
+            <span class="sc neg">{{ p.interceptions | int }} INT</span>
+            {% endif %}
+            {% if p.fumbles_lost and p.fumbles_lost > 0 %}
+            <span class="sc neg">{{ p.fumbles_lost | int }} FUM</span>
+            {% endif %}
+            {% if not (p.receptions or p.receiving_yards or p.rushing_yards or p.passing_yards or p.total_tds or p.return_yards) %}
+            <span class="sc" style="font-style:italic">no stats</span>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        {% if p.override_note %}
+        <span class="override-note">✎ {{ p.override_note }}</span>
+        {% endif %}
+
+        {# Season pts chip #}
+        <span class="season-pts-chip" title="Season total">{{ player_season_pts.get(p.player_id, 0) }} season</span>
+
+        {# Points #}
+        <div class="tr-right">
+          <span class="tr-final {% if p.is_pony %}pts-pony{% elif p.final_points > 0 %}pts-pos{% else %}pts-zero{% endif %}">
+            {{ p.final_points }}
+          </span>
+          {% if p.multiplier and p.multiplier != 1.0 and not p.override_points %}
+          <span class="tr-base">({{ p.base_points }})</span>
+          {% endif %}
+        </div>
+
+        {# Multiplier setter — owner only, unlocked only #}
+        {% if is_owner and not multipliers_locked %}
+        <form method="post" action="/league/{{ league.id }}/{% if p.is_pony %}pony/{% endif %}multiplier" class="mult-form">
+          <input type="hidden" name="roster_id" value="{{ p.get('roster_id') or '' }}"/>
+          <input type="hidden" name="player_name" value="{{ p.name }}"/>
+          <input type="hidden" name="team" value="{{ team.name }}"/>
+          <select class="mult-input" name="value">
+            <option value="">—</option>
+            <option value="1.5" {% if p.multiplier == 1.5 %}selected{% endif %}>×1.5</option>
+            <option value="2"   {% if p.multiplier == 2.0 or p.multiplier == 2 %}selected{% endif %}>×2</option>
+          </select>
+          <button class="mult-save" type="submit">Set</button>
+        </form>
+        {% endif %}
+
+      </div>
+      {% endmacro %}
+
+      {# ── Regular players ─────────────────────────────────────────────── #}
+      {% set regulars = week_data.players | selectattr('is_pony', 'equalto', 0) | list %}
+      {% set ponies   = week_data.players | selectattr('is_pony', 'equalto', 1) | list %}
+
+      {% if regulars %}
+      <div class="section-label">Roster</div>
+      {% for p in regulars | sort(attribute='final_points', reverse=true) %}
+        {{ player_row(p) }}
+      {% endfor %}
+      {% endif %}
+
+      {% if ponies %}
+      <div class="section-label">🐴 Ponies</div>
+      {% for p in ponies | sort(attribute='final_points', reverse=true) %}
+        {{ player_row(p) }}
+      {% endfor %}
+      {% endif %}
+
+      {% if not week_data.players %}
+      <div style="padding:2rem;text-align:center;color:var(--muted);font-size:.85rem">No players drafted yet.</div>
+      {% endif %}
+
+      {% if multipliers_locked and is_owner %}
+      <div style="padding:.75rem 1rem;font-size:.78rem;color:var(--muted);border-top:1px solid var(--border)">
+        🔒 Multiplier window is closed
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Pony Picks (private, owner-only until revealed) ─────────────── -->
+  {% if is_owner and draft_complete %}
+  <div class="pony-section">
+    <div class="pony-section-title">
+      🐴 Pony Picks
+      <span style="font-size:.75rem;font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0">
+        {{ pony_count }}/{{ max_ponies }} selected
+      </span>
+      {% if not pony_locked %}
+      <span style="font-size:.7rem;background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:3px;padding:.1rem .4rem;margin-left:.25rem">
+        Window Open
+      </span>
+      {% else %}
+      <span style="font-size:.7rem;background:rgba(201,69,26,.1);color:var(--ember);border:1px solid rgba(201,69,26,.3);border-radius:3px;padding:.1rem .4rem;margin-left:.25rem">
+        Locked
+      </span>
+      {% endif %}
+    </div>
+
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem;line-height:1.5">
+      Your pony picks are <strong style="color:var(--text)">private</strong> — other teams can't see them until you reveal or the multiplier window closes.
+    </p>
+
+    {# Show existing pony picks with reveal button #}
+    {% set my_ponies = week_data.players | selectattr('is_pony', 'equalto', 1) | list %}
+    {% for p in my_ponies %}
+    <div class="pony-private-row">
+      <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
+      <span style="font-weight:600">{{ p.name }}</span>
+      <span style="font-size:.78rem;color:var(--muted)">{{ p.nfl_team or '' }}</span>
+      {% if p.pony_revealed %}
+        <span style="font-size:.68rem;color:var(--green);margin-left:auto">✓ Revealed</span>
+      {% else %}
+        <span class="pony-private-label">🔒 Hidden</span>
+        <form method="post" action="/league/{{ league.id }}/team/{{ team.id }}/pony/reveal" style="margin:0">
+          <input type="hidden" name="roster_id" value="{{ p.roster_id }}"/>
+          <button class="btn btn-ghost btn-xs" style="font-size:.7rem;padding:.2rem .5rem">Reveal now</button>
+        </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    {# Add pony form #}
+    {% if not pony_locked and pony_count < max_ponies %}
+    <form method="post" action="/league/{{ league.id }}/team/{{ team.id }}/pony/add"
+          style="display:flex;gap:.5rem;margin-top:.65rem;align-items:center;flex-wrap:wrap">
+      <input type="text" name="player_name" placeholder="Player name…" required
+             list="pony-players-list"
+             style="flex:1;min-width:160px;background:var(--s2);border:1px solid var(--border);
+                    color:var(--text);padding:.35rem .65rem;border-radius:var(--r);font-size:.85rem"/>
+      <datalist id="pony-players-list">
+        {% for pl in league_players %}
+        <option value="{{ pl.name }}">{{ pl.position }} — {{ pl.nfl_team }}</option>
+        {% endfor %}
+      </datalist>
+      <button class="btn btn-ember btn-sm">🐴 Add Pony</button>
+    </form>
+    {% if msg == 'pony_added' %}
+    <div style="font-size:.78rem;color:var(--green);margin-top:.5rem">✓ Pony added (hidden from others)</div>
+    {% endif %}
+    {% if request.query_params.get('error') == 'pony_max' %}
+    <div style="font-size:.78rem;color:var(--ember);margin-top:.5rem">Max ponies reached.</div>
+    {% endif %}
+    {% if request.query_params.get('error') == 'player_not_found' %}
+    <div style="font-size:.78rem;color:var(--ember);margin-top:.5rem">Player not found in this league.</div>
+    {% endif %}
+    {% endif %}
+
+    {% if pony_locked %}
+    <div style="font-size:.78rem;color:var(--muted);margin-top:.5rem">
+      🔒 Pony window is closed — all picks auto-revealed.
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ── RIGHT: Sidebar ────────────────────────────────────────────────── -->
+  <div>
+
+    <!-- Points by Round (always 4 playoff weeks) -->
+    <div class="card mb-2">
+      <div class="card-title" style="margin-bottom:.25rem">📈 Points by Round</div>
+      {% set wt_map = {} %}
+      {% for wt in weekly_totals %}{% set _ = wt_map.update({wt.week: wt.total}) %}{% endfor %}
+      {% set all4 = [
+        {"week": 1, "total": wt_map.get(1, 0)},
+        {"week": 2, "total": wt_map.get(2, 0)},
+        {"week": 3, "total": wt_map.get(3, 0)},
+        {"week": 4, "total": wt_map.get(4, 0)}
+      ] %}
+      {% set max_pts = all4 | map(attribute="total") | max %}
+      <div class="sparkline">
+        {% for wt in all4 %}
+        <div class="spark-bar {% if wt.week == week %}active{% endif %} {% if wt.week > current_week %}future{% endif %}"
+             style="height:{{ [((wt.total / max_pts * 100) if max_pts > 0 else 3) | int, 3] | max }}%"
+             title="{{ round_name(wt.week) }}: {{ wt.total }} pts">
+        </div>
+        {% endfor %}
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:0 .75rem .5rem;font-size:.7rem;color:var(--muted)">
+        {% for wt in all4 %}
+        <span style="{% if wt.week > current_week %}opacity:.4{% endif %}">{{ round_name(wt.week) }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+
+  </div>
+</div>
+
+<script>
+// ── Shared ESPN team alias ────────────────────────────────────────────────
+const ESPN_ALIAS = {
+  'WSH':'WSH','WAS':'WSH','LV':'LV','LAS':'LV','LA':'LAR','JAC':'JAX'
+};
+function normTeam(t) { return ESPN_ALIAS[t] || t; }
+
+// ── Game score chips ──────────────────────────────────────────────────────
+async function loadGameScores() {
+  const week   = {{ week }};
+  const season = {{ season | default(2024) }};
+  try {
+    const resp = await fetch(`/api/nfl-games?week=${week}&season=${season}`);
+    if (!resp.ok) return;
+    const games = (await resp.json()).games || {};
+    document.querySelectorAll('.game-score-slot').forEach(slot => {
+      const nfl  = normTeam((slot.dataset.nfl || '').toUpperCase());
+      const game = games[nfl];
+      if (!game) return;
+      const isHome    = normTeam(game.home) === nfl;
+      const myScore   = isHome ? game.home_score : game.away_score;
+      const oppScore  = isHome ? game.away_score : game.home_score;
+      const oppTeam   = isHome ? game.away : game.home;
+      const myWin     = parseInt(myScore) > parseInt(oppScore);
+      const tied      = myScore === oppScore;
+      const scoreColor = myWin ? 'var(--gold)' : tied ? 'var(--text)' : 'var(--muted)';
+      const vsLabel    = isHome ? 'vs' : '@';
+      const statusHtml = game.live
+        ? `<span class="gc-live">● ${game.live}</span>`
+        : `<span style="color:var(--muted);font-size:.62rem">${game.status}</span>`;
+      slot.innerHTML = `<span class="game-chip">
+        <span style="color:${scoreColor};font-weight:800">${nfl}</span>
+        <span style="color:var(--muted)"> ${vsLabel} </span>${oppTeam}
+        <span class="gc-score" style="color:${scoreColor}">${myScore}–${oppScore}</span>
+        ${statusHtml}</span>`;
+    });
+  } catch(e) { console.log('Game scores unavailable:', e.message); }
+}
+loadGameScores();
+
+// ── Eliminated teams ──────────────────────────────────────────────────────
+async function markEliminated() {
+  const season = {{ season | default(2024) }};
+  try {
+    const r = await fetch(`/api/nfl-eliminated?season=${season}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const elimSet = new Set((data.eliminated || []).map(t => normTeam(t)));
+    if (!elimSet.size) return;
+    document.querySelectorAll('.tsb-row[data-nfl]').forEach(row => {
+      const nfl = normTeam((row.dataset.nfl || '').toUpperCase());
+      if (!nfl || !elimSet.has(nfl)) return;
+      row.classList.add('eliminated');
+      const nameSpan = row.querySelector('span.player-name');
+      if (nameSpan && !nameSpan.parentNode.querySelector('.elim-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'elim-badge';
+        badge.textContent = 'Eliminated';
+        nameSpan.insertAdjacentElement('afterend', badge);
+      }
+    });
+  } catch(e) {}
+}
+markEliminated();
+</script>
+
+{% endblock %}

@@ -1,0 +1,1131 @@
+{% extends "base.html" %}
+{% block title %}Draft — {{ league.name }}{% endblock %}
+
+{% block head %}
+<style>
+/* ── Draft order banner ──────────────────────────────────────────────────── */
+.draft-banner {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin-bottom: 1.25rem;
+  padding: .85rem 1rem;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.draft-banner-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .12em;
+  color: var(--muted); align-self: center;
+  margin-right: .25rem; white-space: nowrap;
+}
+.pick-block {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-width: 64px; padding: .45rem .5rem;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--s2); transition: all .2s;
+  flex: 1; max-width: 96px;
+}
+.pick-block .pb-num {
+  font-size: .58rem; color: var(--muted);
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: .18rem;
+}
+.pick-block .pb-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .84rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .04em;
+  text-align: center; line-height: 1.1;
+}
+.pick-block .pb-count { font-size: .6rem; color: var(--muted); margin-top: .16rem; }
+.pick-block.on-clock {
+  background: linear-gradient(135deg, rgba(232,184,75,.2), rgba(232,184,75,.06));
+  border-color: rgba(232,184,75,.6);
+  animation: pulse-gold 2s ease-in-out infinite;
+}
+.pick-block.on-clock .pb-name { color: var(--gold) }
+.pick-block.on-clock .pb-num  { color: rgba(232,184,75,.7) }
+.pick-block.done { opacity: .4 }
+.pick-block.done .pb-name { color: var(--muted) }
+.pick-block.my-team { border-color: rgba(34,197,94,.35) }
+.pick-block.my-team .pb-name { color: var(--green) }
+.pick-block.on-clock.my-team .pb-name { color: var(--gold) }
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 8px rgba(232,184,75,.12) }
+  50%       { box-shadow: 0 0 18px rgba(232,184,75,.32) }
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.draft-layout { display: grid; grid-template-columns: 320px 200px 1fr 280px; gap: 1rem; align-items: start }
+@media (max-width: 1300px) { .draft-layout { grid-template-columns: 320px 200px 1fr } }
+@media (max-width: 1000px) { .draft-layout { grid-template-columns: 320px 1fr } }
+@media (max-width: 700px)  { .draft-layout { grid-template-columns: 1fr } }
+
+/* ── Clock ───────────────────────────────────────────────────────────────── */
+.clock-card {
+  background: linear-gradient(135deg, rgba(232,184,75,.13), rgba(232,184,75,.04));
+  border: 1px solid rgba(232,184,75,.32); border-radius: 10px; padding: 1rem 1.2rem;
+}
+.clock-label { font-family:'Barlow Condensed',sans-serif; font-size:.65rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.1em; color:var(--gold); margin-bottom:.3rem }
+.clock-team  { font-family:'Barlow Condensed',sans-serif; font-size:1.5rem; font-weight:800; text-transform:uppercase }
+.clock-meta  { font-size:.8rem; color:var(--muted); margin-top:.15rem }
+
+/* ── Autocomplete ────────────────────────────────────────────────────────── */
+.search-wrap { position: relative }
+#suggestions {
+  position:absolute; top:100%; left:0; right:0;
+  background:var(--s2); border:1px solid var(--border); border-top:none;
+  border-radius:0 0 var(--r) var(--r); max-height:260px; overflow-y:auto; z-index:99; display:none;
+}
+.sug-item { display:flex; align-items:center; gap:.55rem; padding:.55rem .8rem;
+  cursor:pointer; font-size:.84rem; border-bottom:1px solid var(--border); transition:background .1s; }
+.sug-item:last-child { border-bottom:none }
+.sug-item:hover, .sug-item.active { background:var(--s3) }
+.sug-item .si-pos { min-width:34px }
+.sug-item .si-nfl { color:var(--muted); font-size:.76rem; margin-left:auto }
+
+/* ── Player filters ──────────────────────────────────────────────────────── */
+.filter-lbl { font-size:.63rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:.1em; color:var(--muted); margin:.65rem 0 .3rem; }
+.avail-tabs { display:flex; gap:.25rem; flex-wrap:wrap; margin-bottom:.35rem }
+.team-tabs  { display:flex; gap:.2rem;  flex-wrap:wrap; margin-bottom:.45rem }
+.pos-tab, .team-tab {
+  font-family:'Barlow Condensed',sans-serif; font-size:.72rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em; cursor:pointer;
+  padding:.24rem .55rem; border-radius:4px; border:1px solid var(--border);
+  background:transparent; color:var(--muted); transition:all .15s;
+}
+.pos-tab:hover,  .pos-tab.on  { color:var(--gold); background:rgba(232,184,75,.08); border-color:rgba(232,184,75,.4) }
+.team-tab:hover, .team-tab.on { color:var(--gold); background:rgba(232,184,75,.08); border-color:rgba(232,184,75,.4) }
+.filter-search {
+  width:100%; padding:.32rem .65rem; font-size:.82rem; box-sizing:border-box;
+  background:var(--s2); border:1px solid var(--border); border-radius:var(--r);
+  color:var(--text); outline:none; margin-bottom:.5rem;
+}
+.filter-search:focus { border-color:rgba(232,184,75,.45) }
+.filter-search::placeholder { color:var(--muted) }
+.avail-list { max-height:340px; overflow-y:auto }
+.avail-list table { font-size:.82rem; width:100% }
+.avail-list th { position:sticky; top:0; background:var(--s1); z-index:5 }
+
+/* ── Roster grid ─────────────────────────────────────────────────────────── */
+.rosters-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem }
+
+/* ── Draft chat panel ────────────────────────────────────────────────────── */
+.chat-panel {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 5rem);
+  overflow: hidden;
+}
+.chat-header {
+  background: var(--s2);
+  padding: .65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .82rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .06em;
+  flex-shrink: 0;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: .5rem 0;
+  min-height: 200px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.chat-msg {
+  padding: .38rem .85rem;
+  font-size: .78rem;
+  line-height: 1.4;
+  border-bottom: 1px solid rgba(37,42,52,.4);
+}
+.chat-msg:last-child { border-bottom: none }
+.chat-msg.type-pick {
+  background: rgba(232,184,75,.05);
+  border-left: 2px solid var(--gold);
+  padding-left: .65rem;
+}
+.chat-msg.type-system {
+  background: rgba(59,130,246,.04);
+  border-left: 2px solid rgba(59,130,246,.3);
+  padding-left: .65rem;
+}
+.cm-meta {
+  display: flex;
+  align-items: baseline;
+  gap: .35rem;
+  margin-bottom: .1rem;
+}
+.cm-who {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.cm-who.me  { color: var(--green) }
+.cm-who.sys { color: var(--gold); font-size: .65rem }
+.cm-time { font-size: .62rem; color: var(--muted) }
+.cm-text { color: var(--text) }
+.cm-text .pick-player { color: var(--gold); font-weight: 600 }
+.chat-input-row {
+  display: flex;
+  gap: .4rem;
+  padding: .5rem .75rem;
+  border-top: 1px solid var(--border);
+  background: var(--s2);
+  flex-shrink: 0;
+}
+.chat-input-row input {
+  flex: 1;
+  font-size: .8rem;
+  padding: .38rem .65rem;
+  background: var(--s3);
+  border-color: var(--border);
+}
+.chat-input-row .btn { flex-shrink:0; padding:.38rem .65rem; font-size:.75rem }
+.chat-empty {
+  text-align: center;
+  padding: 1.5rem .75rem;
+  font-size: .75rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Player queue ────────────────────────────────────────────────────────── */
+.queue-panel {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  position: sticky;
+  top: 1rem;
+}
+.queue-header {
+  background: var(--s2);
+  padding: .65rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.queue-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.queue-count {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .75rem;
+  color: var(--muted);
+}
+.queue-list { min-height: 60px; }
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .42rem .75rem;
+  font-size: .8rem;
+  border-bottom: 1px solid rgba(37,42,52,.6);
+  cursor: grab;
+  transition: background .1s;
+  user-select: none;
+}
+.queue-item:last-child { border-bottom: none }
+.queue-item:hover { background: rgba(255,255,255,.03) }
+.queue-item.dragging { opacity: .4; background: var(--s3) }
+.queue-item.drag-over { border-top: 2px solid var(--gold) }
+.queue-item .qi-rank {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .72rem;
+  color: var(--muted);
+  min-width: 1.2rem;
+  font-weight: 700;
+}
+.queue-item .qi-name { flex: 1; font-weight: 500; line-height: 1.2 }
+.queue-item .qi-pos  { flex-shrink: 0 }
+.queue-item .qi-del {
+  color: var(--muted);
+  font-size: .75rem;
+  padding: .1rem .25rem;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all .1s;
+  line-height: 1;
+}
+.queue-item .qi-del:hover { color: var(--ember); background: rgba(201,69,26,.1) }
+.queue-empty {
+  text-align: center;
+  padding: 1.5rem .75rem;
+  font-size: .78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.queue-add-hint {
+  padding: .5rem .75rem;
+  font-size: .7rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-style: italic;
+}
+.queue-item.drafted {
+  opacity: .35;
+  text-decoration: line-through;
+}
+.roster-card  { background:var(--s1); border:1px solid var(--border); border-radius:var(--r); overflow:hidden }
+.rc-header    { background:var(--s2); padding:.65rem 1rem; display:flex; align-items:center; gap:.6rem; border-bottom:1px solid var(--border) }
+.rc-name      { font-family:'Barlow Condensed',sans-serif; font-size:.95rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em }
+.rc-owner     { font-size:.72rem; color:var(--muted) }
+.rc-body      { padding:.4rem 0 }
+.rc-player    { display:flex; align-items:center; gap:.45rem; padding:.38rem .85rem; font-size:.8rem; border-bottom:1px solid rgba(37,42,52,.6) }
+.rc-player:last-child { border-bottom:none }
+.rc-player .rcp-name { flex:1; font-weight:500 }
+.rc-player .rcp-nfl  { color:var(--muted); font-size:.72rem }
+.rc-empty { padding:.65rem .85rem; color:var(--muted); font-size:.8rem; font-style:italic }
+
+/* ── Position counter strip ──────────────────────────────────────────────── */
+.pos-counter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: .45rem .7rem;
+  background: var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+.pc-slot {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  transition: border-color .15s, background .15s;
+}
+/* filled slot — position color tint */
+.pc-slot.full   { border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.07) }
+.pc-slot.over   { border-color: rgba(232,184,75,.45); background: rgba(232,184,75,.08) }
+/* label (QB / RB …) */
+.pc-pos-lbl { color: var(--muted2) }
+.pc-slot.full .pc-pos-lbl  { color: var(--green) }
+.pc-slot.over .pc-pos-lbl  { color: var(--gold)  }
+/* fraction (1/1, 0/2 …) */
+.pc-frac { color: var(--muted) }
+.pc-slot.full .pc-frac     { color: var(--green) }
+.pc-slot.over .pc-frac     { color: var(--gold)  }
+
+/* roster totals row */
+.rc-totals {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .3rem .85rem;
+  font-size: .72rem;
+  color: var(--muted);
+  background: var(--s2);
+  border-top: 1px solid var(--border);
+}
+.rc-totals strong { color: var(--text) }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if request.query_params.get('error')=='taken' %}
+<div class="alert alert-warning">That player has already been drafted.</div>
+{% elif msg == 'league_created' %}
+<div class="alert alert-success">League created! Share the invite code from your <a href="/dashboard" style="color:var(--gold)">dashboard</a>.</div>
+{% endif %}
+
+<div class="page-header">
+  <div class="page-title">🏈 Draft <em>Room</em></div>
+  {% if teams and not draft_state.is_complete %}
+  <span class="page-sub">Round {{ draft_state.current_round }} · Pick {{ draft_state.current_pick + 1 }}</span>
+  {% elif draft_state.is_complete %}
+  <span class="page-sub" style="color:var(--green)">✅ Draft Complete</span>
+  {% endif %}
+</div>
+
+{# ── Draft Order Banner ──────────────────────────────────────────────────── #}
+{% if teams and snake_order %}
+<div class="draft-banner">
+  <span class="draft-banner-label">Round {{ draft_state.current_round }}<br>Order</span>
+  {% for t in snake_order %}
+  {% set is_active = (loop.index0 == draft_state.current_pick and not draft_state.is_complete) %}
+  {% set is_mine   = (t.owner_id == user.id) %}
+  {% set roster_ct = rosters.get(t.name, []) | selectattr('is_pony','equalto',0) | list | length %}
+  <div class="pick-block {% if is_active %}on-clock{% elif draft_state.is_complete %}done{% endif %} {% if is_mine %}my-team{% endif %}">
+    <div class="pb-num">Pick {{ loop.index }}</div>
+    <div class="pb-name">{{ t.name }}</div>
+    <div class="pb-count">{{ roster_ct }} drafted</div>
+  </div>
+  {% endfor %}
+</div>
+{% elif draft_state.is_complete %}
+<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);padding:.75rem 1rem;font-size:.85rem;color:var(--green);margin-bottom:1.25rem">
+  ✅ Draft complete — all picks have been made.
+</div>
+{% endif %}
+
+<div class="draft-layout">
+
+  {# ── LEFT sidebar ────────────────────────────────────────────────────── #}
+  <aside>
+
+    {# On-the-clock card #}
+    {% if team_on_clock and not draft_state.is_complete %}
+    <div class="clock-card mb-2" id="clock-card">
+      <div class="clock-label">🕒 On The Clock</div>
+      <div class="clock-team" id="clock-team">{{ team_on_clock.name }}</div>
+      <div class="clock-meta" id="clock-meta">Round {{ draft_state.current_round }} · Pick {{ draft_state.current_pick + 1 }}</div>
+      {% if league.pick_timer_seconds %}
+      <div style="margin-top:.55rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem">
+          <span style="font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Pick Clock</span>
+          <span id="timer-display" style="font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:800;color:var(--gold)">{{ league.pick_timer_seconds }}s</span>
+        </div>
+        <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+          <div id="timer-bar" style="height:100%;background:var(--gold);border-radius:2px;transition:width .9s linear;width:100%"></div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Pick form #}
+    {% if team_on_clock and (is_commissioner or user.id == team_on_clock.owner_id) %}
+    <div class="card mb-2">
+      <div class="card-title">✏ Make Pick</div>
+      <form method="post" action="/league/{{ league.id }}/draft/pick" id="pick-form">
+        <div class="fg">
+          <label>Player Name</label>
+          <div class="search-wrap">
+            <input type="text" id="player-search" placeholder="Search players…" autocomplete="off"/>
+            <input type="hidden" name="player_name" id="player-name-hidden"/>
+            <div id="suggestions"></div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-gold" style="width:100%;margin-top:.5rem">Draft Player</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {# Available players + filters #}
+    {% if available_players %}
+    <div class="card">
+      <div class="card-title">
+        Available Players
+        <span class="ct-right" id="avail-count-badge">{{ available_players | length }}</span>
+      </div>
+
+      <input class="filter-search" id="avail-search" placeholder="Search by name…" autocomplete="off" spellcheck="false"/>
+
+      <div class="filter-lbl">Position</div>
+      <div class="avail-tabs">
+        <button class="pos-tab on" data-pos="ALL">All</button>
+        {% for pos in by_position.keys() | sort %}
+        <button class="pos-tab" data-pos="{{ pos }}">{{ pos }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="filter-lbl">NFL Team</div>
+      <div class="team-tabs">
+        <button class="team-tab on" data-team="">All</button>
+        {% set nfl_seen = namespace(v=[]) %}
+        {% for p in available_players %}
+          {% if p.nfl_team and p.nfl_team not in nfl_seen.v %}{% set _ = nfl_seen.v.append(p.nfl_team) %}{% endif %}
+        {% endfor %}
+        {% for t in nfl_seen.v | sort %}<button class="team-tab" data-team="{{ t }}">{{ t }}</button>{% endfor %}
+      </div>
+
+      <div style="font-size:.7rem;color:var(--muted);margin-bottom:.35rem;min-height:1rem" id="avail-count-label"></div>
+
+      <div class="avail-list">
+        <table>
+          <thead><tr><th>Name</th><th>POS</th><th>Team</th></tr></thead>
+          <tbody id="avail-tbody">
+          {% for p in available_players %}
+          <tr data-pos="{{ p.position or 'UNK' }}" data-nfl="{{ p.nfl_team or '' }}" data-name="{{ p.name | lower }}" data-player="{{ p.name }}">
+            <td>
+              <button class="queue-star" data-name="{{ p.name }}" data-pos="{{ p.position or 'UNK' }}"
+                      title="Add to queue" style="background:none;border:none;cursor:pointer;padding:0 .3rem 0 0;color:var(--muted);font-size:.85rem;transition:color .15s">☆</button>
+              <span class="player-pick-name" style="cursor:pointer;color:var(--gold)">{{ p.name }}</span>
+            </td>
+            <td><span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span></td>
+            <td class="text-muted text-sm">{{ p.nfl_team or '—' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div id="avail-empty" style="display:none;text-align:center;padding:1.25rem;font-size:.82rem;color:var(--muted)">
+        No players match your filters
+      </div>
+    </div>
+    {% else %}
+    <div class="card text-c text-muted" style="padding:2rem">🏆 All players drafted!</div>
+    {% endif %}
+
+  </aside>
+
+  {# ── MIDDLE: Player queue (visible only to logged-in user) ────────────── #}
+  {% if not draft_state.is_complete %}
+  <div class="queue-panel" id="queue-panel">
+    <div class="queue-header">
+      <span class="queue-title">⭐ My Queue</span>
+      <span class="queue-count" id="queue-count">0</span>
+    </div>
+    <div class="queue-list" id="queue-list">
+      <div class="queue-empty" id="queue-empty">
+        Click ⭐ next to any<br>available player to queue them
+      </div>
+    </div>
+    <div class="queue-add-hint">Drag to reorder · ✕ to remove</div>
+  </div>
+  {% endif %}
+
+  {# ── CHAT: pick log + live chat ─────────────────────────────────────────── #}
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">💬 Draft Chat &amp; Picks</div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-empty" id="chat-empty">No messages yet.</div>
+    </div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Say something…" maxlength="280" autocomplete="off"/>
+      <button class="btn btn-ghost" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+  {# ── RIGHT: rosters ──────────────────────────────────────────────────── #}
+  <div>
+    {% if teams %}
+    <div class="rosters-grid">
+      {% set picks_per_team = league.picks_per_team or 15 %}
+      {#
+        Slot targets: QB×1, RB×2, WR×2, TE×1, FLEX×1, K×1, DST×1 = 9 starters
+        Remaining picks fill bench slots. FLEX counts as an extra RB/WR/TE slot.
+        Caps are display-only guides — the backend enforces only picks_per_team total.
+      #}
+      {% set pos_caps = {'QB':1,'RB':2,'WR':2,'TE':1,'K':1,'DST':1} %}
+      {# FLEX adds 1 extra RB/WR/TE conceptually — shown separately #}
+      {% set starters_total = 9 %}
+      {% set bench_slots = [picks_per_team - starters_total, 0] | max %}
+
+      {% for team in teams %}
+      {% set roster   = rosters.get(team.name, []) %}
+      {% set regulars = roster | selectattr('is_pony','equalto',0) | list %}
+      {% set ponies   = roster | selectattr('is_pony','equalto',1) | list %}
+      {% set is_mine  = (user.id == team.owner_id) %}
+      {% set drafted  = regulars | length %}
+      {% set remaining = [picks_per_team - drafted, 0] | max %}
+
+      {# Count per position from regulars #}
+      {% set pos_counts = namespace(QB=0, RB=0, WR=0, TE=0, K=0, DST=0, OTHER=0) %}
+      {% for p in regulars %}
+        {% set pos = (p.position or 'OTHER').upper() %}
+        {% if pos == 'QB'  %}{% set pos_counts.QB  = pos_counts.QB  + 1 %}
+        {% elif pos == 'RB'  %}{% set pos_counts.RB  = pos_counts.RB  + 1 %}
+        {% elif pos == 'WR'  %}{% set pos_counts.WR  = pos_counts.WR  + 1 %}
+        {% elif pos == 'TE'  %}{% set pos_counts.TE  = pos_counts.TE  + 1 %}
+        {% elif pos == 'K'   %}{% set pos_counts.K   = pos_counts.K   + 1 %}
+        {% elif pos == 'DST' %}{% set pos_counts.DST = pos_counts.DST + 1 %}
+        {% else %}{% set pos_counts.OTHER = pos_counts.OTHER + 1 %}
+        {% endif %}
+      {% endfor %}
+
+      <div class="roster-card {% if is_mine %}tr-me{% endif %}">
+
+        {# ── Card header ── #}
+        <div class="rc-header">
+          <div>
+            <div class="rc-name">{{ team.name }}</div>
+            <div class="rc-owner">{% if is_mine %}Your team{% else %}{{ team.name }}{% endif %}</div>
+          </div>
+          <div class="ml-a" style="display:flex;align-items:center;gap:.4rem">
+            <span class="badge b-green" title="{{ drafted }} of {{ picks_per_team }} picks used">
+              {{ drafted }}/{{ picks_per_team }}
+            </span>
+            <span class="badge b-ember" title="Pony picks">🐴 {{ ponies | length }}/{{ league.max_ponies_per_team }}</span>
+          </div>
+        </div>
+
+        {# ── Position counter strip ── #}
+        <div class="pos-counter">
+          {# QB — cap 1 #}
+          {% set n = pos_counts.QB %}
+          <span class="pc-slot {% if n >= 1 %}full{% elif n > 1 %}over{% endif %}" title="Quarterbacks drafted">
+            <span class="pc-pos-lbl">QB</span>
+            <span class="pc-frac">{{ n }}/1</span>
+          </span>
+
+          {# RB — cap 2 starters; extra go to FLEX/bench #}
+          {% set n = pos_counts.RB %}
+          {% set rb_cap = 2 %}
+          <span class="pc-slot {% if n >= rb_cap %}full{% elif n > rb_cap %}over{% endif %}" title="Running backs drafted">
+            <span class="pc-pos-lbl">RB</span>
+            <span class="pc-frac">{{ n }}/{{ rb_cap }}</span>
+          </span>
+
+          {# WR — cap 2 starters #}
+          {% set n = pos_counts.WR %}
+          {% set wr_cap = 2 %}
+          <span class="pc-slot {% if n >= wr_cap %}full{% elif n > wr_cap %}over{% endif %}" title="Wide receivers drafted">
+            <span class="pc-pos-lbl">WR</span>
+            <span class="pc-frac">{{ n }}/{{ wr_cap }}</span>
+          </span>
+
+          {# TE — cap 1 #}
+          {% set n = pos_counts.TE %}
+          <span class="pc-slot {% if n >= 1 %}full{% elif n > 1 %}over{% endif %}" title="Tight ends drafted">
+            <span class="pc-pos-lbl">TE</span>
+            <span class="pc-frac">{{ n }}/1</span>
+          </span>
+
+          {# FLEX — any RB/WR/TE beyond their starter caps fills this slot #}
+          {% set flex_filled = [pos_counts.RB - 2, 0] | max + [pos_counts.WR - 2, 0] | max + [pos_counts.TE - 1, 0] | max %}
+          <span class="pc-slot {% if flex_filled >= 1 %}full{% endif %}" title="FLEX slot (extra RB/WR/TE beyond starter caps)">
+            <span class="pc-pos-lbl">FLX</span>
+            <span class="pc-frac">{{ [flex_filled, 1] | min }}/1</span>
+          </span>
+
+          {# K — cap 1 #}
+          {% set n = pos_counts.K %}
+          <span class="pc-slot {% if n >= 1 %}full{% elif n > 1 %}over{% endif %}" title="Kickers drafted">
+            <span class="pc-pos-lbl">K</span>
+            <span class="pc-frac">{{ n }}/1</span>
+          </span>
+
+          {# DST — cap 1 #}
+          {% set n = pos_counts.DST %}
+          <span class="pc-slot {% if n >= 1 %}full{% elif n > 1 %}over{% endif %}" title="Defense/ST drafted">
+            <span class="pc-pos-lbl">DST</span>
+            <span class="pc-frac">{{ n }}/1</span>
+          </span>
+
+          {# BENCH — how many of the remaining picks are "bench" spots #}
+          {% set bench_used = [drafted - starters_total, 0] | max %}
+          <span class="pc-slot {% if bench_used >= bench_slots and bench_slots > 0 %}full{% endif %}"
+                title="Bench slots (picks beyond starter slots)">
+            <span class="pc-pos-lbl">BN</span>
+            <span class="pc-frac">{{ bench_used }}/{{ bench_slots }}</span>
+          </span>
+        </div>
+
+        {# ── Player list ── #}
+        <div class="rc-body">
+          {% if regulars %}
+            {% for p in regulars %}
+            <div class="rc-player">
+              <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
+              <span class="rcp-name">{{ p.name }}</span>
+              <span class="rcp-nfl">{{ p.nfl_team or '' }}</span>
+            </div>
+            {% endfor %}
+          {% else %}
+          <div class="rc-empty">No picks yet</div>
+          {% endif %}
+
+          {% if ponies %}
+          <div style="padding:.35rem .85rem .1rem;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ember)">🐴 Ponies</div>
+            {% for p in ponies %}
+            <div class="rc-player">
+              <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
+              <span class="rcp-name">{{ p.name }}</span>
+              <span class="rcp-nfl">{{ p.nfl_team or '' }}</span>
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+
+        {# ── Totals footer ── #}
+        <div class="rc-totals">
+          <span><strong>{{ drafted }}</strong> drafted &nbsp;·&nbsp; <strong>{{ remaining }}</strong> pick{{ 's' if remaining != 1 else '' }} left</span>
+          {% if drafted >= picks_per_team %}
+            <span style="color:var(--green);font-weight:700">✓ Full</span>
+          {% endif %}
+        </div>
+
+      </div>
+      {% endfor %}
+    </div>
+
+    {# Create team only if user doesn't have one yet #}
+    {% set has_team = false %}
+    {% for t in teams %}{% if t.owner_id == user.id %}{% set has_team = true %}{% endif %}{% endfor %}
+    {% if not has_team %}
+    <div class="card mt-2" style="max-width:380px">
+      <div class="card-title">➕ Create Your Team</div>
+      <form method="post" action="/league/{{ league.id }}/create-team">
+        <div class="form-inline">
+          <input name="team_name" placeholder="Team name" required/>
+          <button class="btn btn-gold">Create</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="card" style="max-width:400px;padding:2rem">
+      <div class="card-title">➕ Create Your Team</div>
+      <p style="font-size:.84rem;color:var(--muted);margin-bottom:.75rem">Create a team to join this draft.</p>
+      <form method="post" action="/league/{{ league.id }}/create-team">
+        <div class="form-inline">
+          <input name="team_name" placeholder="Team name" required/>
+          <button class="btn btn-gold">Create</button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+const PLAYERS     = {{ available_players | tojson }};
+const searchInput = document.getElementById('player-search');
+const hiddenInput = document.getElementById('player-name-hidden');
+const sugBox      = document.getElementById('suggestions');
+const pickForm    = document.getElementById('pick-form');
+let activeIdx = -1;
+
+if (searchInput) {
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    activeIdx = -1;
+    if (!q) { sugBox.style.display = 'none'; return; }
+    const matches = PLAYERS.filter(p =>
+      p.name.toLowerCase().includes(q) || (p.nfl_team||'').toLowerCase().includes(q)
+    ).slice(0, 12);
+    if (!matches.length) { sugBox.style.display = 'none'; return; }
+    sugBox.innerHTML = matches.map((p, i) => `
+      <div class="sug-item" data-name="${p.name}" data-idx="${i}">
+        <span class="si-pos"><span class="badge b-${p.position||'UNK'}">${p.position||'?'}</span></span>
+        <span>${p.name}</span>
+        <span class="si-nfl">${p.nfl_team||''}</span>
+      </div>`).join('');
+    sugBox.style.display = 'block';
+    sugBox.querySelectorAll('.sug-item').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); selectPlayer(el.dataset.name); });
+    });
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    const items = sugBox.querySelectorAll('.sug-item');
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx+1, items.length-1); highlight(items) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx-1, 0); highlight(items) }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIdx >= 0 && items[activeIdx]) selectPlayer(items[activeIdx].dataset.name);
+      else if (items.length === 1) selectPlayer(items[0].dataset.name);
+      else if (hiddenInput.value) pickForm.submit();
+    }
+    else if (e.key === 'Escape') sugBox.style.display = 'none';
+  });
+
+  document.addEventListener('click', e => {
+    if (!searchInput.contains(e.target) && !sugBox.contains(e.target))
+      sugBox.style.display = 'none';
+  });
+}
+
+function highlight(items) {
+  items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+  if (activeIdx >= 0) items[activeIdx].scrollIntoView({ block: 'nearest' });
+}
+function selectPlayer(name) {
+  if (searchInput) searchInput.value = name;
+  if (hiddenInput) hiddenInput.value = name;
+  if (sugBox) sugBox.style.display = 'none';
+}
+if (pickForm) {
+  pickForm.addEventListener('submit', () => {
+    if (!hiddenInput.value) hiddenInput.value = (searchInput?.value || '').trim();
+  });
+}
+
+document.querySelectorAll('.player-pick-name').forEach(el => {
+  el.addEventListener('click', () => {
+    selectPlayer(el.textContent.trim());
+    if (searchInput) {
+      searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      searchInput.focus();
+    }
+  });
+});
+
+// ── Filters ───────────────────────────────────────────────────────────────
+const posTabs    = document.querySelectorAll('.pos-tab');
+const teamTabs   = document.querySelectorAll('.team-tab');
+const rows       = Array.from(document.querySelectorAll('#avail-tbody tr'));
+const searchBox  = document.getElementById('avail-search');
+const countBadge = document.getElementById('avail-count-badge');
+const countLabel = document.getElementById('avail-count-label');
+const emptyMsg   = document.getElementById('avail-empty');
+
+let activePos = 'ALL', activeTeam = '', searchQ = '';
+
+function applyFilters() {
+  let visible = 0;
+  rows.forEach(row => {
+    const show =
+      (activePos  === 'ALL' || row.dataset.pos === activePos) &&
+      (activeTeam === ''    || row.dataset.nfl === activeTeam) &&
+      (searchQ    === ''    || row.dataset.name.includes(searchQ));
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  const total = rows.length;
+  if (countBadge) countBadge.textContent = visible < total ? `${visible} / ${total}` : total;
+  if (countLabel) countLabel.textContent = visible < total ? `Showing ${visible} of ${total}` : '';
+  if (emptyMsg)   emptyMsg.style.display = visible === 0 ? 'block' : 'none';
+}
+
+posTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    posTabs.forEach(t => t.classList.remove('on'));
+    tab.classList.add('on');
+    activePos = tab.dataset.pos;
+    applyFilters();
+  });
+});
+teamTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    teamTabs.forEach(t => t.classList.remove('on'));
+    tab.classList.add('on');
+    activeTeam = tab.dataset.team;
+    applyFilters();
+  });
+});
+if (searchBox) {
+  searchBox.addEventListener('input', () => { searchQ = searchBox.value.trim().toLowerCase(); applyFilters(); });
+  searchBox.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { searchQ = ''; searchBox.value = ''; applyFilters(); }
+  });
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────
+const LEAGUE_ID   = {{ league.id }};
+const TIMER_TOTAL = {{ league.pick_timer_seconds or 0 }};
+const SSE_URL     = `/api/league/${LEAGUE_ID}/draft/stream`;
+let lastRound    = {{ draft_state.current_round }};
+let lastPick     = {{ draft_state.current_pick }};
+let lastComplete = {{ 1 if draft_state.is_complete else 0 }};
+let timerInterval = null, clientSeconds = null;
+
+function startClientTimer(remaining) {
+  clearInterval(timerInterval);
+  clientSeconds = remaining;
+  renderTimer();
+  timerInterval = setInterval(() => {
+    if (clientSeconds === null) return;
+    clientSeconds = Math.max(0, clientSeconds - 1);
+    renderTimer();
+  }, 1000);
+}
+function renderTimer() {
+  const display = document.getElementById('timer-display');
+  const bar     = document.getElementById('timer-bar');
+  if (!display || clientSeconds === null) return;
+  const pct    = TIMER_TOTAL > 0 ? (clientSeconds / TIMER_TOTAL) * 100 : 100;
+  display.textContent = clientSeconds + 's';
+  if (bar) bar.style.width = pct + '%';
+  const urgent = clientSeconds <= 10 && clientSeconds > 0;
+  const colour = urgent ? 'var(--ember)' : 'var(--gold)';
+  display.style.color = colour;
+  if (bar) bar.style.background = colour;
+}
+
+let retryDelay = 2000;
+function connectSSE() {
+  const es = new EventSource(SSE_URL);
+  es.onmessage = evt => {
+    retryDelay = 2000;
+    let data; try { data = JSON.parse(evt.data); } catch { return; }
+    const s = data.state || {};
+    if (TIMER_TOTAL > 0 && data.timer_remaining != null) {
+      if (clientSeconds === null || Math.abs(clientSeconds - data.timer_remaining) > 2)
+        startClientTimer(data.timer_remaining);
+    }
+    if (s.current_round !== lastRound || s.current_pick !== lastPick ||
+        (data.is_complete ? 1 : 0) !== lastComplete) {
+      es.close(); clearInterval(timerInterval); window.location.reload();
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    setTimeout(connectSSE, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 30000);
+  };
+}
+
+// ── Player Queue ──────────────────────────────────────────────────────────
+// Stored in localStorage keyed by league+user so each manager has their own.
+// Automatically cleaned up whenever the page reloads (SSE pick event).
+
+const QUEUE_KEY    = `504fantasy_queue_l{{ league.id }}_u{{ user.id }}`;
+const DRAFTED_NOW  = new Set({{ available_players | map(attribute='name') | list | tojson }}.length
+  ? [] // available = not drafted, so drafted = everyone NOT in this list
+  : []);
+
+// Build set of already-drafted names from roster cards
+const draftedNames = new Set();
+document.querySelectorAll('.rcp-name').forEach(el => draftedNames.add(el.textContent.trim()));
+
+function queueLoad() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); }
+  catch { return []; }
+}
+function queueSave(q) {
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+}
+function queueAvailableNames() {
+  // Names still in the available players table (not drafted)
+  return new Set(Array.from(document.querySelectorAll('#avail-tbody tr'))
+    .map(r => r.dataset.player).filter(Boolean));
+}
+
+function renderQueue() {
+  const q        = queueLoad();
+  const avail    = queueAvailableNames();
+  const list     = document.getElementById('queue-list');
+  const empty    = document.getElementById('queue-empty');
+  const countEl  = document.getElementById('queue-count');
+  if (!list) return;
+
+  // Filter out drafted players silently
+  const cleaned = q.filter(item => avail.has(item.name));
+  if (cleaned.length !== q.length) queueSave(cleaned);
+
+  countEl.textContent = cleaned.length || '';
+
+  if (!cleaned.length) {
+    list.innerHTML = '';
+    list.appendChild(empty || (() => {
+      const d = document.createElement('div');
+      d.className = 'queue-empty';
+      d.innerHTML = 'Click ☆ next to any<br>available player to queue them';
+      return d;
+    })());
+    return;
+  }
+
+  list.innerHTML = cleaned.map((item, i) => `
+    <div class="queue-item" draggable="true" data-idx="${i}" data-name="${item.name}">
+      <span class="qi-rank">${i + 1}</span>
+      <span class="qi-pos"><span class="badge b-${item.pos||'UNK'}">${item.pos||'?'}</span></span>
+      <span class="qi-name">${item.name}</span>
+      <span class="qi-del" data-del="${i}" title="Remove">✕</span>
+    </div>`).join('');
+
+  // Remove buttons
+  list.querySelectorAll('.qi-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const q2 = queueLoad();
+      q2.splice(parseInt(btn.dataset.del), 1);
+      queueSave(q2);
+      renderQueue();
+      updateStars();
+    });
+  });
+
+  // Click item → fill pick form
+  list.querySelectorAll('.queue-item').forEach(item => {
+    item.addEventListener('click', e => {
+      if (e.target.classList.contains('qi-del')) return;
+      selectPlayer(item.dataset.name);
+      if (searchInput) {
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        searchInput.focus();
+      }
+    });
+  });
+
+  // Drag-to-reorder
+  let dragIdx = null;
+  list.querySelectorAll('.queue-item').forEach(item => {
+    item.addEventListener('dragstart', () => {
+      dragIdx = parseInt(item.dataset.idx);
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => item.classList.remove('dragging'));
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      list.querySelectorAll('.queue-item').forEach(i => i.classList.remove('drag-over'));
+      item.classList.add('drag-over');
+    });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      const dropIdx = parseInt(item.dataset.idx);
+      if (dragIdx === null || dragIdx === dropIdx) return;
+      const q2 = queueLoad();
+      const [moved] = q2.splice(dragIdx, 1);
+      q2.splice(dropIdx, 0, moved);
+      queueSave(q2);
+      renderQueue();
+      updateStars();
+    });
+  });
+}
+
+function updateStars() {
+  const q = queueLoad();
+  const queued = new Set(q.map(i => i.name));
+  document.querySelectorAll('.queue-star').forEach(btn => {
+    const inQ = queued.has(btn.dataset.name);
+    btn.textContent = inQ ? '★' : '☆';
+    btn.style.color = inQ ? 'var(--gold)' : 'var(--muted)';
+    btn.title = inQ ? 'Remove from queue' : 'Add to queue';
+  });
+}
+
+// Star button toggle
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.queue-star');
+  if (!btn) return;
+  e.stopPropagation();
+  const name = btn.dataset.name;
+  const pos  = btn.dataset.pos;
+  let q = queueLoad();
+  const idx = q.findIndex(i => i.name === name);
+  if (idx >= 0) {
+    q.splice(idx, 1);
+  } else {
+    q.push({ name, pos });
+  }
+  queueSave(q);
+  renderQueue();
+  updateStars();
+});
+
+// Initial render
+renderQueue();
+updateStars();
+
+if (!lastComplete) {
+  connectSSE();
+  {% if draft_state.pick_started_at and league.pick_timer_seconds %}
+  const startedAt = new Date("{{ draft_state.pick_started_at }}").getTime();
+  const elapsed   = Math.floor((Date.now() - startedAt) / 1000);
+  startClientTimer(Math.max(0, TIMER_TOTAL - elapsed));
+  {% endif %}
+}
+// ── Draft Chat & Pick Log ─────────────────────────────────────────────────
+let chatLastId  = 0;
+let chatPoller  = null;
+const ME = "{{ user.username }}";
+// NOTE: LEAGUE_ID already declared above in SSE block
+
+function fmtTime(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  } catch { return '' }
+}
+
+function formatPickMsg(text) {
+  // "Team X selected Player Y (Round N, Pick M)"
+  const m = text.match(/^(.+?) selected (.+?) \((.+)\)$/);
+  if (m) {
+    return `<span class="fw7">${m[1]}</span> selected <span class="pick-player">${m[2]}</span> <span class="text-muted" style="font-size:.7rem">(${m[3]})</span>`;
+  }
+  return text;
+}
+
+function renderMessages(msgs) {
+  const box   = document.getElementById('chat-messages');
+  const empty = document.getElementById('chat-empty');
+  if (!box) return;
+
+  if (!msgs.length) return;
+  if (empty) empty.remove();
+
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+
+  msgs.forEach(msg => {
+    const div = document.createElement('div');
+    div.className = `chat-msg type-${msg.msg_type}`;
+
+    const whoClass = msg.username === 'system' ? 'sys' : (msg.username === ME ? 'me' : '');
+    const whoLabel = msg.username === 'system' ? '📣 PICK' : msg.username;
+    const bodyHtml = (msg.msg_type === 'pick')
+      ? formatPickMsg(msg.message)
+      : msg.message.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    div.innerHTML = `
+      <div class="cm-meta">
+        <span class="cm-who ${whoClass}">${whoLabel}</span>
+        <span class="cm-time">${fmtTime(msg.ts)}</span>
+      </div>
+      <div class="cm-text">${bodyHtml}</div>`;
+
+    box.appendChild(div);
+    chatLastId = Math.max(chatLastId, msg.id);
+  });
+
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+async function pollChat() {
+  try {
+    const r = await fetch(`/api/league/${LEAGUE_ID}/draft/chat?since_id=${chatLastId}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.messages?.length) renderMessages(data.messages);
+  } catch {}
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  input.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('message', msg);
+    await fetch(`/league/${LEAGUE_ID}/draft/chat`, { method:'POST', body:fd });
+    await pollChat();
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+// Enter key sends
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('chat-input');
+  if (input) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
+    });
+  }
+  // Load initial messages
+  pollChat();
+  // Poll every 3 seconds
+  chatPoller = setInterval(pollChat, 3000);
+});
+
+</script>
+{% endblock %}

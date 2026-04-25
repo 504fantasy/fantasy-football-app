@@ -1,0 +1,70 @@
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+.env
+*.env
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Database files (local SQLite) ─────────────────────────────────────────────
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ── Type checking ─────────────────────────────────────────────────────────────
+.mypy_cache/
+.pytype/
+.ruff_cache/
+
+# ── VS Code ───────────────────────────────────────────────────────────────────
+# Keep .vscode/ tracked (launch.json, settings.json, extensions.json are useful
+# for teammates) but ignore personal workspace state
+.vscode/*.log
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Windows ───────────────────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# Keep docker-compose.yml tracked; ignore local override
+docker-compose.override.yml
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Backup files from our edits ───────────────────────────────────────────────
+*.bak
+*.orig

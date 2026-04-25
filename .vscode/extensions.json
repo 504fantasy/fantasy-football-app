@@ -1,0 +1,25 @@
+{
+  // When you open this project VS Code will offer to install these.
+  // Hit "Install All" — they make Python + FastAPI development much smoother.
+  "recommendations": [
+    // Python core
+    "ms-python.python",           // Python language support, IntelliSense
+    "ms-python.debugpy",          // Debugger (required for F5 launch)
+    "ms-python.black-formatter",  // Auto-formatter on save
+    "charliermarsh.ruff",         // Fast linter (replaces flake8/pylint)
+
+    // Templates
+    "samuelcolvin.jinjahtml",     // Jinja2 syntax highlighting in .html files
+
+    // Environment & secrets
+    "mikestead.dotenv",           // .env file syntax highlighting
+
+    // Docker (for later when you deploy)
+    "ms-azuretools.vscode-docker",
+
+    // Quality of life
+    "streetsidesoftware.code-spell-checker",
+    "eamodio.gitlens",            // Git blame inline
+    "usernamehw.errorlens"        // Shows errors inline next to code
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  // Press F5 to start the app with the debugger attached.
+  // Breakpoints in main.py, db.py, scoring.py all work.
+  // The app reloads automatically when you save a .py file.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Gridiron (dev)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "main:app",
+        "--reload",
+        "--host", "0.0.0.0",
+        "--port", "8000"
+      ],
+      "jinja": true,
+      "justMyCode": false,
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Run Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": ["discover", "-s", "tests", "-p", "test_*.py", "-v"],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal"
+    }
+  ]
+}

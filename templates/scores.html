@@ -1,0 +1,846 @@
+{% extends "base.html" %}
+{% block title %}Scores — {{ league.name }}{% endblock %}
+
+{% set ROUND_NAMES = {1: "Wild Card", 2: "Divisional", 3: "Conf. Champ.", 4: "Super Bowl"} %}
+{% macro round_name(w) %}{{ ROUND_NAMES.get(w, "Week " ~ w) }}{% endmacro %}
+
+{% block head %}
+<style>
+.scores-layout { display:grid; grid-template-columns:1fr 260px; gap:1.5rem; align-items:start }
+.sidebar-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start }
+@media (max-width:780px) {
+  .scores-layout  { grid-template-columns:1fr }
+  .sidebar-grid   { grid-template-columns:1fr }
+  .bracket        { min-width:520px }
+}
+
+.week-nav { display:flex; align-items:center; justify-content:center; gap:.5rem; margin:1rem 0 1.5rem; flex-wrap:wrap }
+.week-btn {
+  font-family:'Barlow Condensed',sans-serif; font-size:.8rem; font-weight:700;
+  text-transform:uppercase; letter-spacing:.06em; padding:.28rem .65rem; border-radius:var(--r);
+  border:1px solid var(--border); background:transparent; color:var(--muted);
+  cursor:pointer; text-decoration:none; transition:all .15s;
+}
+.week-btn:hover, .week-btn.active { background:var(--s3); color:var(--gold); border-color:rgba(232,184,75,.4) }
+
+/* ── Team score block ──────────────────────────────────────────────────── */
+.team-score-block {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
+  overflow:hidden; margin-bottom:1rem; transition:border-color .15s;
+}
+.team-score-block:hover { border-color:rgba(232,184,75,.2) }
+.tsb-header {
+  display:flex; align-items:center; gap:.75rem; padding:.85rem 1.1rem;
+  background:var(--s2); cursor:pointer; border-bottom:1px solid var(--border); user-select:none;
+}
+.tsb-rank { font-family:'Barlow Condensed',sans-serif; font-size:1.5rem; font-weight:800; min-width:2rem }
+.tsb-rank.r1 { color:var(--gold) }
+.tsb-rank.r2 { color:#c0c0c0 }
+.tsb-rank.r3 { color:#cd7f32 }
+.tsb-rank.rx { color:var(--muted) }
+.tsb-name  { font-family:'Barlow Condensed',sans-serif; font-size:1.1rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em }
+.tsb-owner { font-size:.78rem; color:var(--muted) }
+.tsb-pts   { margin-left:auto; font-family:'Barlow Condensed',sans-serif; font-size:1.8rem; font-weight:800; color:var(--gold) }
+.tsb-caret { color:var(--muted); font-size:.75rem; margin-left:.3rem; transition:transform .2s }
+.tsb-caret.open { transform:rotate(180deg) }
+
+.tsb-players { display:none }
+.tsb-players.open { display:block }
+
+/* ── Player stat row ───────────────────────────────────────────────────── */
+.tsb-row {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .65rem 1.25rem;
+  font-size: .9rem;
+  border-bottom: 1px solid rgba(37,42,52,.5);
+  flex-wrap: wrap;
+}
+.tsb-row:last-child { border-bottom:none }
+.tsb-row:hover { background:rgba(255,255,255,.02) }
+
+.tr-name {
+  font-weight: 600;
+  font-size: .95rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tr-nfl {
+  font-size: .8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tr-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  flex-shrink: 0;
+}
+.tr-final {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.tr-final.pts-pos  { color:var(--gold) }
+.tr-final.pts-pony { color:#fb923c }
+.tr-final.pts-zero { color:var(--muted) }
+.tr-base   { font-size:.78rem; color:var(--muted) }
+.override-note { font-size:.74rem; color:#60a5fa; flex-shrink:0 }
+
+/* stat chips */
+.stat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  align-items: center;
+}
+.sc {
+  font-size: .75rem;
+  padding: .15rem .45rem;
+  border-radius: 3px;
+  background: var(--s3);
+  color: var(--muted);
+  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,.05);
+}
+.sc.highlight { color: var(--text); background: rgba(232,184,75,.1); border-color: rgba(232,184,75,.2) }
+.sc.neg       { color: var(--ember); background: rgba(201,69,26,.08); border-color: rgba(201,69,26,.2) }
+
+/* game chip */
+.game-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .78rem;
+  padding: .18rem .55rem;
+  border-radius: 3px;
+  background: var(--s3);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.game-chip .gc-teams { letter-spacing: .04em }
+.game-chip .gc-score { color: var(--text); font-weight: 800 }
+.game-chip .gc-live  { color: var(--green); font-size: .68rem; text-transform:uppercase; letter-spacing:.06em }
+.game-chip .gc-team-win { color: var(--gold) }
+
+/* ── Eliminated player ──────────────────────────────────────────────────── */
+.tsb-row.eliminated .tr-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--ember);
+  color: var(--muted);
+  opacity: .7;
+}
+.elim-badge {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ember);
+  background: rgba(201,69,26,.1);
+  border: 1px solid rgba(201,69,26,.3);
+  border-radius: 3px;
+  padding: .1rem .35rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Standings sidebar ─────────────────────────────────────────────────── */
+.stand-row { display:flex; align-items:center; gap:.65rem; padding:.6rem .75rem; border-bottom:1px solid var(--border) }
+.stand-row:last-child { border-bottom:none }
+.stand-pts  { margin-left:auto; font-family:'Barlow Condensed',sans-serif; font-size:1.05rem; font-weight:800; color:var(--gold) }
+.stand-name { font-family:'Barlow Condensed',sans-serif; font-size:.95rem; font-weight:700; text-transform:uppercase }
+.stand-owner{ font-size:.74rem; color:var(--muted) }
+
+/* ── Playoff games panel ───────────────────────────────────────────────── */
+.playoff-game {
+  padding: .6rem .75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: .82rem;
+}
+.playoff-game:last-child { border-bottom: none }
+.pg-teams {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .18rem;
+}
+.pg-team {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex: 1;
+}
+.pg-team.winner .pg-name { color: var(--gold); font-weight: 700 }
+.pg-team.loser  .pg-name { color: var(--muted); opacity: .7 }
+.pg-abbr {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .78rem; font-weight: 800;
+  text-transform: uppercase;
+  min-width: 2.5rem;
+}
+.pg-name { font-size: .78rem; flex: 1 }
+.pg-score {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.1rem; font-weight: 800;
+  min-width: 2rem; text-align: right;
+}
+.pg-team.winner .pg-score { color: var(--gold) }
+.pg-team.loser  .pg-score { color: var(--muted); opacity: .7 }
+.pg-status {
+  font-size: .68rem;
+  color: var(--muted);
+  text-align: center;
+}
+.pg-status.live { color: var(--green); font-weight: 600 }
+.pg-vs {
+  font-size: .68rem;
+  color: var(--muted);
+  padding: 0 .3rem;
+  font-style: italic;
+}
+.round-badge {
+  display: inline-block;
+  font-size: .62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--gold);
+  background: rgba(232,184,75,.1);
+  border: 1px solid rgba(232,184,75,.2);
+  border-radius: 3px;
+  padding: .1rem .45rem;
+  margin-bottom: .5rem;
+}
+
+/* ── NFL Playoff Bracket ─────────────────────────────────────────────────── */
+.bracket-section {
+  margin-bottom: 1.5rem;
+}
+.bracket-section-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .12em;
+  color: var(--muted); margin-bottom: .7rem;
+}
+.bracket-wrap {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow-x: auto;
+  padding: 1.25rem 1rem;
+  display: flex;
+  justify-content: center;
+}
+.bracket {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  min-width: 760px;
+}
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+}
+.bracket-round-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .65rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--gold);
+  text-align: center;
+  margin-bottom: .75rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid rgba(232,184,75,.2);
+}
+.bracket-matchups {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  flex: 1;
+  gap: .5rem;
+}
+.bracket-game {
+  position: relative;
+  margin: 0 .4rem;
+}
+/* connector lines between rounds */
+.bracket-game::after {
+  content: '';
+  position: absolute;
+  right: -.4rem;
+  top: 50%;
+  width: .4rem;
+  height: 1px;
+  background: var(--border);
+}
+.bracket-round:last-child .bracket-game::after { display: none }
+
+.bg-team {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .38rem .55rem;
+  font-size: .78rem;
+  background: var(--s2);
+  border: 1px solid var(--border);
+  transition: all .15s;
+  position: relative;
+}
+.bg-team:first-child {
+  border-radius: 5px 5px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+.bg-team:last-child {
+  border-radius: 0 0 5px 5px;
+  border-top: none;
+}
+.bg-team.winner {
+  background: rgba(232,184,75,.1);
+  border-color: rgba(232,184,75,.4);
+  z-index: 1;
+}
+.bg-team.winner .bg-name { color: var(--gold); font-weight: 700 }
+.bg-team.winner .bg-score { color: var(--gold) }
+.bg-team.loser { opacity: .45 }
+.bg-team.tbd {
+  background: var(--s2);
+  opacity: .5;
+}
+.bg-seed {
+  font-size: .62rem;
+  color: var(--muted);
+  min-width: 1rem;
+  text-align: center;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.bg-name {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.bg-score {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .9rem;
+  font-weight: 800;
+  min-width: 1.8rem;
+  text-align: right;
+  color: var(--muted);
+}
+.bg-status {
+  font-size: .6rem;
+  color: var(--muted);
+  text-align: center;
+  padding: .15rem 0;
+  border-top: 1px solid var(--border);
+  background: var(--s1);
+  letter-spacing: .04em;
+}
+.bg-status.live { color: var(--green); font-weight: 700 }
+.bracket-connector {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 1rem;
+  flex-shrink: 0;
+  position: relative;
+}
+.bracket-connector-line {
+  border-right: 1px solid var(--border);
+  flex: 1;
+}
+.bracket-connector-line.top { border-bottom: 1px solid var(--border) }
+.bracket-connector-line.bot { border-top: 1px solid var(--border) }
+.bracket-loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--muted);
+  font-size: .83rem;
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">📊 <em>Scores</em></div>
+  <span class="page-sub">{{ league.name }} · {{ round_name(week) }}</span>
+</div>
+
+<!-- ── NFL Playoff Bracket ──────────────────────────────────────────────── -->
+<div class="bracket-section" id="bracket-section" style="display:none">
+  <div class="bracket-section-title">🏈 NFL Playoff Bracket</div>
+  <div class="bracket-wrap">
+    <div class="bracket" id="bracket-root">
+      <div class="bracket-loading" id="bracket-loading">Loading bracket…</div>
+    </div>
+  </div>
+</div>
+
+<div class="week-nav">
+  {% for w in [1, 2, 3, 4] %}
+  <a href="/league/{{ league.id }}/scores?week={{ w }}"
+     class="week-btn {% if w==week %}active{% endif %}">{{ round_name(w) }}</a>
+  {% endfor %}
+</div>
+
+<div class="scores-layout">
+
+  <!-- ── Team scores ──────────────────────────────────────────────────── -->
+  <div>
+    {% if not team_scores %}
+    <div class="card text-c text-muted" style="padding:3rem">No scores for {{ round_name(week) }} yet.</div>
+    {% else %}
+    {% for ts in team_scores %}
+    <div class="team-score-block">
+      <div class="tsb-header" onclick="toggleTeam(this)">
+        {% set rk = loop.index %}
+        <div class="tsb-rank {% if rk==1 %}r1{% elif rk==2 %}r2{% elif rk==3 %}r3{% else %}rx{% endif %}">#{{ rk }}</div>
+        <div>
+          <div class="tsb-name">{{ ts.team.name }}</div>
+          <div class="tsb-owner">{{ ts.owner.username if ts.owner else '' }}</div>
+        </div>
+        <div class="tsb-pts">{{ ts.total }}<small style="font-size:.85rem;color:var(--muted)"> pts</small></div>
+        <span class="tsb-caret">▼</span>
+      </div>
+
+      <div class="tsb-players">
+        {% if ts.players %}
+          {% for p in ts.players | sort(attribute='final_points', reverse=true) %}
+          <div class="tsb-row">
+
+            {# Position badge #}
+            <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
+
+            {# Name #}
+            <span class="tr-name">
+              {{ p.name }}
+              {% if p.is_pony %}<span class="badge b-ember" style="font-size:.65rem;margin-left:.3rem">🐴</span>{% endif %}
+              {% if p.multiplier %}<span class="badge b-gold" style="font-size:.65rem;margin-left:.2rem">×{{ p.multiplier }}</span>{% endif %}
+            </span>
+
+            {# NFL team #}
+            <span class="tr-nfl">{{ p.nfl_team or '—' }}</span>
+
+            {# Game score chip — filled by JS #}
+            <div class="game-score-slot" data-nfl="{{ p.nfl_team or '' }}"></div>
+
+            {# Eliminated badge — toggled by JS #}
+            <span class="elim-badge" style="display:none">Eliminated</span>
+
+            {# Stat chips #}
+            {% set pos = p.position or '' %}
+            <div class="stat-chips">
+              {% if pos == 'K' %}
+                {% set fgs = p.field_goals_json | default('[]') %}
+                {% if fgs and fgs != '[]' %}
+                <span class="sc highlight">FG ✓</span>
+                {% endif %}
+              {% elif pos == 'DST' %}
+                {% if p.return_yards and p.return_yards > 0 %}
+                <span class="sc highlight">{{ p.return_yards | int }} ret yds</span>
+                {% endif %}
+              {% else %}
+                {% if p.receptions and p.receptions > 0 %}
+                <span class="sc {% if p.receptions >= 5 %}highlight{% endif %}">{{ p.receptions | int }} rec</span>
+                {% endif %}
+                {% if p.receiving_yards and p.receiving_yards > 0 %}
+                <span class="sc {% if p.receiving_yards >= 50 %}highlight{% endif %}">{{ p.receiving_yards | int }} rec yds</span>
+                {% endif %}
+                {% if p.rushing_yards and p.rushing_yards > 0 %}
+                <span class="sc {% if p.rushing_yards >= 50 %}highlight{% endif %}">{{ p.rushing_yards | int }} rush yds</span>
+                {% endif %}
+                {% if p.passing_yards and p.passing_yards > 0 %}
+                <span class="sc {% if p.passing_yards >= 200 %}highlight{% endif %}">{{ p.passing_yards | int }} pass yds</span>
+                {% endif %}
+                {% if p.total_tds and p.total_tds > 0 %}
+                <span class="sc highlight">{{ p.total_tds | int }} TD{% if p.total_tds > 1 %}s{% endif %}</span>
+                {% endif %}
+                {% if p.return_yards and p.return_yards > 0 %}
+                <span class="sc">{{ p.return_yards | int }} ret yds</span>
+                {% endif %}
+                {% if p.interceptions and p.interceptions > 0 %}
+                <span class="sc neg">{{ p.interceptions | int }} INT</span>
+                {% endif %}
+                {% if p.fumbles_lost and p.fumbles_lost > 0 %}
+                <span class="sc neg">{{ p.fumbles_lost | int }} FUM</span>
+                {% endif %}
+                {% if not (p.receptions or p.receiving_yards or p.rushing_yards or p.passing_yards or p.total_tds or p.return_yards) %}
+                <span class="sc" style="font-style:italic">no stats</span>
+                {% endif %}
+              {% endif %}
+            </div>
+
+            {% if p.override_note %}
+            <span class="override-note">✎ {{ p.override_note }}</span>
+            {% endif %}
+
+            {# Points — pushed to far right by margin-left:auto on tr-right #}
+            <div class="tr-right">
+              <span class="tr-final {% if p.is_pony %}pts-pony{% elif p.final_points > 0 %}pts-pos{% else %}pts-zero{% endif %}">
+                {{ p.final_points }}
+              </span>
+              {% if p.multiplier and p.multiplier != 1.0 and not p.override_points %}
+              <span class="tr-base">({{ p.base_points }})</span>
+              {% endif %}
+            </div>
+
+          </div>
+          {% endfor %}
+        {% else %}
+        <div style="padding:.75rem 1.1rem;color:var(--muted);font-size:.83rem">No players on roster.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+  <div>
+
+    <!-- Playoff games — populated by JS from ESPN API -->
+    <div class="card mb-2" id="playoff-games-card" style="display:none">
+      <div class="card-title">
+        🏈 Playoff Games
+        <span class="ct-right" id="playoff-round-name" style="font-size:.7rem;color:var(--gold)"></span>
+      </div>
+      <div id="playoff-games-list"></div>
+    </div>
+
+    <div class="sidebar-grid">
+
+      <div class="card">
+        <div class="card-title">🏆 Season Standings</div>
+        {% if standings %}
+        {% for st in standings %}
+        <div class="stand-row">
+          <div class="rank {% if loop.index==1 %}r1{% elif loop.index==2 %}r2{% elif loop.index==3 %}r3{% endif %}">{{ loop.index }}</div>
+          <div>
+            <div class="stand-name">{{ st.team.name }}</div>
+            <div class="stand-owner">{{ st.owner.username if st.owner else '' }}</div>
+          </div>
+          <div class="stand-pts">{{ st.total_points }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted text-sm text-c" style="padding:1rem">No scores yet.</p>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Scoring Rules</div>
+        <table style="font-size:.8rem">
+          <tr><td class="text-muted">Reception</td>      <td class="text-r fw7">+1.0</td></tr>
+          <tr><td class="text-muted">Receiving yard</td> <td class="text-r fw7">+0.1</td></tr>
+          <tr><td class="text-muted">Rushing yard</td>   <td class="text-r fw7">+0.1</td></tr>
+          <tr><td class="text-muted">Return yard</td>    <td class="text-r fw7">+0.1</td></tr>
+          <tr><td class="text-muted">Passing yard</td>   <td class="text-r fw7">+0.04</td></tr>
+          <tr><td class="text-muted">Any TD</td>         <td class="text-r fw7">+6.0</td></tr>
+          <tr><td class="text-muted">Fumble lost</td>    <td class="text-r text-red fw7">−2.0</td></tr>
+          <tr><td class="text-muted">Interception</td>   <td class="text-r text-red fw7">−2.0</td></tr>
+          <tr><td class="text-muted" colspan="2" style="padding-top:.5rem;color:var(--gold)">Kicker (K)</td></tr>
+          <tr><td class="text-muted">FG yard</td>        <td class="text-r fw7">+0.1/yd</td></tr>
+          <tr><td class="text-muted" colspan="2" style="padding-top:.5rem;color:var(--gold)">Defense (DST)</td></tr>
+          <tr><td class="text-muted">Return yard</td>    <td class="text-r fw7">+0.1</td></tr>
+        </table>
+      </div>
+
+    </div>
+
+    {% if is_commissioner %}
+    <div class="mt-2">
+      <a href="/league/{{ league.id }}/manage" class="btn btn-ghost" style="width:100%">⚙ Manage League</a>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+// ── Expand/collapse team rows ─────────────────────────────────────────────
+function toggleTeam(header) {
+  const body  = header.nextElementSibling;
+  const caret = header.querySelector('.tsb-caret');
+  body.classList.toggle('open');
+  caret.classList.toggle('open');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const first = document.querySelector('.tsb-header');
+  if (first) toggleTeam(first);
+});
+
+// ── NFL game scores from ESPN ─────────────────────────────────────────────
+// ESPN team abbrev aliases — their API sometimes differs from nflfastR
+const ESPN_ALIAS = {
+  'WSH':'WSH', 'WAS':'WSH',
+  'LV':'LV',   'LAS':'LV',
+  'LA':'LAR',  'LAR':'LAR',
+  'JAC':'JAX', 'JAX':'JAX',
+};
+function normTeam(t) { return ESPN_ALIAS[t] || t; }
+
+async function loadGameScores() {
+  const week = {{ week }};
+  const season = {{ season | default(2024) }};
+  try {
+    const resp = await fetch(`/api/nfl-games?week=${week}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const games = data.games || {};
+
+    document.querySelectorAll('.game-score-slot').forEach(slot => {
+      const nfl = normTeam((slot.dataset.nfl || '').toUpperCase());
+      const game = games[nfl];
+      if (!game) return;
+
+      const isHome     = normTeam(game.home) === nfl;
+      const myScore    = isHome ? game.home_score : game.away_score;
+      const oppScore   = isHome ? game.away_score : game.home_score;
+      const oppTeam    = isHome ? game.away       : game.home;
+      const myWin      = parseInt(myScore) > parseInt(oppScore);
+      const tied       = myScore === oppScore;
+      const completed  = game.completed;
+      const live       = game.live;
+
+      let statusHtml = '';
+      if (live) {
+        statusHtml = `<span class="gc-live">● ${live}</span>`;
+      } else if (completed) {
+        statusHtml = `<span style="color:var(--muted);font-size:.62rem">${game.status}</span>`;
+      } else {
+        statusHtml = `<span style="color:var(--muted);font-size:.62rem">${game.status}</span>`;
+      }
+
+      const scoreColor = myWin ? 'var(--gold)' : tied ? 'var(--text)' : 'var(--muted)';
+      const vsLabel    = isHome ? 'vs' : '@';
+
+      slot.innerHTML = `
+        <span class="game-chip">
+          <span class="gc-teams">
+            <span style="color:${scoreColor};font-weight:800">${nfl}</span>
+            <span style="color:var(--muted)"> ${vsLabel} </span>
+            ${oppTeam}
+          </span>
+          <span class="gc-score" style="color:${scoreColor}">${myScore}–${oppScore}</span>
+          ${statusHtml}
+        </span>`;
+    });
+  } catch (e) {
+    // ESPN unreachable — silently skip, game scores are optional
+    console.log('Game scores unavailable:', e.message);
+  }
+}
+
+loadGameScores();
+
+// ── NFL Playoff Bracket ───────────────────────────────────────────────────
+// Fetch all 4 rounds and build a bracket. Each round is fetched in parallel.
+// Teams without results yet show as TBD.
+
+const ROUND_LABELS = {1:'Wild Card', 2:'Divisional', 3:'Conf. Championship', 4:'Super Bowl'};
+const SEASON = {{ season | default(2024) }};
+
+async function fetchRound(week) {
+  try {
+    const r = await fetch(`/api/nfl-games?week=${week}&season=${SEASON}`);
+    if (!r.ok) return [];
+    const d = await r.json();
+    return d.games_list || [];
+  } catch { return []; }
+}
+
+function teamSlot(team, score, isWinner, isLoser, hasScores, seed) {
+  const winCls  = hasScores && isWinner ? 'winner' : '';
+  const loseCls = hasScores && isLoser  ? 'loser'  : '';
+  const tbdCls  = !team ? 'tbd' : '';
+  const name    = team || 'TBD';
+  const scoreHtml = hasScores && team
+    ? `<span class="bg-score">${score || 0}</span>`
+    : `<span class="bg-score" style="color:var(--border)">–</span>`;
+  return `<div class="bg-team ${winCls} ${loseCls} ${tbdCls}">
+    <span class="bg-seed">${seed || ''}</span>
+    <span class="bg-name">${name}</span>
+    ${scoreHtml}
+  </div>`;
+}
+
+function gameCard(g) {
+  if (!g) {
+    return `<div class="bracket-game">
+      ${teamSlot(null,0,false,false,false,'')}
+      ${teamSlot(null,0,false,false,false,'')}
+    </div>`;
+  }
+  const hs = parseInt(g.home_score || 0);
+  const as = parseInt(g.away_score || 0);
+  const hasScores = g.completed || !!g.live;
+  const homeWin = hasScores && hs > as;
+  const awayWin = hasScores && as > hs;
+  const statusCls  = g.live ? 'live' : '';
+  const statusText = g.live ? `● ${g.live}` : (g.completed ? 'Final' : (g.status || 'Scheduled'));
+  return `<div class="bracket-game">
+    ${teamSlot(g.away, g.away_score, awayWin, homeWin, hasScores, '')}
+    ${teamSlot(g.home, g.home_score, homeWin, awayWin, hasScores, '')}
+    <div class="bg-status ${statusCls}">${statusText}</div>
+  </div>`;
+}
+
+async function buildBracket() {
+  const section = document.getElementById('bracket-section');
+  const root    = document.getElementById('bracket-root');
+  const loading = document.getElementById('bracket-loading');
+  if (!section || !root) return;
+
+  const [wc, div, conf, sb] = await Promise.all([
+    fetchRound(1), fetchRound(2), fetchRound(3), fetchRound(4)
+  ]);
+
+  // Need at least Wild Card to show anything
+  if (!wc.length && !div.length && !conf.length && !sb.length) return;
+
+  section.style.display = 'block';
+  if (loading) loading.remove();
+
+  // Pad rounds to expected game counts
+  const pad = (arr, n) => { const a = [...arr]; while (a.length < n) a.push(null); return a; };
+  const wcGames   = pad(wc,   6);
+  const divGames  = pad(div,  4);
+  const confGames = pad(conf, 2);
+  const sbGames   = pad(sb,   1);
+
+  // Connector between rounds: N games → N/2 connectors
+  function connectors(n) {
+    let html = '<div class="bracket-connector">';
+    for (let i = 0; i < n; i++) {
+      html += `<div class="bracket-connector-line ${i % 2 === 0 ? 'top' : 'bot'}"></div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function round(label, games) {
+    return `<div class="bracket-round">
+      <div class="bracket-round-label">${label}</div>
+      <div class="bracket-matchups">
+        ${games.map(g => gameCard(g)).join('')}
+      </div>
+    </div>`;
+  }
+
+  root.innerHTML =
+    round('Wild Card',          wcGames)   +
+    connectors(6)                          +
+    round('Divisional',         divGames)  +
+    connectors(4)                          +
+    round('Conf. Championship', confGames) +
+    connectors(2)                          +
+    round('Super Bowl',         sbGames);
+}
+
+buildBracket();
+
+async function loadPlayoffGames() {
+  const week = {{ week }};
+  try {
+    const resp = await fetch(`/api/nfl-games?week=${week}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const games = data.games_list || [];
+    if (!games.length) return;
+
+    const card    = document.getElementById('playoff-games-card');
+    const list    = document.getElementById('playoff-games-list');
+    const rdLabel = document.getElementById('playoff-round-name');
+    if (!card || !list) return;
+
+    rdLabel.textContent = data.round_name || '';
+    card.style.display = 'block';
+
+    list.innerHTML = games.map(g => {
+      const homeScore = parseInt(g.home_score || 0);
+      const awayScore = parseInt(g.away_score || 0);
+      const homeWin   = homeScore > awayScore;
+      const awayWin   = awayScore > homeScore;
+      const hasScores = g.completed || g.live;
+
+      const statusClass = g.live ? 'live' : '';
+      const statusText  = g.live ? `● ${g.live}` : (g.completed ? 'Final' : g.status || 'Scheduled');
+
+      // Extract short team names from event name "X at Y" or "X vs Y"
+      // Fall back to abbreviations
+      const homeName = g.home || '';
+      const awayName = g.away || '';
+
+      return `
+        <div class="playoff-game">
+          <div class="pg-teams">
+            <div class="pg-team ${hasScores && awayWin ? 'loser' : ''} ${hasScores && homeWin ? 'winner' : ''}">
+              <span class="pg-abbr">${homeName}</span>
+              ${hasScores ? `<span class="pg-score">${g.home_score}</span>` : ''}
+            </div>
+            <span class="pg-vs">vs</span>
+            <div class="pg-team ${hasScores && homeWin ? 'loser' : ''} ${hasScores && awayWin ? 'winner' : ''}"
+                 style="flex-direction:row-reverse;text-align:right">
+              ${hasScores ? `<span class="pg-score">${g.away_score}</span>` : ''}
+              <span class="pg-abbr" style="text-align:right">${awayName}</span>
+            </div>
+          </div>
+          <div class="pg-status ${statusClass}">${statusText}</div>
+        </div>`;
+    }).join('');
+
+  } catch(e) {
+    console.log('Playoff games unavailable:', e.message);
+  }
+}
+
+loadPlayoffGames();
+
+// ── Eliminated teams ─────────────────────────────────────────────────────
+// Fetches completed playoff results from ESPN and marks any player whose
+// NFL team has been knocked out with a strikethrough + ELIMINATED badge.
+
+const ESPN_ALIAS_ELIM = {
+  'WSH':'WSH','WAS':'WSH','LV':'LV','LAS':'LV','LA':'LAR','JAC':'JAX'
+};
+function normElim(t) { return ESPN_ALIAS_ELIM[t] || t; }
+
+async function markEliminated() {
+  const season = {{ season | default(2024) }};
+  try {
+    const r = await fetch(`/api/nfl-eliminated?season=${season}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const elimSet = new Set((data.eliminated || []).map(t => normElim(t)));
+    if (!elimSet.size) return;
+
+    document.querySelectorAll('.tsb-row').forEach(row => {
+      const slot = row.querySelector('.game-score-slot');
+      const nfl  = normElim((slot?.dataset.nfl || '').toUpperCase());
+      if (nfl && elimSet.has(nfl)) {
+        row.classList.add('eliminated');
+        const badge = row.querySelector('.elim-badge');
+        if (badge) badge.style.display = '';
+      }
+    });
+  } catch(e) {
+    console.log('Eliminated check failed:', e.message);
+  }
+}
+
+markEliminated();
+</script>
+{% endblock %}

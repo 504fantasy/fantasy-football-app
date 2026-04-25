@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Scores Week {{ week }} — {{ league.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Scores</h1>
+  <p>{{ league.name }} &nbsp;·&nbsp; Season {{ league.season }}</p>
+</div>
+
+<!-- WEEK NAV -->
+<div class="week-nav">
+  {% if week > 1 %}
+    <a href="/survivor/{{ league.id }}/scores?week={{ week - 1 }}" class="week-btn">← Wk {{ week - 1 }}</a>
+  {% else %}
+    <button class="week-btn" disabled>←</button>
+  {% endif %}
+  <span>Week {{ week }} of {{ total_weeks }}</span>
+  {% if week < current_week %}
+    <a href="/survivor/{{ league.id }}/scores?week={{ week + 1 }}" class="week-btn">Wk {{ week + 1 }} →</a>
+  {% else %}
+    <button class="week-btn" disabled>→</button>
+  {% endif %}
+</div>
+
+<!-- WEEK SCORES -->
+<div class="card">
+  <h2>Week {{ week }} Results</h2>
+  {% if week_scores %}
+  {% for ts in week_scores %}
+  <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:var(--surface2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div>
+        <strong style="font-size:15px;">{{ ts.team.name }}</strong>
+        <span style="color:var(--muted);font-size:12px;margin-left:8px;">{{ ts.owner.username if ts.owner else '' }}</span>
+        {% if not ts.complete %}<span class="badge badge-red" style="margin-left:8px;">Incomplete</span>{% endif %}
+      </div>
+      <div style="font-size:22px;font-weight:700;color:{% if loop.first %}var(--gold){% else %}var(--text){% endif %}">
+        {{ ts.total }}
+      </div>
+    </div>
+    {% if ts.players %}
+    <table style="font-size:12px;">
+      <thead>
+        <tr>
+          <th>Pos</th><th>Player</th><th>NFL Team</th><th style="text-align:right">Pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in ts.players | sort(attribute='final_points', reverse=True) %}
+        <tr>
+          <td><span class="pos pos-{{ p.position }}">{{ p.position }}</span></td>
+          <td>{{ p.name }}</td>
+          <td style="color:var(--muted)">{{ p.nfl_team }}</td>
+          <td style="text-align:right;font-weight:600">{{ p.final_points }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--muted);font-size:12px;">No lineup submitted.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <p style="color:var(--muted);text-align:center;padding:20px;">No data yet for Week {{ week }}.</p>
+  {% endif %}
+</div>
+
+<!-- SEASON STANDINGS SIDEBAR -->
+<div class="card">
+  <h2>Season Standings (Through Week {{ current_week }})</h2>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Team</th><th>Owner</th><th>Total Pts</th></tr>
+    </thead>
+    <tbody>
+      {% for row in standings %}
+      <tr class="rank-{{ loop.index }}">
+        <td>{{ loop.index }}</td>
+        <td><strong>{{ row.team.name }}</strong></td>
+        <td style="color:var(--muted)">{{ row.owner.username if row.owner else '—' }}</td>
+        <td><strong>{{ row.season_pts }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

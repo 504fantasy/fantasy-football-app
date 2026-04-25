@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}504 Fantasy{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:     #0a0c10;
+      --s1:     #111418;
+      --s2:     #181c23;
+      --s3:     #1e2330;
+      --border: #252a34;
+      --gold:   #e8b84b;
+      --gold2:  #f5d06a;
+      --ember:  #c9451a;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --blue:   #3b82f6;
+      --purple: #a78bfa;
+      --text:   #e8eaf0;
+      --muted:  #64748b;
+      --r:      8px;
+    }
+    *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0 }
+    html { scroll-behavior: smooth }
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.55;
+    }
+
+    /* ── NAV ── */
+    nav {
+      background: var(--s1);
+      border-bottom: 2px solid var(--gold);
+      height: 54px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+    .nav-brand {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--gold);
+      text-decoration: none;
+      margin-right: .5rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    /* breadcrumb separator */
+    .nav-sep {
+      color: var(--border);
+      margin: 0 .4rem;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .nav-league {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .95rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+      margin-right: 1rem;
+      flex-shrink: 1;
+    }
+    .nav-links { display: flex; gap: .1rem; flex: 1 }
+    .nav-links a {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-decoration: none;
+      padding: .35rem .9rem;
+      border-radius: var(--r);
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .nav-links a:hover  { color: var(--text); background: var(--s3) }
+    .nav-links a.active { color: var(--gold); background: rgba(232,184,75,.1) }
+    .nav-end {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      font-size: .82rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .nav-end strong { color: var(--text) }
+
+    /* ── MAIN ── */
+    main { max-width: 1440px; margin: 0 auto; padding: 1.75rem 1.5rem }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 1.4rem;
+    }
+    .card + .card { margin-top: 1rem }
+    .card-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--gold);
+      margin-bottom: 1rem;
+      padding-bottom: .65rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .card-title .ct-right {
+      margin-left: auto;
+      font-size: .78rem;
+      color: var(--muted);
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      display: flex;
+      align-items: baseline;
+      gap: .75rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .page-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.9rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .page-title em { font-style: normal; color: var(--gold) }
+    .page-sub { color: var(--muted); font-size: .875rem; margin-left: auto }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .45rem 1rem;
+      border: none;
+      border-radius: var(--r);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn-gold  { background: var(--gold);  color: #0a0c10 }
+    .btn-gold:hover  { background: var(--gold2) }
+    .btn-ember { background: var(--ember); color: #fff }
+    .btn-ember:hover { background: #e05820 }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border) }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted) }
+    .btn-green { background: #16a34a; color: #fff }
+    .btn-green:hover { background: #15803d }
+    .btn-sm { padding: .28rem .65rem; font-size: .75rem }
+    .btn-xs { padding: .18rem .5rem;  font-size: .68rem }
+
+    /* ── FORMS ── */
+    .fg { margin-bottom: .85rem }
+    label, .fg label {
+      display: block;
+      font-size: .74rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: .3rem;
+    }
+    input, select, textarea {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text);
+      padding: .48rem .75rem;
+      font-family: 'Barlow', sans-serif;
+      font-size: .875rem;
+      width: 100%;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gold) }
+    select option { background: var(--s2) }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .75rem }
+    .form-inline { display: flex; gap: .5rem; align-items: flex-end }
+    .form-inline > * { flex: 1 }
+    .form-inline .btn { flex: none }
+
+    /* ── TABLES ── */
+    .tbl-wrap { overflow-x: auto }
+    table { width: 100%; border-collapse: collapse; font-size: .855rem }
+    th {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .73rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      text-align: left;
+      padding: .55rem .75rem;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td { padding: .6rem .75rem; border-bottom: 1px solid var(--border); vertical-align: middle }
+    tr:last-child td { border-bottom: none }
+    tbody tr:hover td { background: rgba(255,255,255,.02) }
+    .tr-me td { background: rgba(232,184,75,.04) }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-block;
+      padding: .13rem .45rem;
+      border-radius: 4px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      white-space: nowrap;
+    }
+    .b-QB  { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44 }
+    .b-RB  { background: #16a34a22; color: #4ade80; border: 1px solid #16a34a44 }
+    .b-WR  { background: #0369a122; color: #38bdf8; border: 1px solid #0369a144 }
+    .b-TE  { background: #b4530022; color: #fb923c; border: 1px solid #b4530044 }
+    .b-K   { background: #71717a22; color: #a1a1aa; border: 1px solid #71717a44 }
+    .b-DST { background: #b9112222; color: #f87171; border: 1px solid #b9112244 }
+    .b-UNK { background: #33333322; color: #888;    border: 1px solid #44444444 }
+    .b-gold   { background: rgba(232,184,75,.18); color: var(--gold);   border: 1px solid rgba(232,184,75,.35) }
+    .b-ember  { background: rgba(201,69,26,.22);  color: #fb923c;       border: 1px solid rgba(201,69,26,.4)  }
+    .b-admin  { background: rgba(59,130,246,.18); color: #93c5fd;       border: 1px solid rgba(59,130,246,.35)}
+    .b-green  { background: rgba(34,197,94,.15);  color: var(--green);  border: 1px solid rgba(34,197,94,.3)  }
+    .b-red    { background: rgba(239,68,68,.15);  color: var(--red);    border: 1px solid rgba(239,68,68,.3)  }
+    .b-comm   { background: rgba(232,184,75,.18); color: var(--gold);   border: 1px solid rgba(232,184,75,.35)}
+
+    /* ── ALERTS ── */
+    .alert {
+      padding: .65rem 1rem;
+      border-radius: var(--r);
+      font-size: .855rem;
+      margin-bottom: 1rem;
+      border-left: 3px solid;
+    }
+    .alert-success { background: rgba(34,197,94,.08);  border-color: var(--green); color: var(--green) }
+    .alert-danger  { background: rgba(239,68,68,.08);  border-color: var(--red);   color: var(--red)   }
+    .alert-warning { background: rgba(232,184,75,.08); border-color: var(--gold);  color: var(--gold)  }
+    .alert-info    { background: rgba(59,130,246,.08); border-color: var(--blue);  color: #93c5fd      }
+
+    /* ── DIVIDER ── */
+    hr { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0 }
+
+    /* ── UTILITIES ── */
+    .flex     { display: flex }
+    .items-c  { align-items: center }
+    .justify-b{ justify-content: space-between }
+    .gap-1 { gap: .5rem } .gap-2 { gap: 1rem }
+    .mt-1  { margin-top: .5rem  } .mt-2 { margin-top: 1rem   } .mt-3 { margin-top: 1.5rem  }
+    .mb-1  { margin-bottom: .5rem } .mb-2 { margin-bottom: 1rem }
+    .ml-a  { margin-left: auto }
+    .text-c { text-align: center } .text-r { text-align: right }
+    .text-gold  { color: var(--gold)   }
+    .text-muted { color: var(--muted)  }
+    .text-green { color: var(--green)  }
+    .text-red   { color: var(--red)    }
+    .text-sm    { font-size: .8rem     }
+    .fw7    { font-weight: 700 }
+    .font-c { font-family: 'Barlow Condensed', sans-serif }
+    .hidden { display: none !important }
+
+    /* rank medals */
+    .rank { font-family: 'Barlow Condensed', sans-serif; font-size: 1.2rem; font-weight: 800; color: var(--muted); min-width: 1.6rem }
+    .rank.r1 { color: var(--gold) }
+    .rank.r2 { color: #c0c0c0 }
+    .rank.r3 { color: #cd7f32 }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px }
+    ::-webkit-scrollbar-track { background: var(--bg) }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px }
+
+    @media(max-width: 768px) {
+      main { padding: .85rem .75rem }
+      nav  { padding: 0 .85rem; height:52px }
+      .nav-league { display: none }
+      .nav-links  { display: none }
+      .nav-links.open {
+        display: flex; flex-direction:column;
+        position:fixed; top:52px; left:0; right:0;
+        background:var(--s1); border-bottom:2px solid var(--gold);
+        padding:.5rem .75rem .75rem;
+        gap:.2rem; z-index:300;
+      }
+      .nav-links.open a { padding:.6rem .85rem; font-size:.9rem }
+      .nav-end strong { display:none }
+      .nav-end .btn-sm:not(.keep) { display:none }
+      .hamburger {
+        display:flex; flex-direction:column; gap:4px;
+        cursor:pointer; padding:.4rem; margin-left:.25rem;
+        background:none; border:none;
+      }
+      .hamburger span {
+        display:block; width:20px; height:2px;
+        background:var(--muted); border-radius:2px;
+        transition:all .2s;
+      }
+      .hamburger.open span:nth-child(1) { transform:translateY(6px) rotate(45deg) }
+      .hamburger.open span:nth-child(2) { opacity:0 }
+      .hamburger.open span:nth-child(3) { transform:translateY(-6px) rotate(-45deg) }
+    }
+    @media(min-width:769px) { .hamburger { display:none } }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+{% if user is defined and user %}
+<nav>
+  <a class="nav-brand" href="/dashboard">⚡</a>
+
+  {% if league is defined and league %}
+  <span class="nav-sep">/</span>
+  <span class="nav-league">{{ league.name }}</span>
+  <div class="nav-links" id="nav-links">
+    <a href="/league/{{ league.id }}"
+       {% if request.url.path == '/league/' ~ league.id %}class="active"{% endif %}>🏠 Home</a>
+    <a href="/league/{{ league.id }}/draft"
+       {% if request.url.path == '/league/' ~ league.id ~ '/draft' %}class="active"{% endif %}>📋 Draft</a>
+    <a href="/league/{{ league.id }}/scores"
+       {% if request.url.path == '/league/' ~ league.id ~ '/scores' %}class="active"{% endif %}>📊 Scores</a>
+    {% if my_team_id is defined and my_team_id %}
+    <a href="/league/{{ league.id }}/team/{{ my_team_id }}"
+       {% if '/team/' in request.url.path %}class="active"{% endif %}>🏆 My Team</a>
+    {% endif %}
+    {% if is_commissioner is defined and is_commissioner %}
+    <a href="/league/{{ league.id }}/manage"
+       {% if '/manage' in request.url.path %}class="active"{% endif %}>⚙ Manage</a>
+    <a href="/league/{{ league.id }}/audit"
+       {% if '/audit' in request.url.path %}class="active"{% endif %}>🧾 Audit</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="nav-links" id="nav-links">
+    <a href="/dashboard"
+       {% if request.url.path == '/dashboard' %}class="active"{% endif %}>My Leagues</a>
+  </div>
+  {% endif %}
+
+  <div class="nav-end">
+    <strong>{{ user.username }}</strong>
+    {% if user.is_superadmin %}<span class="badge b-admin">Superadmin</span>{% endif %}
+    <a href="/dashboard" class="btn btn-ghost btn-sm">🏟</a>
+    <a href="/logout"    class="btn btn-ghost btn-sm keep">Logout</a>
+    <button class="hamburger" id="hamburger" onclick="toggleNav()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+<script>
+function toggleNav() {
+  const links = document.getElementById('nav-links');
+  const ham   = document.getElementById('hamburger');
+  links.classList.toggle('open');
+  ham.classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  const links = document.getElementById('nav-links');
+  const ham   = document.getElementById('hamburger');
+  if (links && !links.contains(e.target) && ham && !ham.contains(e.target)) {
+    links.classList.remove('open');
+    ham.classList.remove('open');
+  }
+});
+</script>
+{% endif %}
+
+<main>{% block content %}{% endblock %}</main>
+
+</body>
+</html>
