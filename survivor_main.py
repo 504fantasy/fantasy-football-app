@@ -48,6 +48,7 @@ Routes
 """
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import json
@@ -55,43 +56,52 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from survivor_db import (
-    adapt_sql, execute_returning, get_db, init_db,
-    REQUIRED_POSITIONS, NFL_REGULAR_SEASON_WEEKS,
-)
-
 # Reuse scoring engine and NFL sync from the main game
 from scoring import calculate_fantasy_points
+from survivor_db import (
+    NFL_REGULAR_SEASON_WEEKS,
+    REQUIRED_POSITIONS,
+    adapt_sql,
+    execute_returning,
+    get_db,
+    init_db,
+)
+
 try:
-    from nfl_sync import seed_players as _seed_players, sync_week as _sync_week, current_nfl_week
+    from nfl_sync import current_nfl_week
+    from nfl_sync import seed_players as _seed_players
+    from nfl_sync import sync_week as _sync_week
 except ImportError:
-    def _seed_players(*a, **kw): return {"added": 0, "skipped": 0}
-    def _sync_week(*a, **kw):    return {"updated": 0}
-    def current_nfl_week():      return 1
+
+    def _seed_players(*a, **kw):
+        return {"added": 0, "skipped": 0}
+
+    def _sync_week(*a, **kw):
+        return {"updated": 0}
+
+    def current_nfl_week():
+        return 1
+
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Config
+# Shared auth — reuse main app JWT config and users table
+# Survivor shares the main app "session" cookie and "users" table.
+# One account works for both games — no separate survivor registration.
 # ──────────────────────────────────────────────────────────────────────────────
 
-JWT_SECRET       = os.environ.get("JWT_SECRET", "CHANGE_ME_in_production_use_a_long_random_string")
-JWT_ALGORITHM    = "HS256"
+JWT_SECRET = os.environ.get(
+    "JWT_SECRET", "CHANGE_ME_in_production_use_a_long_random_string"
+)
+JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "72"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# JWT helpers
-# ──────────────────────────────────────────────────────────────────────────────
-
-def create_access_token(username: str) -> str:
-    expire  = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
-    payload = {"sub": username, "exp": expire, "app": "survivor"}
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def decode_access_token(token: str) -> str | None:
     try:
@@ -100,17 +110,27 @@ def decode_access_token(token: str) -> str | None:
     except JWTError:
         return None
 
+
 def hash_password(pw: str) -> str:
     return pwd_context.hash(pw)
 
+
 def verify_password(pw: str, hashed: str) -> bool:
     return pwd_context.verify(pw, hashed)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # DB bootstrap
 # ──────────────────────────────────────────────────────────────────────────────
 
-init_db()
+try:
+    init_db()
+    print("[survivor] survivor_db initialized OK")
+except Exception as _e:
+    import traceback as _tb
+
+    print(f"[survivor] ERROR: init_db() failed: {_e}")
+    _tb.print_exc()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # App
@@ -123,15 +143,43 @@ templates = Jinja2Templates(directory="survivor_templates")
 # Current-user helper
 # ──────────────────────────────────────────────────────────────────────────────
 
+
+def _get_main_db():
+    """Open a connection to the main game's database (users table lives here)."""
+    import sqlite3 as _sq
+
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url:
+        return get_db()  # Postgres: same DATABASE_URL covers both
+    main_db_path = os.environ.get("DB_PATH", "data/fantasy.db")
+    conn = _sq.connect(main_db_path)
+    conn.row_factory = _sq.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
 def get_current_user(request: Request):
-    token    = request.cookies.get("survivor_session")
-    if not token: return None
+    """
+    Read the main app 'session' cookie — falls back to 'survivor_session'
+    for anyone still holding an old cookie. Looks up in the shared 'users' table.
+    """
+    token = request.cookies.get("session") or request.cookies.get("survivor_session")
+    if not token:
+        return None
     username = decode_access_token(token)
-    if not username: return None
-    conn = get_db()
-    row  = conn.execute("SELECT * FROM survivor_users WHERE username=?", (username,)).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    if not username:
+        return None
+    try:
+        conn = _get_main_db()
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=?", (username,)
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"[survivor] get_current_user error: {e}")
+        return None
+
 
 def require_user(request: Request):
     user = get_current_user(request)
@@ -139,114 +187,137 @@ def require_user(request: Request):
         raise HTTPException(status_code=401, detail="Not logged in")
     return user
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Audit log
 # ──────────────────────────────────────────────────────────────────────────────
 
-def write_audit(actor: str, action: str, league_id: int = None,
-                team: str = None, player: str = None, details: str = None):
-    ts   = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+def write_audit(
+    actor: str,
+    action: str,
+    league_id: int = None,
+    team: str = None,
+    player: str = None,
+    details: str = None,
+):
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     conn = get_db()
     conn.execute(
         "INSERT INTO survivor_audit_log (league_id, ts, actor, action, team, player, details) "
         "VALUES (?,?,?,?,?,?,?)",
-        (league_id, ts, actor, action, team, player, details)
+        (league_id, ts, actor, action, team, player, details),
     )
     conn.commit()
     conn.close()
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # User helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-def create_user(username: str, password: str, is_superadmin: bool = False) -> bool:
-    conn = get_db()
-    try:
-        conn.execute(
-            "INSERT INTO survivor_users (username, password_hash, is_superadmin) VALUES (?,?,?)",
-            (username, hash_password(password), int(is_superadmin))
-        )
-        conn.commit()
-        return True
-    except Exception:
-        return False
-    finally:
-        conn.close()
 
 def get_user(username: str):
-    conn = get_db()
-    row  = conn.execute("SELECT * FROM survivor_users WHERE username=?", (username,)).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    """Look up user in the main app's shared users table."""
+    try:
+        conn = _get_main_db()
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=?", (username,)
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"[survivor] get_user error: {e}")
+        return None
+
 
 def get_user_by_id(uid: int):
-    conn = get_db()
-    row  = conn.execute("SELECT * FROM survivor_users WHERE id=?", (uid,)).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    """Look up user by id in the main app's shared users table."""
+    try:
+        conn = _get_main_db()
+        row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        print(f"[survivor] get_user_by_id error: {e}")
+        return None
 
-def ensure_superadmin():
-    if not get_user("admin"):
-        pw = os.environ.get("ADMIN_PASSWORD", "changeme_set_ADMIN_PASSWORD_env")
-        create_user("admin", pw, is_superadmin=True)
-
-ensure_superadmin()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # League helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _gen_invite() -> str:
-    import secrets, string
-    return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+    import secrets
+    import string
+
+    return "".join(
+        secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8)
+    )
+
 
 def create_league(name: str, commissioner_id: int, season: int) -> int:
     invite = _gen_invite()
-    ts     = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    conn   = get_db()
-    lid    = execute_returning(conn,
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db()
+    lid = execute_returning(
+        conn,
         "INSERT INTO survivor_leagues (name, commissioner_id, invite_code, created_at, season) "
         "VALUES (?,?,?,?,?)",
-        (name, commissioner_id, invite, ts, season)
+        (name, commissioner_id, invite, ts, season),
     )
-    conn.execute(adapt_sql(
-        "INSERT INTO survivor_league_members (league_id, user_id, joined_at) "
-        "VALUES (?,?,?) ON CONFLICT DO NOTHING"
-    ), (lid, commissioner_id, ts))
-    conn.commit(); conn.close()
+    conn.execute(
+        adapt_sql(
+            "INSERT INTO survivor_league_members (league_id, user_id, joined_at) "
+            "VALUES (?,?,?) ON CONFLICT DO NOTHING"
+        ),
+        (lid, commissioner_id, ts),
+    )
+    conn.commit()
+    conn.close()
     return lid
+
 
 def get_league(league_id: int):
     conn = get_db()
-    row  = conn.execute("SELECT * FROM survivor_leagues WHERE id=?", (league_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM survivor_leagues WHERE id=?", (league_id,)
+    ).fetchone()
     conn.close()
     return dict(row) if row else None
 
+
 def get_user_leagues(user_id: int) -> list:
     conn = get_db()
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT l.*, lm.joined_at, (l.commissioner_id = ?) as is_commissioner
         FROM survivor_leagues l
         JOIN survivor_league_members lm ON lm.league_id = l.id
         WHERE lm.user_id = ?
         ORDER BY l.created_at DESC
-    """, (user_id, user_id)).fetchall()
+    """,
+        (user_id, user_id),
+    ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
+
 def join_league_by_code(user_id: int, invite_code: str):
-    conn   = get_db()
+    conn = get_db()
     league = conn.execute(
         "SELECT * FROM survivor_leagues WHERE invite_code=?",
-        (invite_code.strip().upper(),)
+        (invite_code.strip().upper(),),
     ).fetchone()
     if not league:
-        conn.close(); return None, "Invalid invite code."
+        conn.close()
+        return None, "Invalid invite code."
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     try:
         conn.execute(
             "INSERT INTO survivor_league_members (league_id, user_id, joined_at) VALUES (?,?,?)",
-            (league["id"], user_id, ts)
+            (league["id"], user_id, ts),
         )
         conn.commit()
     except Exception:
@@ -254,17 +325,20 @@ def join_league_by_code(user_id: int, invite_code: str):
     conn.close()
     return league["id"], None
 
+
 def is_league_member(league_id: int, user_id: int) -> bool:
     conn = get_db()
-    row  = conn.execute(
+    row = conn.execute(
         "SELECT id FROM survivor_league_members WHERE league_id=? AND user_id=?",
-        (league_id, user_id)
+        (league_id, user_id),
     ).fetchone()
     conn.close()
     return row is not None
 
+
 def is_commissioner(league: dict, user: dict) -> bool:
     return bool(user.get("is_superadmin")) or league["commissioner_id"] == user["id"]
+
 
 def league_ctx(league_id: int, user: dict) -> dict:
     league = get_league(league_id)
@@ -274,49 +348,55 @@ def league_ctx(league_id: int, user: dict) -> dict:
         raise HTTPException(status_code=403, detail="Not a member of this league")
     return league
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Team helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def get_league_teams(league_id: int) -> list:
     conn = get_db()
     rows = conn.execute(
-        "SELECT * FROM survivor_teams WHERE league_id=? ORDER BY id",
-        (league_id,)
+        "SELECT * FROM survivor_teams WHERE league_id=? ORDER BY id", (league_id,)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
+
 def get_user_team_in_league(league_id: int, user_id: int):
     conn = get_db()
-    row  = conn.execute(
+    row = conn.execute(
         "SELECT * FROM survivor_teams WHERE league_id=? AND owner_id=?",
-        (league_id, user_id)
+        (league_id, user_id),
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Player helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def get_league_players(league_id: int) -> list:
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM survivor_players WHERE league_id=? ORDER BY position, name",
-        (league_id,)
+        (league_id,),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
 
 def get_players_by_position(league_id: int, position: str) -> list:
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM survivor_players WHERE league_id=? AND position=? ORDER BY name",
-        (league_id, position.upper())
+        (league_id, position.upper()),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
 
 def get_used_player_ids_for_team(team_id: int, exclude_week: int = None) -> set:
     """
@@ -329,16 +409,17 @@ def get_used_player_ids_for_team(team_id: int, exclude_week: int = None) -> set:
         rows = conn.execute(
             "SELECT DISTINCT player_id FROM survivor_lineups "
             "WHERE team_id=? AND locked=1 AND week != ?",
-            (team_id, exclude_week)
+            (team_id, exclude_week),
         ).fetchall()
     else:
         rows = conn.execute(
             "SELECT DISTINCT player_id FROM survivor_lineups "
             "WHERE team_id=? AND locked=1",
-            (team_id,)
+            (team_id,),
         ).fetchall()
     conn.close()
     return {r["player_id"] for r in rows}
+
 
 def get_available_players_for_team(league_id: int, team_id: int, week: int) -> dict:
     """
@@ -353,33 +434,42 @@ def get_available_players_for_team(league_id: int, team_id: int, week: int) -> d
             by_pos.setdefault(p["position"], []).append(p)
     return by_pos
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Lineup helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def get_team_lineup(team_id: int, week: int) -> list:
     """Return the lineup rows for a team/week."""
     conn = get_db()
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT sl.*, p.name as player_name, p.nfl_team, p.position as player_pos
         FROM survivor_lineups sl
         JOIN survivor_players p ON sl.player_id = p.id
         WHERE sl.team_id=? AND sl.week=?
         ORDER BY sl.position
-    """, (team_id, week)).fetchall()
+    """,
+        (team_id, week),
+    ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
 
 def lineup_is_complete(lineup: list) -> bool:
     submitted = {row["position"] for row in lineup}
     return set(REQUIRED_POSITIONS) == submitted
 
+
 def lineup_is_locked(lineup: list) -> bool:
     return all(row.get("locked") for row in lineup) if lineup else False
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Scoring
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _row_to_stats(row: dict) -> dict:
     try:
@@ -387,17 +477,18 @@ def _row_to_stats(row: dict) -> dict:
     except Exception:
         fgs = []
     return {
-        "receptions":          row.get("receptions", 0) or 0,
-        "receiving_yards":     row.get("receiving_yards", 0) or 0,
-        "rushing_yards":       row.get("rushing_yards", 0) or 0,
-        "return_yards":        row.get("return_yards", 0) or 0,
-        "passing_yards":       row.get("passing_yards", 0) or 0,
-        "total_tds":           row.get("total_tds", 0) or 0,
-        "fumbles_lost":        row.get("fumbles_lost", 0) or 0,
-        "interceptions":       row.get("interceptions", 0) or 0,
-        "field_goals_made":    fgs,
+        "receptions": row.get("receptions", 0) or 0,
+        "receiving_yards": row.get("receiving_yards", 0) or 0,
+        "rushing_yards": row.get("rushing_yards", 0) or 0,
+        "return_yards": row.get("return_yards", 0) or 0,
+        "passing_yards": row.get("passing_yards", 0) or 0,
+        "total_tds": row.get("total_tds", 0) or 0,
+        "fumbles_lost": row.get("fumbles_lost", 0) or 0,
+        "interceptions": row.get("interceptions", 0) or 0,
+        "field_goals_made": fgs,
         "return_fumbles_lost": row.get("return_fumbles_lost", 0) or 0,
     }
+
 
 def get_team_week_score(team_id: int, week: int) -> dict:
     """
@@ -405,7 +496,8 @@ def get_team_week_score(team_id: int, week: int) -> dict:
     Returns {players: [...], total: float}.
     """
     conn = get_db()
-    rows = conn.execute("""
+    rows = conn.execute(
+        """
         SELECT sl.position, sl.locked,
                p.id as player_id, p.name, p.nfl_team, p.position as player_pos,
                ps.receptions, ps.receiving_yards, ps.rushing_yards,
@@ -417,33 +509,40 @@ def get_team_week_score(team_id: int, week: int) -> dict:
         LEFT JOIN survivor_player_scores ps
                ON ps.player_id = p.id AND ps.week = ?
         WHERE sl.team_id=? AND sl.week=?
-    """, (week, team_id, week)).fetchall()
+    """,
+        (week, team_id, week),
+    ).fetchall()
     conn.close()
 
     players_out = []
-    total       = 0.0
+    total = 0.0
     for r in rows:
-        r   = dict(r)
-        pos = r.get("position", "").upper()   # lineup slot position
+        r = dict(r)
+        pos = r.get("position", "").upper()  # lineup slot position
         if r.get("override_points") is not None:
             pts = float(r["override_points"])
         else:
             stats = _row_to_stats(r)
-            pts   = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats)
+            pts = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats)
         total += pts
         players_out.append({**r, "final_points": round(pts, 2)})
 
     return {"players": players_out, "total": round(total, 2)}
 
+
 def get_team_season_score(team_id: int, through_week: int) -> float:
     return round(
-        sum(get_team_week_score(team_id, w)["total"] for w in range(1, through_week + 1)),
-        2
+        sum(
+            get_team_week_score(team_id, w)["total"] for w in range(1, through_week + 1)
+        ),
+        2,
     )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Seed players (adapts nfl_sync.seed_players to survivor_players table)
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
     """
@@ -454,9 +553,11 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
     # We create a temporary in-memory staging using the standard seed path
     # then copy over to survivor_players.
     import sqlite3 as _sqlite3
+
     staging = _sqlite3.connect(":memory:")
     staging.row_factory = _sqlite3.Row
-    staging.execute("""
+    staging.execute(
+        """
         CREATE TABLE players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             league_id INTEGER,
@@ -465,12 +566,16 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
             nfl_team TEXT,
             UNIQUE(league_id, name)
         )
-    """)
+    """
+    )
     staging.commit()
 
     try:
-        result = _seed_players.__wrapped__(staging, league_id) if hasattr(_seed_players, "__wrapped__") \
-                 else _seed_players(league_id, overwrite=overwrite)
+        result = (
+            _seed_players.__wrapped__(staging, league_id)
+            if hasattr(_seed_players, "__wrapped__")
+            else _seed_players(league_id, overwrite=overwrite)
+        )
     except Exception:
         result = {"added": 0, "skipped": 0}
 
@@ -480,12 +585,13 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
 
     if os.path.exists(main_db_path):
         import sqlite3 as _s
+
         mconn = _s.connect(main_db_path)
         mconn.row_factory = _s.Row
         rows = mconn.execute(
             "SELECT name, position, nfl_team FROM players WHERE league_id=? "
             "AND position IN ('QB','RB','WR','TE','DST','K')",
-            (league_id,)
+            (league_id,),
         ).fetchall()
         mconn.close()
 
@@ -495,183 +601,208 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
                 conn.execute(
                     "INSERT INTO survivor_players (league_id, name, position, nfl_team) "
                     "VALUES (?,?,?,?)",
-                    (league_id, row["name"], row["position"].upper(), row["nfl_team"].upper())
+                    (
+                        league_id,
+                        row["name"],
+                        row["position"].upper(),
+                        row["nfl_team"].upper(),
+                    ),
                 )
                 added += 1
             except Exception:
                 skipped += 1
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
 
     return {"added": added, "skipped": skipped}
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AUTH ROUTES
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/survivor/", response_class=HTMLResponse)
 def survivor_root(request: Request):
     user = get_current_user(request)
     if not user:
-        return templates.TemplateResponse("home_public.html", {"request": request})
+        return RedirectResponse("/login?next=/survivor/", status_code=303)
     leagues = get_user_leagues(user["id"])
     if len(leagues) == 1:
         return RedirectResponse(f"/survivor/{leagues[0]['id']}", status_code=303)
     return RedirectResponse("/survivor/dashboard", status_code=303)
 
+
 @app.get("/survivor/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "error": request.query_params.get("error", ""),
-        "registered": request.query_params.get("registered", ""),
-    })
+    # Redirect to main app login — one account works for both games
+    return RedirectResponse("/login", status_code=303)
+
 
 @app.post("/survivor/login")
-def login(request: Request, username: str = Form(...), password: str = Form(...)):
-    user = get_user(username)
-    if not user or not verify_password(password, user["password_hash"]):
-        return RedirectResponse("/survivor/login?error=1", status_code=303)
-    token = create_access_token(user["username"])
-    resp  = RedirectResponse("/survivor/", status_code=303)
-    resp.set_cookie(
-        "survivor_session", token,
-        httponly=True, samesite="lax",
-        secure=os.environ.get("SECURE_COOKIES", "0") == "1",
-        max_age=JWT_EXPIRE_HOURS * 3600,
-    )
-    return resp
+def login_post():
+    return RedirectResponse("/login", status_code=303)
+
 
 @app.get("/survivor/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    return templates.TemplateResponse("register.html", {
-        "request": request,
-        "error": request.query_params.get("error", ""),
-    })
+    # Redirect to main app register — one account works for both games
+    return RedirectResponse("/register", status_code=303)
+
 
 @app.post("/survivor/register")
-def register(username: str = Form(...), password: str = Form(...)):
-    if len(password) < 6:
-        return RedirectResponse("/survivor/register?error=short", status_code=303)
-    if not create_user(username, password):
-        return RedirectResponse("/survivor/register?error=taken", status_code=303)
-    return RedirectResponse("/survivor/login?registered=1", status_code=303)
+def register_post():
+    return RedirectResponse("/register", status_code=303)
+
 
 @app.get("/survivor/logout")
 def logout():
-    resp = RedirectResponse("/survivor/login", status_code=303)
-    resp.delete_cookie("survivor_session")
+    resp = RedirectResponse("/logout", status_code=303)
     return resp
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # DASHBOARD
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/survivor/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     leagues = get_user_leagues(user["id"])
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "user":    user,
-        "leagues": leagues,
-        "msg":     request.query_params.get("msg", ""),
-        "error":   request.query_params.get("error", ""),
-    })
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "user": user,
+            "leagues": leagues,
+            "msg": request.query_params.get("msg", ""),
+            "error": request.query_params.get("error", ""),
+        },
+    )
+
 
 @app.post("/survivor/league/create")
-def league_create(request: Request,
-                  league_name: str = Form(...),
-                  season: int = Form(2025)):
+def league_create(
+    request: Request, league_name: str = Form(...), season: int = Form(2025)
+):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     if not league_name.strip():
         return RedirectResponse("/survivor/dashboard?error=empty_name", status_code=303)
     lid = create_league(league_name.strip(), user["id"], season)
-    write_audit(actor=user["username"], action="LEAGUE_CREATE", league_id=lid,
-                details=f"name={league_name.strip()} season={season}")
+    write_audit(
+        actor=user["username"],
+        action="LEAGUE_CREATE",
+        league_id=lid,
+        details=f"name={league_name.strip()} season={season}",
+    )
     return RedirectResponse(f"/survivor/{lid}?msg=league_created", status_code=303)
+
 
 @app.post("/survivor/league/join")
 def league_join(request: Request, invite_code: str = Form(...)):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     lid, err = join_league_by_code(user["id"], invite_code)
     if err:
         return RedirectResponse(f"/survivor/dashboard?error={err}", status_code=303)
     write_audit(actor=user["username"], action="LEAGUE_JOIN", league_id=lid)
     return RedirectResponse(f"/survivor/{lid}", status_code=303)
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # LEAGUE HOME
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/survivor/{league_id}", response_class=HTMLResponse)
 def league_home(league_id: int, request: Request):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
 
-    teams       = get_league_teams(league_id)
-    current_wk  = league["current_week"]
-    my_team     = get_user_team_in_league(league_id, user["id"])
+    teams = get_league_teams(league_id)
+    current_wk = league["current_week"]
+    my_team = get_user_team_in_league(league_id, user["id"])
 
     standings = []
     for team in teams:
         season_pts = get_team_season_score(team["id"], current_wk)
-        week_pts   = get_team_week_score(team["id"], current_wk)["total"]
-        lineup     = get_team_lineup(team["id"], current_wk)
-        standings.append({
-            "team":        team,
-            "owner":       get_user_by_id(team["owner_id"]),
-            "season_pts":  season_pts,
-            "week_pts":    week_pts,
-            "lineup_complete": lineup_is_complete(lineup),
-            "lineup_locked":   lineup_is_locked(lineup),
-        })
+        week_pts = get_team_week_score(team["id"], current_wk)["total"]
+        lineup = get_team_lineup(team["id"], current_wk)
+        standings.append(
+            {
+                "team": team,
+                "owner": get_user_by_id(team["owner_id"]),
+                "season_pts": season_pts,
+                "week_pts": week_pts,
+                "lineup_complete": lineup_is_complete(lineup),
+                "lineup_locked": lineup_is_locked(lineup),
+            }
+        )
     standings.sort(key=lambda x: x["season_pts"], reverse=True)
 
-    return templates.TemplateResponse("league_home.html", {
-        "request":          request,
-        "user":             user,
-        "league":           league,
-        "standings":        standings,
-        "current_week":     current_wk,
-        "total_weeks":      NFL_REGULAR_SEASON_WEEKS,
-        "my_team":          my_team,
-        "is_commissioner":  is_commissioner(league, user),
-        "msg":              request.query_params.get("msg", ""),
-        "required_positions": REQUIRED_POSITIONS,
-    })
+    return templates.TemplateResponse(
+        "league_home.html",
+        {
+            "request": request,
+            "user": user,
+            "league": league,
+            "standings": standings,
+            "current_week": current_wk,
+            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "my_team": my_team,
+            "is_commissioner": is_commissioner(league, user),
+            "msg": request.query_params.get("msg", ""),
+            "required_positions": REQUIRED_POSITIONS,
+        },
+    )
+
 
 @app.post("/survivor/{league_id}/create-team")
 def create_team(league_id: int, request: Request, team_name: str = Form(...)):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league_ctx(league_id, user)
     conn = get_db()
     try:
         conn.execute(
             "INSERT INTO survivor_teams (league_id, name, owner_id) VALUES (?,?,?)",
-            (league_id, team_name.strip(), user["id"])
+            (league_id, team_name.strip(), user["id"]),
         )
         conn.commit()
     except Exception:
         conn.close()
-        return RedirectResponse(f"/survivor/{league_id}?error=team_name_taken", status_code=303)
+        return RedirectResponse(
+            f"/survivor/{league_id}?error=team_name_taken", status_code=303
+        )
     conn.close()
-    write_audit(actor=user["username"], action="TEAM_CREATE", league_id=league_id,
-                team=team_name.strip())
+    write_audit(
+        actor=user["username"],
+        action="TEAM_CREATE",
+        league_id=league_id,
+        team=team_name.strip(),
+    )
     return RedirectResponse(f"/survivor/{league_id}?msg=team_created", status_code=303)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # LINEUP PAGE  (submit / edit weekly picks)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/survivor/{league_id}/lineup", response_class=HTMLResponse)
 def lineup_page(league_id: int, request: Request, week: int = None):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
 
     my_team = get_user_team_in_league(league_id, user["id"])
@@ -683,58 +814,87 @@ def lineup_page(league_id: int, request: Request, week: int = None):
         week = current_wk
 
     # Only allow editing the current week (commissioners can edit any week)
-    is_comm    = is_commissioner(league, user)
-    editable   = (week == current_wk) or is_comm
+    is_comm = is_commissioner(league, user)
+    editable = (week == current_wk) or is_comm
 
-    current_lineup   = get_team_lineup(my_team["id"], week)
-    locked           = lineup_is_locked(current_lineup)
+    current_lineup = get_team_lineup(my_team["id"], week)
+    locked = lineup_is_locked(current_lineup)
     available_by_pos = get_available_players_for_team(league_id, my_team["id"], week)
-    used_ids         = get_used_player_ids_for_team(my_team["id"], exclude_week=week)
+    used_ids = get_used_player_ids_for_team(my_team["id"], exclude_week=week)
 
     # Map current picks for the template
     current_picks = {row["position"]: row for row in current_lineup}
 
-    return templates.TemplateResponse("lineup.html", {
-        "request":           request,
-        "user":              user,
-        "league":            league,
-        "my_team":           my_team,
-        "week":              week,
-        "current_week":      current_wk,
-        "total_weeks":       NFL_REGULAR_SEASON_WEEKS,
-        "current_lineup":    current_lineup,
-        "current_picks":     current_picks,
-        "locked":            locked,
-        "editable":          editable and not locked,
-        "available_by_pos":  available_by_pos,
-        "used_ids":          used_ids,
-        "required_positions": REQUIRED_POSITIONS,
-        "lineup_complete":   lineup_is_complete(current_lineup),
-        "is_commissioner":   is_comm,
-        "msg":               request.query_params.get("msg", ""),
-        "error":             request.query_params.get("error", ""),
-    })
+    # Build full pool by position (for pool-usage bars)
+    all_players = get_league_players(league_id)
+    all_players_by_pos: dict = {}
+    for p in all_players:
+        all_players_by_pos.setdefault(p["position"], []).append(p)
+
+    # Build used-players list with the week they were used (from locked lineups)
+    conn = get_db()
+    used_rows = conn.execute(
+        """
+        SELECT DISTINCT sl.player_id, sl.week as used_week,
+               p.name, p.position, p.nfl_team
+        FROM survivor_lineups sl
+        JOIN survivor_players p ON sl.player_id = p.id
+        WHERE sl.team_id=? AND sl.locked=1 AND sl.week != ?
+        ORDER BY sl.week
+    """,
+        (my_team["id"], week),
+    ).fetchall()
+    conn.close()
+    used_players = [dict(r) for r in used_rows]
+
+    return templates.TemplateResponse(
+        "lineup.html",
+        {
+            "request": request,
+            "user": user,
+            "league": league,
+            "my_team": my_team,
+            "week": week,
+            "current_week": current_wk,
+            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "current_lineup": current_lineup,
+            "current_picks": current_picks,
+            "locked": locked,
+            "editable": editable and not locked,
+            "available_by_pos": available_by_pos,
+            "all_players_by_pos": all_players_by_pos,
+            "used_ids": used_ids,
+            "used_players": used_players,
+            "required_positions": REQUIRED_POSITIONS,
+            "lineup_complete": lineup_is_complete(current_lineup),
+            "is_commissioner": is_comm,
+            "msg": request.query_params.get("msg", ""),
+            "error": request.query_params.get("error", ""),
+        },
+    )
+
 
 @app.post("/survivor/{league_id}/lineup/submit")
 def lineup_submit(
     league_id: int,
     request: Request,
     week: int = Form(...),
-    qb: int   = Form(...),
-    rb: int   = Form(...),
-    wr: int   = Form(...),
-    te: int   = Form(...),
-    dst: int  = Form(...),
-    k: int    = Form(...),
+    qb: int = Form(...),
+    rb: int = Form(...),
+    wr: int = Form(...),
+    te: int = Form(...),
+    dst: int = Form(...),
+    k: int = Form(...),
 ):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
-    league  = league_ctx(league_id, user)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
     my_team = get_user_team_in_league(league_id, user["id"])
     if not my_team:
         return RedirectResponse(f"/survivor/{league_id}?error=no_team", status_code=303)
 
-    is_comm    = is_commissioner(league, user)
+    is_comm = is_commissioner(league, user)
     current_wk = league["current_week"]
 
     # Non-commissioners can only submit the current week
@@ -744,7 +904,7 @@ def lineup_submit(
         )
 
     picks = {"QB": qb, "RB": rb, "WR": wr, "TE": te, "DST": dst, "K": k}
-    base  = f"/survivor/{league_id}/lineup?week={week}"
+    base = f"/survivor/{league_id}/lineup?week={week}"
 
     # Validate: all players must be real, belong to this league, correct position
     conn = get_db()
@@ -753,17 +913,23 @@ def lineup_submit(
     for pos, pid in picks.items():
         row = conn.execute(
             "SELECT * FROM survivor_players WHERE id=? AND league_id=?",
-            (pid, league_id)
+            (pid, league_id),
         ).fetchone()
         if not row:
             conn.close()
-            return RedirectResponse(f"{base}&error=invalid_player_{pos}", status_code=303)
+            return RedirectResponse(
+                f"{base}&error=invalid_player_{pos}", status_code=303
+            )
         if row["position"].upper() != pos:
             conn.close()
-            return RedirectResponse(f"{base}&error=wrong_position_{pos}", status_code=303)
+            return RedirectResponse(
+                f"{base}&error=wrong_position_{pos}", status_code=303
+            )
         if pid in used:
             conn.close()
-            return RedirectResponse(f"{base}&error=player_already_used_{pos}", status_code=303)
+            return RedirectResponse(
+                f"{base}&error=player_already_used_{pos}", status_code=303
+            )
 
     # Validate: no duplicate players within the lineup
     if len(set(picks.values())) != len(picks):
@@ -773,7 +939,9 @@ def lineup_submit(
     # Upsert each position slot
     ts = datetime.now(timezone.utc).isoformat()
     for pos, pid in picks.items():
-        conn.execute(adapt_sql("""
+        conn.execute(
+            adapt_sql(
+                """
             INSERT INTO survivor_lineups
                 (league_id, team_id, week, position, player_id, locked, submitted_at)
             VALUES (?,?,?,?,?,0,?)
@@ -781,23 +949,34 @@ def lineup_submit(
             DO UPDATE SET player_id=excluded.player_id,
                           submitted_at=excluded.submitted_at,
                           locked=0
-        """), (league_id, my_team["id"], week, pos, pid, ts))
+        """
+            ),
+            (league_id, my_team["id"], week, pos, pid, ts),
+        )
 
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
 
-    write_audit(actor=user["username"], action="LINEUP_SUBMIT", league_id=league_id,
-                team=my_team["name"],
-                details=f"week={week} QB={qb} RB={rb} WR={wr} TE={te} DST={dst} K={k}")
+    write_audit(
+        actor=user["username"],
+        action="LINEUP_SUBMIT",
+        league_id=league_id,
+        team=my_team["name"],
+        details=f"week={week} QB={qb} RB={rb} WR={wr} TE={te} DST={dst} K={k}",
+    )
     return RedirectResponse(f"{base}&msg=lineup_saved", status_code=303)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SCORES PAGE
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/survivor/{league_id}/scores", response_class=HTMLResponse)
 def scores_page(league_id: int, request: Request, week: int = None):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
 
     current_wk = league["current_week"]
@@ -810,133 +989,208 @@ def scores_page(league_id: int, request: Request, week: int = None):
     week_scores = []
     for team in teams:
         result = get_team_week_score(team["id"], week)
-        owner  = get_user_by_id(team["owner_id"])
+        owner = get_user_by_id(team["owner_id"])
         lineup = get_team_lineup(team["id"], week)
-        week_scores.append({
-            "team":     team,
-            "owner":    owner,
-            "players":  result["players"],
-            "total":    result["total"],
-            "complete": lineup_is_complete(lineup),
-        })
+        week_scores.append(
+            {
+                "team": team,
+                "owner": owner,
+                "players": result["players"],
+                "total": result["total"],
+                "complete": lineup_is_complete(lineup),
+            }
+        )
     week_scores.sort(key=lambda x: x["total"], reverse=True)
 
     # Season standings
     standings = []
     for team in teams:
         season_pts = get_team_season_score(team["id"], current_wk)
-        standings.append({
-            "team":       team,
-            "owner":      get_user_by_id(team["owner_id"]),
-            "season_pts": season_pts,
-        })
+        standings.append(
+            {
+                "team": team,
+                "owner": get_user_by_id(team["owner_id"]),
+                "season_pts": season_pts,
+            }
+        )
     standings.sort(key=lambda x: x["season_pts"], reverse=True)
 
-    return templates.TemplateResponse("scores.html", {
-        "request":          request,
-        "user":             user,
-        "league":           league,
-        "week":             week,
-        "current_week":     current_wk,
-        "total_weeks":      NFL_REGULAR_SEASON_WEEKS,
-        "week_scores":      week_scores,
-        "standings":        standings,
-        "is_commissioner":  is_commissioner(league, user),
-        "my_team":          get_user_team_in_league(league_id, user["id"]),
-    })
+    return templates.TemplateResponse(
+        "scores.html",
+        {
+            "request": request,
+            "user": user,
+            "league": league,
+            "week": week,
+            "current_week": current_wk,
+            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "week_scores": week_scores,
+            "standings": standings,
+            "is_commissioner": is_commissioner(league, user),
+            "my_team": get_user_team_in_league(league_id, user["id"]),
+        },
+    )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # COMMISSIONER PANEL
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/survivor/{league_id}/manage", response_class=HTMLResponse)
 def manage_page(league_id: int, request: Request):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403, detail="Commissioner only")
 
-    conn    = get_db()
-    members = conn.execute("""
+    conn = get_db()
+    members = conn.execute(
+        """
         SELECT u.id, u.username, lm.joined_at
         FROM survivor_league_members lm
-        JOIN survivor_users u ON lm.user_id = u.id
+        JOIN users u ON lm.user_id = u.id
         WHERE lm.league_id=?
-    """, (league_id,)).fetchall()
+    """,
+        (league_id,),
+    ).fetchall()
     current_wk = league["current_week"]
     week_scores = {
         r["player_id"]: dict(r)
-        for r in conn.execute("""
+        for r in conn.execute(
+            """
             SELECT ps.* FROM survivor_player_scores ps
             JOIN survivor_players p ON ps.player_id = p.id
             WHERE p.league_id=? AND ps.week=?
-        """, (league_id, current_wk)).fetchall()
+        """,
+            (league_id, current_wk),
+        ).fetchall()
     }
     conn.close()
 
-    teams   = get_league_teams(league_id)
+    teams = get_league_teams(league_id)
     players = get_league_players(league_id)
     teams_with_owners = [
         {**t, "owner_name": (get_user_by_id(t["owner_id"]) or {}).get("username", "?")}
         for t in teams
     ]
 
-    return templates.TemplateResponse("manage.html", {
-        "request":          request,
-        "user":             user,
-        "league":           league,
-        "members":          [dict(m) for m in members],
-        "teams":            teams_with_owners,
-        "players":          players,
-        "current_week":     current_wk,
-        "total_weeks":      NFL_REGULAR_SEASON_WEEKS,
-        "week_scores":      week_scores,
-        "msg":              request.query_params.get("msg", ""),
-        "error":            request.query_params.get("error", ""),
-        "is_commissioner":  True,
-        "required_positions": REQUIRED_POSITIONS,
-        "current_nfl_week": current_nfl_week(),
-        "my_team":          get_user_team_in_league(league_id, user["id"]),
-    })
+    # Lineup status for each team this week
+    lineup_status: dict = {}
+    team_lineups: dict = {}
+    for t in teams:
+        lu = get_team_lineup(t["id"], current_wk)
+        lineup_status[t["id"]] = {
+            "complete": lineup_is_complete(lu),
+            "locked": lineup_is_locked(lu),
+        }
+        team_lineups[t["id"]] = {row["position"]: row for row in lu}
+
+    # Season points per team (through current week)
+    team_season_pts: dict = {}
+    for t in teams:
+        team_season_pts[t["id"]] = get_team_season_score(t["id"], current_wk)
+
+    # Enrich week_scores with player names
+    enriched_week_scores: dict = {}
+    conn2 = get_db()
+    for pid, ps in week_scores.items():
+        row = conn2.execute(
+            "SELECT name, position FROM survivor_players WHERE id=?", (pid,)
+        ).fetchone()
+        enriched_week_scores[pid] = {
+            **ps,
+            "player_name": row["name"] if row else str(pid),
+            "position": row["position"] if row else "",
+        }
+    conn2.close()
+
+    return templates.TemplateResponse(
+        "manage.html",
+        {
+            "request": request,
+            "user": user,
+            "league": league,
+            "members": [dict(m) for m in members],
+            "teams": teams_with_owners,
+            "players": players,
+            "current_week": current_wk,
+            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "week_scores": enriched_week_scores,
+            "lineup_status": lineup_status,
+            "team_lineups": team_lineups,
+            "team_season_pts": team_season_pts,
+            "msg": request.query_params.get("msg", ""),
+            "error": request.query_params.get("error", ""),
+            "is_commissioner": True,
+            "required_positions": REQUIRED_POSITIONS,
+            "current_nfl_week": current_nfl_week(),
+            "my_team": get_user_team_in_league(league_id, user["id"]),
+        },
+    )
+
 
 # ── League settings ──────────────────────────────────────────────────────────
+
 
 @app.post("/survivor/{league_id}/manage/settings")
 def manage_settings(
     league_id: int,
     request: Request,
     league_name: str = Form(...),
-    season: int      = Form(2025),
-    deadline_day:  int = Form(0),
+    season: int = Form(2025),
+    deadline_day: int = Form(0),
     deadline_hour: int = Form(13),
 ):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
     conn = get_db()
-    conn.execute(adapt_sql("""
+    conn.execute(
+        adapt_sql(
+            """
         UPDATE survivor_leagues
         SET name=?, season=?, submission_deadline_day=?, submission_deadline_hour=?
         WHERE id=?
-    """), (league_name.strip(), season,
-           max(0, min(6, deadline_day)),
-           max(0, min(23, deadline_hour)),
-           league_id))
-    conn.commit(); conn.close()
-    write_audit(actor=user["username"], action="SETTINGS_UPDATE", league_id=league_id,
-                details=f"name={league_name} season={season}")
-    return RedirectResponse(f"/survivor/{league_id}/manage?msg=settings_saved", status_code=303)
+    """
+        ),
+        (
+            league_name.strip(),
+            season,
+            max(0, min(6, deadline_day)),
+            max(0, min(23, deadline_hour)),
+            league_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"],
+        action="SETTINGS_UPDATE",
+        league_id=league_id,
+        details=f"name={league_name} season={season}",
+    )
+    return RedirectResponse(
+        f"/survivor/{league_id}/manage?msg=settings_saved", status_code=303
+    )
+
 
 # ── Advance week (locks current lineups and moves to next week) ──────────────
+
 
 @app.post("/survivor/{league_id}/manage/advance-week")
 def advance_week(league_id: int, request: Request):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
 
     current_wk = league["current_week"]
     if current_wk >= NFL_REGULAR_SEASON_WEEKS:
@@ -946,56 +1200,82 @@ def advance_week(league_id: int, request: Request):
 
     conn = get_db()
     # Lock all lineups for the current week
-    conn.execute(adapt_sql("""
+    conn.execute(
+        adapt_sql(
+            """
         UPDATE survivor_lineups SET locked=1
         WHERE league_id=? AND week=?
-    """), (league_id, current_wk))
+    """
+        ),
+        (league_id, current_wk),
+    )
     # Advance the week counter
-    conn.execute(adapt_sql(
-        "UPDATE survivor_leagues SET current_week=? WHERE id=?"
-    ), (current_wk + 1, league_id))
-    conn.commit(); conn.close()
+    conn.execute(
+        adapt_sql("UPDATE survivor_leagues SET current_week=? WHERE id=?"),
+        (current_wk + 1, league_id),
+    )
+    conn.commit()
+    conn.close()
 
-    write_audit(actor=user["username"], action="ADVANCE_WEEK", league_id=league_id,
-                details=f"week {current_wk} → {current_wk + 1}")
+    write_audit(
+        actor=user["username"],
+        action="ADVANCE_WEEK",
+        league_id=league_id,
+        details=f"week {current_wk} → {current_wk + 1}",
+    )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=week_advanced", status_code=303
     )
 
+
 # ── Lock current week's lineups without advancing ───────────────────────────
+
 
 @app.post("/survivor/{league_id}/manage/lock-week")
 def lock_week(league_id: int, request: Request):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
 
     conn = get_db()
-    conn.execute(adapt_sql(
-        "UPDATE survivor_lineups SET locked=1 WHERE league_id=? AND week=?"
-    ), (league_id, league["current_week"]))
-    conn.commit(); conn.close()
+    conn.execute(
+        adapt_sql("UPDATE survivor_lineups SET locked=1 WHERE league_id=? AND week=?"),
+        (league_id, league["current_week"]),
+    )
+    conn.commit()
+    conn.close()
 
-    write_audit(actor=user["username"], action="LOCK_WEEK", league_id=league_id,
-                details=f"week={league['current_week']}")
+    write_audit(
+        actor=user["username"],
+        action="LOCK_WEEK",
+        league_id=league_id,
+        details=f"week={league['current_week']}",
+    )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=week_locked", status_code=303
     )
 
+
 # ── Player management ────────────────────────────────────────────────────────
+
 
 @app.post("/survivor/{league_id}/manage/player/add")
 def manage_add_player(
-    league_id: int, request: Request,
-    name: str     = Form(...),
+    league_id: int,
+    request: Request,
+    name: str = Form(...),
     position: str = Form(...),
     nfl_team: str = Form(...),
 ):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
     pos = position.strip().upper()
     if pos not in REQUIRED_POSITIONS:
         return RedirectResponse(
@@ -1005,7 +1285,7 @@ def manage_add_player(
     try:
         conn.execute(
             "INSERT INTO survivor_players (league_id, name, position, nfl_team) VALUES (?,?,?,?)",
-            (league_id, name.strip(), pos, nfl_team.strip().upper())
+            (league_id, name.strip(), pos, nfl_team.strip().upper()),
         )
         conn.commit()
     except Exception:
@@ -1014,96 +1294,168 @@ def manage_add_player(
             f"/survivor/{league_id}/manage?error=player_exists", status_code=303
         )
     conn.close()
-    write_audit(actor=user["username"], action="PLAYER_ADD", league_id=league_id,
-                player=name.strip(), details=f"pos={pos} team={nfl_team.upper()}")
+    write_audit(
+        actor=user["username"],
+        action="PLAYER_ADD",
+        league_id=league_id,
+        player=name.strip(),
+        details=f"pos={pos} team={nfl_team.upper()}",
+    )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=player_added", status_code=303
     )
 
+
 @app.post("/survivor/{league_id}/manage/player/edit")
 def manage_edit_player(
-    league_id: int, request: Request,
+    league_id: int,
+    request: Request,
     player_id: int = Form(...),
-    name: str      = Form(...),
-    position: str  = Form(...),
-    nfl_team: str  = Form(...),
+    name: str = Form(...),
+    position: str = Form(...),
+    nfl_team: str = Form(...),
 ):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
     conn = get_db()
-    conn.execute(adapt_sql(
-        "UPDATE survivor_players SET name=?, position=?, nfl_team=? WHERE id=? AND league_id=?"
-    ), (name.strip(), position.strip().upper(), nfl_team.strip().upper(), player_id, league_id))
-    conn.commit(); conn.close()
-    write_audit(actor=user["username"], action="PLAYER_EDIT", league_id=league_id,
-                player=name.strip())
+    conn.execute(
+        adapt_sql(
+            "UPDATE survivor_players SET name=?, position=?, nfl_team=? WHERE id=? AND league_id=?"
+        ),
+        (
+            name.strip(),
+            position.strip().upper(),
+            nfl_team.strip().upper(),
+            player_id,
+            league_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"],
+        action="PLAYER_EDIT",
+        league_id=league_id,
+        player=name.strip(),
+    )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=player_updated", status_code=303
     )
 
+
 @app.post("/survivor/{league_id}/manage/player/delete")
 def manage_delete_player(
-    league_id: int, request: Request,
+    league_id: int,
+    request: Request,
     player_id: int = Form(...),
 ):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
     conn = get_db()
-    row  = conn.execute(
+    row = conn.execute(
         "SELECT name FROM survivor_players WHERE id=? AND league_id=?",
-        (player_id, league_id)
+        (player_id, league_id),
     ).fetchone()
     pname = row["name"] if row else str(player_id)
-    conn.execute(adapt_sql(
-        "DELETE FROM survivor_lineups WHERE player_id=? AND league_id=?"
-    ), (player_id, league_id))
-    conn.execute(adapt_sql(
-        "DELETE FROM survivor_player_scores WHERE player_id=?"
-    ), (player_id,))
-    conn.execute(adapt_sql(
-        "DELETE FROM survivor_players WHERE id=? AND league_id=?"
-    ), (player_id, league_id))
-    conn.commit(); conn.close()
-    write_audit(actor=user["username"], action="PLAYER_DELETE", league_id=league_id,
-                player=pname)
+    conn.execute(
+        adapt_sql("DELETE FROM survivor_lineups WHERE player_id=? AND league_id=?"),
+        (player_id, league_id),
+    )
+    conn.execute(
+        adapt_sql("DELETE FROM survivor_player_scores WHERE player_id=?"), (player_id,)
+    )
+    conn.execute(
+        adapt_sql("DELETE FROM survivor_players WHERE id=? AND league_id=?"),
+        (player_id, league_id),
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"],
+        action="PLAYER_DELETE",
+        league_id=league_id,
+        player=pname,
+    )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=player_deleted", status_code=303
     )
 
+
+@app.post("/survivor/{league_id}/manage/team/delete")
+def manage_delete_team(
+    league_id: int,
+    request: Request,
+    team_id: int = Form(...),
+):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    row = conn.execute(
+        "SELECT name FROM survivor_teams WHERE id=? AND league_id=?",
+        (team_id, league_id),
+    ).fetchone()
+    tname = row["name"] if row else str(team_id)
+    # Delete all lineups for the team then the team itself
+    conn.execute(adapt_sql("DELETE FROM survivor_lineups WHERE team_id=?"), (team_id,))
+    conn.execute(
+        adapt_sql("DELETE FROM survivor_teams WHERE id=? AND league_id=?"),
+        (team_id, league_id),
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"], action="TEAM_DELETE", league_id=league_id, team=tname
+    )
+    return RedirectResponse(
+        f"/survivor/{league_id}/manage?msg=team_deleted#teams", status_code=303
+    )
+
+
 # ── Score entry ──────────────────────────────────────────────────────────────
+
 
 @app.post("/survivor/{league_id}/manage/scores/entry")
 def manage_score_entry(
     league_id: int,
     request: Request,
-    player_id: int           = Form(...),
-    week: int                = Form(...),
-    receptions: float        = Form(0),
-    receiving_yards: float   = Form(0),
-    rushing_yards: float     = Form(0),
-    return_yards: float      = Form(0),
-    passing_yards: float     = Form(0),
-    total_tds: int           = Form(0),
-    fumbles_lost: int        = Form(0),
-    interceptions: int       = Form(0),
+    player_id: int = Form(...),
+    week: int = Form(...),
+    receptions: float = Form(0),
+    receiving_yards: float = Form(0),
+    rushing_yards: float = Form(0),
+    return_yards: float = Form(0),
+    passing_yards: float = Form(0),
+    total_tds: int = Form(0),
+    fumbles_lost: int = Form(0),
+    interceptions: int = Form(0),
     return_fumbles_lost: int = Form(0),
-    override_points: str     = Form(""),
-    override_note: str       = Form(""),
+    override_points: str = Form(""),
+    override_note: str = Form(""),
 ):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
 
     override = float(override_points) if override_points.strip() else None
-    conn     = get_db()
-    p_row    = conn.execute(
+    conn = get_db()
+    p_row = conn.execute(
         "SELECT name FROM survivor_players WHERE id=? AND league_id=?",
-        (player_id, league_id)
+        (player_id, league_id),
     ).fetchone()
     if not p_row:
         conn.close()
@@ -1112,7 +1464,9 @@ def manage_score_entry(
         )
     p_name = p_row["name"]
 
-    conn.execute(adapt_sql("""
+    conn.execute(
+        adapt_sql(
+            """
         INSERT INTO survivor_player_scores (
             player_id, week, receptions, receiving_yards, rushing_yards,
             return_yards, passing_yards, total_tds, fumbles_lost, interceptions,
@@ -1130,48 +1484,89 @@ def manage_score_entry(
             return_fumbles_lost=excluded.return_fumbles_lost,
             override_points=excluded.override_points,
             override_note=excluded.override_note
-    """), (player_id, week, receptions, receiving_yards, rushing_yards,
-           return_yards, passing_yards, total_tds, fumbles_lost, interceptions,
-           return_fumbles_lost, override, override_note.strip() or None))
-    conn.commit(); conn.close()
+    """
+        ),
+        (
+            player_id,
+            week,
+            receptions,
+            receiving_yards,
+            rushing_yards,
+            return_yards,
+            passing_yards,
+            total_tds,
+            fumbles_lost,
+            interceptions,
+            return_fumbles_lost,
+            override,
+            override_note.strip() or None,
+        ),
+    )
+    conn.commit()
+    conn.close()
 
     if override is not None:
-        write_audit(actor=user["username"], action="SCORE_OVERRIDE", league_id=league_id,
-                    player=p_name, details=f"week={week} override={override}")
+        write_audit(
+            actor=user["username"],
+            action="SCORE_OVERRIDE",
+            league_id=league_id,
+            player=p_name,
+            details=f"week={week} override={override}",
+        )
     else:
-        write_audit(actor=user["username"], action="SCORE_ENTRY", league_id=league_id,
-                    player=p_name, details=f"week={week}")
+        write_audit(
+            actor=user["username"],
+            action="SCORE_ENTRY",
+            league_id=league_id,
+            player=p_name,
+            details=f"week={week}",
+        )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=score_saved", status_code=303
     )
 
+
 # ── NFL Sync ─────────────────────────────────────────────────────────────────
+
 
 @app.post("/survivor/{league_id}/manage/sync/roster")
 def sync_roster(league_id: int, request: Request, overwrite: bool = Form(False)):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
     try:
         result = seed_survivor_players(league_id, overwrite=overwrite)
-        msg    = f"sync_ok_{result.get('added', 0)}"
-        write_audit(actor=user["username"], action="ROSTER_SYNC", league_id=league_id,
-                    details=f"added={result.get('added',0)}")
+        msg = f"sync_ok_{result.get('added', 0)}"
+        write_audit(
+            actor=user["username"],
+            action="ROSTER_SYNC",
+            league_id=league_id,
+            details=f"added={result.get('added',0)}",
+        )
     except Exception as e:
         msg = "sync_error"
-        write_audit(actor=user["username"], action="ROSTER_SYNC_ERROR", league_id=league_id,
-                    details=str(e))
+        write_audit(
+            actor=user["username"],
+            action="ROSTER_SYNC_ERROR",
+            league_id=league_id,
+            details=str(e),
+        )
     return RedirectResponse(f"/survivor/{league_id}/manage?msg={msg}", status_code=303)
+
 
 @app.post("/survivor/{league_id}/manage/sync/week")
 def sync_scores_now(league_id: int, request: Request, week: int = Form(...)):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
 
-    conn    = get_db()
+    conn = get_db()
     players = conn.execute(
         "SELECT id FROM survivor_players WHERE league_id=?", (league_id,)
     ).fetchall()
@@ -1183,6 +1578,7 @@ def sync_scores_now(league_id: int, request: Request, week: int = Form(...)):
     main_db_path = os.environ.get("DB_PATH", "data/fantasy.db")
     if os.path.exists(main_db_path):
         import sqlite3 as _s
+
         mconn = _s.connect(main_db_path)
         mconn.row_factory = _s.Row
 
@@ -1192,15 +1588,19 @@ def sync_scores_now(league_id: int, request: Request, week: int = Form(...)):
             srow = conn.execute(
                 "SELECT name FROM survivor_players WHERE id=?", (spid,)
             ).fetchone()
-            if not srow: continue
+            if not srow:
+                continue
             mrow = mconn.execute(
                 "SELECT ps.* FROM player_scores ps "
                 "JOIN players p ON ps.player_id=p.id "
                 "WHERE p.name=? AND ps.week=?",
-                (srow["name"], week)
+                (srow["name"], week),
             ).fetchone()
-            if not mrow: continue
-            conn.execute(adapt_sql("""
+            if not mrow:
+                continue
+            conn.execute(
+                adapt_sql(
+                    """
                 INSERT INTO survivor_player_scores (
                     player_id, week, receptions, receiving_yards, rushing_yards,
                     return_yards, passing_yards, total_tds, fumbles_lost,
@@ -1218,126 +1618,176 @@ def sync_scores_now(league_id: int, request: Request, week: int = Form(...)):
                     interceptions=excluded.interceptions,
                     field_goals_json=excluded.field_goals_json,
                     return_fumbles_lost=excluded.return_fumbles_lost
-            """), (spid, week,
-                   mrow["receptions"], mrow["receiving_yards"], mrow["rushing_yards"],
-                   mrow["return_yards"], mrow["passing_yards"], mrow["total_tds"],
-                   mrow["fumbles_lost"], mrow["interceptions"],
-                   mrow["field_goals_json"] or "[]", mrow["return_fumbles_lost"] or 0,
-                   None, None))
+            """
+                ),
+                (
+                    spid,
+                    week,
+                    mrow["receptions"],
+                    mrow["receiving_yards"],
+                    mrow["rushing_yards"],
+                    mrow["return_yards"],
+                    mrow["passing_yards"],
+                    mrow["total_tds"],
+                    mrow["fumbles_lost"],
+                    mrow["interceptions"],
+                    mrow["field_goals_json"] or "[]",
+                    mrow["return_fumbles_lost"] or 0,
+                    None,
+                    None,
+                ),
+            )
             updated += 1
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         mconn.close()
 
-    write_audit(actor=user["username"], action="SCORES_SYNC", league_id=league_id,
-                details=f"week={week} updated={updated}")
+    write_audit(
+        actor=user["username"],
+        action="SCORES_SYNC",
+        league_id=league_id,
+        details=f"week={week} updated={updated}",
+    )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=scores_synced_{updated}", status_code=303
     )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AUDIT LOG
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/survivor/{league_id}/audit", response_class=HTMLResponse)
 def audit_page(
-    league_id: int, request: Request,
-    action: str = None, search: str = None, limit: int = 200,
+    league_id: int,
+    request: Request,
+    action: str = None,
+    search: str = None,
+    limit: int = 200,
 ):
     user = get_current_user(request)
-    if not user: return RedirectResponse("/survivor/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
-    if not is_commissioner(league, user): raise HTTPException(status_code=403)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
 
     conn = get_db()
     conditions = ["league_id=?"]
     params: list = [league_id]
     if action and action != "ALL":
-        conditions.append("action=?"); params.append(action)
+        conditions.append("action=?")
+        params.append(action)
     if search:
-        conditions.append("(actor LIKE ? OR team LIKE ? OR player LIKE ? OR details LIKE ?)")
-        s = f"%{search}%"; params.extend([s, s, s, s])
+        conditions.append(
+            "(actor LIKE ? OR team LIKE ? OR player LIKE ? OR details LIKE ?)"
+        )
+        s = f"%{search}%"
+        params.extend([s, s, s, s])
 
     where = "WHERE " + " AND ".join(conditions)
-    rows  = conn.execute(
+    rows = conn.execute(
         f"SELECT * FROM survivor_audit_log {where} ORDER BY id DESC LIMIT ?",
-        params + [limit]
+        params + [limit],
     ).fetchall()
-    action_types = [r["action"] for r in conn.execute(
-        "SELECT DISTINCT action FROM survivor_audit_log WHERE league_id=? ORDER BY action",
-        (league_id,)
-    ).fetchall()]
+    action_types = [
+        r["action"]
+        for r in conn.execute(
+            "SELECT DISTINCT action FROM survivor_audit_log WHERE league_id=? ORDER BY action",
+            (league_id,),
+        ).fetchall()
+    ]
     conn.close()
 
-    return templates.TemplateResponse("audit_log.html", {
-        "request":       request,
-        "user":          user,
-        "league":        league,
-        "logs":          [dict(r) for r in rows],
-        "action_types":  action_types,
-        "filter_action": action or "ALL",
-        "filter_search": search or "",
-        "limit":         limit,
-        "total":         len(rows),
-        "is_commissioner": True,
-    })
+    return templates.TemplateResponse(
+        "audit_log.html",
+        {
+            "request": request,
+            "user": user,
+            "league": league,
+            "logs": [dict(r) for r in rows],
+            "action_types": action_types,
+            "filter_action": action or "ALL",
+            "filter_search": search or "",
+            "limit": limit,
+            "total": len(rows),
+            "is_commissioner": True,
+        },
+    )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # JSON API
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/api/survivor/{league_id}/used-players")
 def api_used_players(league_id: int, request: Request, team_id: int = None):
     """Return list of player IDs already used by a team (across all locked weeks)."""
     user = get_current_user(request)
-    if not user: raise HTTPException(status_code=401)
+    if not user:
+        raise HTTPException(status_code=401)
     league_ctx(league_id, user)
 
-    my_team = get_user_team_in_league(league_id, user["id"]) if team_id is None else None
-    tid     = team_id or (my_team["id"] if my_team else None)
+    my_team = (
+        get_user_team_in_league(league_id, user["id"]) if team_id is None else None
+    )
+    tid = team_id or (my_team["id"] if my_team else None)
     if not tid:
         raise HTTPException(status_code=400, detail="No team found")
 
     used_ids = get_used_player_ids_for_team(tid)
-    conn     = get_db()
-    rows     = conn.execute(
-        "SELECT id, name, position, nfl_team FROM survivor_players "
-        "WHERE id IN ({})".format(",".join("?" * len(used_ids))) if used_ids else
-        "SELECT id, name, position, nfl_team FROM survivor_players WHERE 1=0",
-        tuple(used_ids)
-    ).fetchall() if used_ids else []
+    conn = get_db()
+    rows = (
+        conn.execute(
+            (
+                "SELECT id, name, position, nfl_team FROM survivor_players "
+                "WHERE id IN ({})".format(",".join("?" * len(used_ids)))
+                if used_ids
+                else "SELECT id, name, position, nfl_team FROM survivor_players WHERE 1=0"
+            ),
+            tuple(used_ids),
+        ).fetchall()
+        if used_ids
+        else []
+    )
     conn.close()
     return {"team_id": tid, "used_players": [dict(r) for r in rows]}
+
 
 @app.get("/api/survivor/{league_id}/week-scores")
 def api_week_scores(league_id: int, week: int, request: Request):
     user = get_current_user(request)
-    if not user: raise HTTPException(status_code=401)
+    if not user:
+        raise HTTPException(status_code=401)
     league_ctx(league_id, user)
     teams = get_league_teams(league_id)
-    return [
-        {"team": t, **get_team_week_score(t["id"], week)}
-        for t in teams
-    ]
+    return [{"team": t, **get_team_week_score(t["id"], week)} for t in teams]
+
 
 @app.get("/api/survivor/{league_id}/lineup/{team_id}/{week}")
 def api_team_lineup(league_id: int, team_id: int, week: int, request: Request):
     user = get_current_user(request)
-    if not user: raise HTTPException(status_code=401)
+    if not user:
+        raise HTTPException(status_code=401)
     league_ctx(league_id, user)
     lineup = get_team_lineup(team_id, week)
     return {
-        "team_id":  team_id,
-        "week":     week,
-        "lineup":   lineup,
+        "team_id": team_id,
+        "week": week,
+        "lineup": lineup,
         "complete": lineup_is_complete(lineup),
-        "locked":   lineup_is_locked(lineup),
+        "locked": lineup_is_locked(lineup),
     }
+
 
 @app.get("/api/survivor/{league_id}/available-players")
 def api_available_players(league_id: int, week: int, request: Request):
     """Returns all players available (not yet used) for the requesting user's team."""
     user = get_current_user(request)
-    if not user: raise HTTPException(status_code=401)
+    if not user:
+        raise HTTPException(status_code=401)
     league_ctx(league_id, user)
     my_team = get_user_team_in_league(league_id, user["id"])
     if not my_team:
