@@ -396,8 +396,14 @@ def create_user(username: str, password: str, is_superadmin: bool = False) -> bo
         )
         conn.commit()
         return True
-    except Exception:
-        # Both sqlite3.IntegrityError and psycopg2.IntegrityError caught here
+    except Exception as e:
+        err = str(e).lower()
+        if "unique" in err or "duplicate" in err:
+            return False  # genuine duplicate username
+        import traceback
+
+        print(f"[main] create_user FAILED for '{username}': {e}")
+        traceback.print_exc()
         return False
     finally:
         conn.close()
@@ -735,9 +741,6 @@ def league_ctx(league_id: int, user: dict) -> dict:
     return league
 
 
-from survivor_main import app as survivor_app
-
-app.mount("/survivor", survivor_app)
 # ======================================================
 # AUTH
 # ======================================================
@@ -786,8 +789,13 @@ def login(username: str = Form(...), password: str = Form(...)):
 def register(username: str = Form(...), password: str = Form(...)):
     if len(password) < 6:
         return RedirectResponse("/register?error=short", status_code=303)
+    username = username.strip()
+    if not username:
+        return RedirectResponse("/register?error=empty", status_code=303)
     if not create_user(username, password):
-        return RedirectResponse("/register?error=taken", status_code=303)
+        if get_user(username):
+            return RedirectResponse("/register?error=taken", status_code=303)
+        return RedirectResponse("/register?error=db_error", status_code=303)
     return RedirectResponse("/login?registered=1", status_code=303)
 
 
@@ -807,21 +815,19 @@ def logout(request: Request):
 
 @app.get("/dashboard")
 def dashboard(request: Request, user=Depends(get_current_user)):
-    if not user: return RedirectResponse("/login", status_code=303)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
     leagues = get_user_leagues(user["id"])
-
-    # Add this — pull survivor leagues for the same user
-    from survivor_main import get_user_leagues as get_survivor_leagues
-    survivor_leagues = get_survivor_leagues(user["id"])
-
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "user": user,
-        "leagues": leagues,
-        "survivor_leagues": survivor_leagues,   # ← add this
-        "msg":   request.query_params.get("msg", ""),
-        "error": request.query_params.get("error", ""),
-    })
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "user": user,
+            "leagues": leagues,
+            "msg": request.query_params.get("msg", ""),
+            "error": request.query_params.get("error", ""),
+        },
+    )
 
 
 @app.post("/league/create")
