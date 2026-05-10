@@ -3226,7 +3226,7 @@ def api_nfl_games(week: int, season: int = None):
         completed = status_type.get("completed", False)
 
         # Live game info
-        situation = comp.get("situation", {})
+        situation = comp.get("situ     ation", {})
         period = situation.get("period", 0)
         clock = situation.get("displayClock", "")
         quarter_str = ""
