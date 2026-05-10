@@ -66,12 +66,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    # bcrypt already salts + stretches — no pre-hashing needed
-    return pwd_context.hash(password)
+    # bcrypt limit is 72 bytes — truncate to be safe
+    return pwd_context.hash(password[:72])
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return pwd_context.verify(password, password_hash)
+    return pwd_context.verify(password[:72], password_hash)
 
 
 # ======================================================
