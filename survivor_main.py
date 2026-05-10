@@ -112,11 +112,12 @@ def decode_access_token(token: str) -> str | None:
 
 
 def hash_password(pw: str) -> str:
-    return pwd_context.hash(pw)
+    # bcrypt limit is 72 bytes — truncate to be safe
+    return pwd_context.hash(pw[:72])
 
 
 def verify_password(pw: str, hashed: str) -> bool:
-    return pwd_context.verify(pw, hashed)
+    return pwd_context.verify(pw[:72], hashed)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
