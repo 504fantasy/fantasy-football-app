@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin — 504 Fantasy</title>
+<style>
+:root {
+  --bg:     #080a0e;
+  --s1:     #0f1218;
+  --s2:     #161b24;
+  --s3:     #1d2330;
+  --border: #232a38;
+  --border2:#2e3848;
+  --gold:   #e8b84b;
+  --gold2:  #f5d06a;
+  --ember:  #c9451a;
+  --ember2: #e05820;
+  --green:  #22c55e;
+  --red:    #ef4444;
+  --blue:   #3b82f6;
+  --text:   #eaecf2;
+  --muted:  #5e6e88;
+  --muted2: #8898b0;
+  --r:      8px;
+  --rr:     14px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+html { scroll-behavior: smooth }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+::-webkit-scrollbar { width: 6px }
+::-webkit-scrollbar-track { background: var(--bg) }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px }
+
+/* ── Layout ── */
+.admin-wrap {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* ── Header ── */
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.admin-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.admin-title span { color: var(--gold) }
+.admin-sub { font-size: .8rem; color: var(--muted2); margin-top: .2rem }
+.header-links { display: flex; gap: .5rem }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .42rem 1rem;
+  border: none; border-radius: var(--r);
+  font-size: .8rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  cursor: pointer; text-decoration: none;
+  transition: all .15s; white-space: nowrap;
+}
+.btn-gold   { background: var(--gold); color: #080a0e }
+.btn-gold:hover { background: var(--gold2) }
+.btn-ghost  { background: transparent; color: var(--muted2); border: 1px solid var(--border2) }
+.btn-ghost:hover { color: var(--text); border-color: var(--muted) }
+.btn-red    { background: rgba(239,68,68,.12); color: #fca5a5; border: 1px solid rgba(239,68,68,.25) }
+.btn-red:hover { background: rgba(239,68,68,.22) }
+.btn-sm     { padding: .28rem .65rem; font-size: .72rem }
+
+/* ── Alerts ── */
+.alert {
+  padding: .7rem 1rem; border-radius: var(--r);
+  font-size: .855rem; margin-bottom: 1.25rem;
+  border-left: 3px solid; display: flex; align-items: center; gap: .5rem;
+}
+.alert-success { background: rgba(34,197,94,.08); border-color: var(--green); color: var(--green) }
+.alert-danger  { background: rgba(239,68,68,.08); border-color: var(--red);   color: #fca5a5 }
+
+/* ── Stat cards ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+@media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(3, 1fr) } }
+@media (max-width: 680px)  { .stats-grid { grid-template-columns: repeat(2, 1fr) } }
+
+.stat-card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rr);
+  padding: 1.25rem 1.4rem;
+  transition: border-color .2s;
+}
+.stat-card:hover { border-color: var(--border2) }
+.stat-label {
+  font-size: .7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted2); margin-bottom: .4rem;
+}
+.stat-val {
+  font-size: 2rem; font-weight: 800;
+  line-height: 1; color: var(--gold);
+}
+.stat-val.green { color: var(--green) }
+.stat-val.blue  { color: var(--blue) }
+.stat-val.ember { color: var(--ember2) }
+.stat-icon { font-size: 1.4rem; margin-bottom: .4rem }
+
+/* ── Section ── */
+.section {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--rr);
+  margin-bottom: 1.75rem;
+  overflow: hidden;
+}
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--s2);
+}
+.section-title {
+  font-size: .85rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.section-count {
+  font-size: .75rem; color: var(--muted2);
+  background: var(--s3); border: 1px solid var(--border2);
+  border-radius: 100px; padding: .15rem .6rem;
+}
+
+/* ── Table ── */
+.tbl-wrap { overflow-x: auto }
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: .82rem;
+}
+th {
+  text-align: left; padding: .7rem 1rem;
+  font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); border-bottom: 1px solid var(--border);
+  background: var(--s2); white-space: nowrap;
+}
+td {
+  padding: .65rem 1rem;
+  border-bottom: 1px solid rgba(35,42,56,.6);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none }
+tr:hover td { background: rgba(255,255,255,.02) }
+
+.badge {
+  display: inline-block; padding: .15rem .5rem;
+  border-radius: 4px; font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  white-space: nowrap;
+}
+.badge-gold   { background: rgba(232,184,75,.15); color: var(--gold);   border: 1px solid rgba(232,184,75,.25) }
+.badge-green  { background: rgba(34,197,94,.12);  color: var(--green);  border: 1px solid rgba(34,197,94,.25) }
+.badge-muted  { background: rgba(94,110,136,.12); color: var(--muted2); border: 1px solid rgba(94,110,136,.25) }
+.badge-red    { background: rgba(239,68,68,.12);  color: #fca5a5;       border: 1px solid rgba(239,68,68,.25) }
+.badge-blue   { background: rgba(59,130,246,.12); color: #93c5fd;       border: 1px solid rgba(59,130,246,.25) }
+
+.mono { font-family: 'DM Mono', ui-monospace, monospace; font-size: .8rem }
+
+/* ── Two-col layout ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.75rem; margin-bottom: 1.75rem }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr } }
+
+/* ── Confirm modal ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center; padding: 1.5rem;
+}
+.modal-overlay.open { display: flex }
+.modal-box {
+  background: var(--s1); border: 1px solid var(--border2);
+  border-radius: var(--rr); max-width: 420px; width: 100%;
+  padding: 2rem; box-shadow: 0 40px 80px rgba(0,0,0,.6);
+}
+.modal-title { font-size: 1.1rem; font-weight: 800; margin-bottom: .5rem }
+.modal-body  { font-size: .9rem; color: var(--muted2); line-height: 1.6; margin-bottom: 1.5rem }
+.modal-body strong { color: var(--red) }
+.modal-actions { display: flex; gap: .75rem; justify-content: flex-end }
+</style>
+</head>
+<body>
+
+<div class="admin-wrap">
+
+  <!-- Header -->
+  <div class="admin-header">
+    <div>
+      <div class="admin-title">504 <span>Fantasy</span> — Site Admin</div>
+      <div class="admin-sub">Logged in as {{ user.username }}</div>
+    </div>
+    <div class="header-links">
+      <a href="/dashboard" class="btn btn-ghost">← Dashboard</a>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  {% if msg == 'user_deleted' %}
+    <div class="alert alert-success">✅ User account deleted successfully.</div>
+  {% elif msg == 'league_deleted' %}
+    <div class="alert alert-success">✅ League deleted successfully.</div>
+  {% endif %}
+  {% if error == 'cannot_delete_superadmin' %}
+    <div class="alert alert-danger">⛔ Cannot delete a superadmin account.</div>
+  {% elif error == 'cannot_delete_self' %}
+    <div class="alert alert-danger">⛔ You cannot delete your own account.</div>
+  {% elif error == 'user_not_found' %}
+    <div class="alert alert-danger">⛔ User not found.</div>
+  {% elif error == 'league_not_found' %}
+    <div class="alert alert-danger">⛔ League not found.</div>
+  {% endif %}
+
+  <!-- Stat Cards -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">👤</div>
+      <div class="stat-label">Total Users</div>
+      <div class="stat-val">{{ total_users }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🏆</div>
+      <div class="stat-label">Total Leagues</div>
+      <div class="stat-val">{{ total_leagues }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🛡️</div>
+      <div class="stat-label">Total Teams</div>
+      <div class="stat-val blue">{{ total_teams }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🏈</div>
+      <div class="stat-label">Total Players</div>
+      <div class="stat-val blue">{{ total_players }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📋</div>
+      <div class="stat-label">Draft Picks</div>
+      <div class="stat-val green">{{ total_picks }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🐴</div>
+      <div class="stat-label">Pony Picks</div>
+      <div class="stat-val green">{{ total_ponies }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📊</div>
+      <div class="stat-label">Scores Entered</div>
+      <div class="stat-val ember">{{ total_scores }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">✅</div>
+      <div class="stat-label">Drafts Complete</div>
+      <div class="stat-val green">{{ drafts_complete }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">⏳</div>
+      <div class="stat-label">Drafts In Progress</div>
+      <div class="stat-val ember">{{ drafts_active }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📝</div>
+      <div class="stat-label">Audit Events</div>
+      <div class="stat-val">{{ total_audits }}</div>
+    </div>
+  </div>
+
+  <!-- Two-col: Recent Signups + Recent Audit -->
+  <div class="two-col">
+
+    <!-- Recent Signups -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-title">Recent Signups</div>
+        <span class="section-count">Last 10</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Username</th>
+              <th>Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in recent_users %}
+            <tr>
+              <td class="mono" style="color:var(--muted)">{{ u.id }}</td>
+              <td><strong>{{ u.username }}</strong></td>
+              <td>
+                {% if u.is_superadmin %}
+                  <span class="badge badge-gold">Admin</span>
+                {% else %}
+                  <span class="badge badge-muted">User</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Audit -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-title">Recent Activity</div>
+        <span class="section-count">Last 20</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>League</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in recent_audit %}
+            <tr>
+              <td class="mono" style="color:var(--muted); white-space:nowrap; font-size:.7rem">
+                {{ e.ts[:16] if e.ts else '—' }}
+              </td>
+              <td>{{ e.actor or '—' }}</td>
+              <td><span class="badge badge-blue">{{ e.action }}</span></td>
+              <td style="color:var(--muted2)">{{ e.league_name or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- All Users -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">All Users</div>
+      <span class="section-count">{{ users|length }} total</span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Leagues</th>
+            <th>Teams</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td class="mono" style="color:var(--muted)">{{ u.id }}</td>
+            <td><strong>{{ u.username }}</strong></td>
+            <td>
+              {% if u.is_superadmin %}
+                <span class="badge badge-gold">Admin</span>
+              {% else %}
+                <span class="badge badge-muted">User</span>
+              {% endif %}
+            </td>
+            <td>{{ u.league_count }}</td>
+            <td>{{ u.team_count }}</td>
+            <td>
+              {% if not u.is_superadmin and u.id != user.id %}
+              <button class="btn btn-red btn-sm"
+                onclick="confirmDelete('user', {{ u.id }}, '{{ u.username }}')">
+                Delete
+              </button>
+              {% else %}
+              <span style="color:var(--muted); font-size:.72rem">Protected</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- All Leagues -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title">All Leagues</div>
+      <span class="section-count">{{ leagues|length }} total</span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>League Name</th>
+            <th>Commissioner</th>
+            <th>Members</th>
+            <th>Teams</th>
+            <th>Players</th>
+            <th>Draft</th>
+            <th>Created</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in leagues %}
+          <tr>
+            <td class="mono" style="color:var(--muted)">{{ l.id }}</td>
+            <td>
+              <a href="/league/{{ l.id }}" style="color:var(--gold); text-decoration:none; font-weight:600"
+                 target="_blank">{{ l.name }}</a>
+            </td>
+            <td>{{ l.commissioner }}</td>
+            <td>{{ l.member_count }}</td>
+            <td>{{ l.team_count }}</td>
+            <td>{{ l.player_count }}</td>
+            <td>
+              {% if l.draft_complete %}
+                <span class="badge badge-green">Complete</span>
+              {% else %}
+                <span class="badge badge-muted">In Progress</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--muted2); font-size:.75rem; white-space:nowrap">
+              {{ l.created_at[:10] if l.created_at else '—' }}
+            </td>
+            <td>
+              <button class="btn btn-red btn-sm"
+                onclick="confirmDelete('league', {{ l.id }}, '{{ l.name }}')">
+                Delete
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /admin-wrap -->
+
+
+<!-- Confirm Delete Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Confirm Delete</div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <form id="delete-form" method="POST" style="display:inline">
+        <input type="hidden" name="user_id"   id="form-user-id">
+        <input type="hidden" name="league_id" id="form-league-id">
+        <button type="submit" class="btn btn-red">Yes, Delete</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function confirmDelete(type, id, name) {
+  const modal  = document.getElementById('confirm-modal');
+  const form   = document.getElementById('delete-form');
+  const body   = document.getElementById('modal-body');
+  const title  = document.getElementById('modal-title');
+
+  document.getElementById('form-user-id').value   = '';
+  document.getElementById('form-league-id').value = '';
+
+  if (type === 'user') {
+    title.textContent = 'Delete User Account';
+    body.innerHTML = `Are you sure you want to delete <strong style="color:var(--text)">${name}</strong>?
+      <br><br><strong>This will also delete all leagues they commissioned</strong> and remove them from all other leagues. This cannot be undone.`;
+    form.action = '/admin/user/delete';
+    document.getElementById('form-user-id').value = id;
+  } else {
+    title.textContent = 'Delete League';
+    body.innerHTML = `Are you sure you want to delete the league <strong style="color:var(--text)">${name}</strong>?
+      <br><br><strong>This will permanently delete all teams, players, rosters, draft picks, and scores</strong> in this league. This cannot be undone.`;
+    form.action = '/admin/league/delete';
+    document.getElementById('form-league-id').value = id;
+  }
+
+  modal.classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('confirm-modal').classList.remove('open');
+}
+
+// Close on backdrop click
+document.getElementById('confirm-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Close on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+
+</body>
+</html>

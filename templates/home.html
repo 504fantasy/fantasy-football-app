@@ -1292,8 +1292,8 @@ body {
   <div class="nav-links">
     <button class="nav-link active" id="nl-home"     onclick="showPage('home')">Home</button>
     <button class="nav-link"        id="nl-how"      onclick="showPage('how')">How It Works</button>
-    <button class="nav-link"        id="nl-pricing"  onclick="showPage('pricing')">Pricing</button>
-    <button class="nav-link"        id="nl-contact"  onclick="showPage('contact')">Contact</button>
+    <button class="nav-link"        id="nl-pricing"  onclick="openPricingModal()">Pricing</button>
+    <button class="nav-link"        id="nl-contact"  onclick="openContactModal()">Contact</button>
   </div>
   <div class="nav-end">
     <button class="btn btn-ghost btn-sm" onclick="window.location.href='/login'">Log In</button>
@@ -1312,9 +1312,9 @@ body {
     <div class="hero-glow"></div>
     <div class="hero-inner">
       <div>
-        <div class="hero-eyebrow">
-          <span class="eyebrow-dot"></span>
-          NFL Playoffs — Live Now
+        <div class="hero-eyebrow" id="hero-eyebrow">
+          <span class="eyebrow-dot" id="eyebrow-dot"></span>
+          <span id="eyebrow-text">Loading...</span>
         </div>
         <h1 class="hero-headline">
           <span>504</span><br>
@@ -1690,7 +1690,7 @@ body {
           <div class="footer-col-title">Product</div>
           <div class="footer-links">
             <a class="footer-link" onclick="showPage('how')">How It Works</a>
-            <a class="footer-link" onclick="showPage('pricing')">Pricing</a>
+            <a class="footer-link" onclick="openPricingModal()">Pricing</a>
             <a class="footer-link" onclick="showPage('home')">Scoring Rules</a>
             <a class="footer-link">Changelog</a>
           </div>
@@ -1698,7 +1698,7 @@ body {
         <div>
           <div class="footer-col-title">Support</div>
           <div class="footer-links">
-            <a class="footer-link" onclick="showPage('contact')">Contact Us</a>
+            <a class="footer-link" onclick="openContactModal()">Contact Us</a>
             <a class="footer-link">Documentation</a>
             <a class="footer-link">Commissioner Guide</a>
             <a class="footer-link">Status</a>
@@ -1707,9 +1707,8 @@ body {
         <div>
           <div class="footer-col-title">Legal</div>
           <div class="footer-links">
-            <a class="footer-link">Privacy Policy</a>
-            <a class="footer-link">Terms of Service</a>
-            <a class="footer-link">Cookie Policy</a>
+            <a class="footer-link" onclick="openPrivacyModal()" style="cursor:pointer">Privacy Policy</a>
+            <a class="footer-link" onclick="openTermsModal()" style="cursor:pointer">Terms of Service</a>
           </div>
         </div>
       </div>
@@ -1932,8 +1931,8 @@ body {
         <span>© 2026 504 Fantasy.</span>
         <div style="display:flex;gap:.5rem">
           <button class="btn btn-ghost btn-sm" onclick="showPage('home')">Home</button>
-          <button class="btn btn-ghost btn-sm" onclick="showPage('pricing')">Pricing</button>
-          <button class="btn btn-ghost btn-sm" onclick="showPage('contact')">Contact</button>
+          <button class="btn btn-ghost btn-sm" onclick="openPricingModal()">Pricing</button>
+          <button class="btn btn-ghost btn-sm" onclick="openContactModal()">Contact</button>
         </div>
       </div>
     </div>
@@ -2003,7 +2002,7 @@ body {
       <div class="pricing-tier">Enterprise</div>
       <div class="pricing-price">$<span>29</span><span class="per"> / mo</span></div>
       <div class="pricing-desc">Running a media brand, sports bar league, or large organization? This is yours.</div>
-      <button class="btn btn-outline-gold" style="width:100%" onclick="showPage('contact')">Contact Us</button>
+      <button class="btn btn-outline-gold" style="width:100%" onclick="openContactModal()">Contact Us</button>
       <div class="pricing-divider"></div>
       <div class="pricing-features">
         <div class="pricing-feature"><span class="pf-check">✓</span>Everything in Pro</div>
@@ -2066,7 +2065,7 @@ body {
         <div style="display:flex;gap:.5rem">
           <button class="btn btn-ghost btn-sm" onclick="showPage('home')">Home</button>
           <button class="btn btn-ghost btn-sm" onclick="showPage('how')">How It Works</button>
-          <button class="btn btn-ghost btn-sm" onclick="showPage('contact')">Contact</button>
+          <button class="btn btn-ghost btn-sm" onclick="openContactModal()">Contact</button>
         </div>
       </div>
     </div>
@@ -2179,7 +2178,7 @@ body {
         <span>© 2026 504 Fantasy.</span>
         <div style="display:flex;gap:.5rem">
           <button class="btn btn-ghost btn-sm" onclick="showPage('home')">Home</button>
-          <button class="btn btn-ghost btn-sm" onclick="showPage('pricing')">Pricing</button>
+          <button class="btn btn-ghost btn-sm" onclick="openPricingModal()">Pricing</button>
           <button class="btn btn-ghost btn-sm" onclick="showPage('how')">How It Works</button>
         </div>
       </div>
@@ -2270,4 +2269,502 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.step-card, .testi-card, .pricing-card, .hiw-s 
+document.querySelectorAll('.step-card, .testi-card, .pricing-card, .hiw-s
+
+// ── Init ──────────────────────────────────────────
+showPage('home');
+
+// ── NFL season badge ──────────────────────────────
+(function() {
+  // All dates are for the 2025-26 NFL season
+  // Adjust year-to-year as needed
+  const PRESEASON_START  = new Date('2025-08-07T00:00:00');   // First preseason game
+  const REGULAR_START    = new Date('2025-09-04T00:00:00');   // Regular season kickoff
+  const PLAYOFFS_START   = new Date('2026-01-10T00:00:00');   // Wild Card weekend
+  const PLAYOFFS_END     = new Date('2026-02-09T00:00:00');   // Day after Super Bowl
+
+  const dot  = document.getElementById('eyebrow-dot');
+  const text = document.getElementById('eyebrow-text');
+  const wrap = document.getElementById('hero-eyebrow');
+
+  function daysUntil(date) {
+    const now = new Date();
+    const diff = date - now;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
+  function update() {
+    const now = new Date();
+
+    if (now >= PLAYOFFS_START && now <= PLAYOFFS_END) {
+      // 🏈 Playoffs are live
+      dot.style.background = 'var(--gold)';
+      text.textContent = 'NFL Playoffs — Live Now';
+      wrap.style.borderColor = 'rgba(232,184,75,.25)';
+
+    } else if (now >= REGULAR_START && now < PLAYOFFS_START) {
+      // Regular season is live
+      const days = daysUntil(PLAYOFFS_START);
+      dot.style.background = 'var(--green)';
+      text.textContent = `NFL Regular Season — Playoffs in ${days} day${days !== 1 ? 's' : ''}`;
+      wrap.style.background = 'rgba(34,197,94,.08)';
+      wrap.style.borderColor = 'rgba(34,197,94,.25)';
+
+    } else if (now >= PRESEASON_START && now < REGULAR_START) {
+      // Preseason is live
+      const days = daysUntil(REGULAR_START);
+      dot.style.background = '#60a5fa';
+      text.textContent = `NFL Preseason — Regular Season in ${days} day${days !== 1 ? 's' : ''}`;
+      wrap.style.background = 'rgba(96,165,250,.08)';
+      wrap.style.borderColor = 'rgba(96,165,250,.25)';
+
+    } else if (now < PRESEASON_START) {
+      // Off-season — count down to preseason
+      const days = daysUntil(PRESEASON_START);
+      dot.style.background = 'var(--muted2)';
+      dot.style.animation = 'none';
+      text.textContent = `NFL Preseason Kicks Off in ${days} Day${days !== 1 ? 's' : ''}`;
+      wrap.style.background = 'rgba(94,110,136,.08)';
+      wrap.style.borderColor = 'rgba(94,110,136,.25)';
+
+    } else {
+      // Post Super Bowl off-season
+      const days = daysUntil(new Date('2026-08-01T00:00:00')); // approx next preseason
+      dot.style.background = 'var(--muted2)';
+      dot.style.animation = 'none';
+      text.textContent = `Off-Season — Next Preseason in ${days} Day${days !== 1 ? 's' : ''}`;
+      wrap.style.background = 'rgba(94,110,136,.08)';
+      wrap.style.borderColor = 'rgba(94,110,136,.25)';
+    }
+  }
+
+  update();
+  // Refresh once per hour in case the page is left open
+  setInterval(update, 3600000);
+})();
+</script>
+
+<!-- ════════════════════════════════════════════════════
+     PRICING MODAL
+════════════════════════════════════════════════════ -->
+<div id="pricing-modal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  background:rgba(0,0,0,0.75);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  align-items:center;
+  justify-content:center;
+  padding:1.5rem;
+" onclick="closePricingModal(event)">
+
+  <div style="
+    background:var(--s1);
+    border:1px solid var(--border2);
+    border-radius:18px;
+    max-width:480px;
+    width:100%;
+    padding:2.5rem 2.5rem 2rem;
+    position:relative;
+    box-shadow:0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(232,184,75,0.1);
+    text-align:center;
+  " onclick="event.stopPropagation()">
+
+    <!-- Close button -->
+    <button onclick="closePricingModal()" style="
+      position:absolute;
+      top:1rem; right:1rem;
+      background:var(--s2);
+      border:1px solid var(--border2);
+      border-radius:50%;
+      width:32px; height:32px;
+      color:var(--muted2);
+      font-size:1.1rem;
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition:all .15s;
+    " onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted2)'">✕</button>
+
+    <!-- Icon -->
+    <div style="font-size:2.8rem; margin-bottom:1rem;">🏈</div>
+
+    <!-- Title -->
+    <div style="
+      font-family:'Barlow Condensed',sans-serif;
+      font-size:1.8rem;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      color:var(--gold);
+      margin-bottom:1.25rem;
+    ">It's Free to Play</div>
+
+    <!-- Message -->
+    <p style="
+      font-size:1rem;
+      color:var(--muted2);
+      line-height:1.7;
+      margin-bottom:1.75rem;
+    ">
+      All the games are completely free to play. However, any donations would be greatly appreciated.
+      A lot of time and work has gone into building this site and it does cost to keep it up and running.
+      <br><br>
+      <strong style="color:var(--text)">Thanks and Enjoy!</strong>
+    </p>
+
+    <!-- Divider -->
+    <div style="border-top:1px solid var(--border); margin-bottom:1.75rem;"></div>
+
+    <!-- Venmo CTA -->
+    <a href="https://venmo.com/Clint-Voelker" target="_blank" rel="noopener" style="
+      display:inline-flex;
+      align-items:center;
+      gap:.65rem;
+      background:#3d95ce;
+      color:#fff;
+      font-family:'Barlow Condensed',sans-serif;
+      font-size:1rem;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      padding:.75rem 2rem;
+      border-radius:10px;
+      text-decoration:none;
+      transition:all .18s;
+      margin-bottom:.75rem;
+    " onmouseover="this.style.background='#2f7eb0'" onmouseout="this.style.background='#3d95ce'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19.45 2C20.27 3.42 20.65 4.88 20.65 6.7c0 5.55-4.74 12.76-8.6 17.3H3.35L0 2.9l7.85-.75 1.88 7.65C11.18 7.4 13.1 4.1 14.92 2.9c.8-.55 1.7-.9 2.7-.9h1.83z"/>
+      </svg>
+      Venmo @Clint-Voelker
+    </a>
+
+    <div style="font-size:.78rem; color:var(--muted); margin-top:.5rem;">
+      No pressure — we appreciate every dollar 🙏
+    </div>
+  </div>
+</div>
+
+<script>
+function openPricingModal() {
+  const m = document.getElementById('pricing-modal');
+  m.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closePricingModal(e) {
+  if (e && e.target !== document.getElementById('pricing-modal')) return;
+  document.getElementById('pricing-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closePricingModal(true);
+});
+// Fix: treat true as "force close" signal
+const _orig = closePricingModal;
+window.closePricingModal = function(e) {
+  if (e === true || !e) {
+    document.getElementById('pricing-modal').style.display = 'none';
+    document.body.style.overflow = '';
+    return;
+  }
+  if (e.target === document.getElementById('pricing-modal')) {
+    document.getElementById('pricing-modal').style.display = 'none';
+    document.body.style.overflow = '';
+  }
+};
+</script>
+
+<!-- ════════════════════════════════════════════════════
+     PRIVACY POLICY MODAL
+════════════════════════════════════════════════════ -->
+<div id="privacy-modal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  background:rgba(0,0,0,0.75);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  align-items:center;
+  justify-content:center;
+  padding:1.5rem;
+" onclick="if(event.target===this){closePrivacyModal()}">
+
+  <div style="
+    background:var(--s1);
+    border:1px solid var(--border2);
+    border-radius:18px;
+    max-width:560px;
+    width:100%;
+    max-height:85vh;
+    overflow-y:auto;
+    padding:2.5rem;
+    position:relative;
+    box-shadow:0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(232,184,75,0.1);
+  " onclick="event.stopPropagation()">
+
+    <button onclick="closePrivacyModal()" style="
+      position:absolute; top:1rem; right:1rem;
+      background:var(--s2); border:1px solid var(--border2);
+      border-radius:50%; width:32px; height:32px;
+      color:var(--muted2); font-size:1.1rem; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+    ">✕</button>
+
+    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:900; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); margin-bottom:.3rem;">Privacy Policy</div>
+    <div style="font-size:.75rem; color:var(--muted); margin-bottom:1.75rem;">Last updated: May 2026</div>
+
+    <div style="font-size:.9rem; color:var(--muted2); line-height:1.75; display:flex; flex-direction:column; gap:1.25rem;">
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">What We Collect</div>
+        When you create an account, we collect a username and a hashed (encrypted) password. We do not collect your real name, email address, phone number, or any payment information. Venmo donations are handled entirely by Venmo and we never see your payment details.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">How We Use It</div>
+        Your username and password are used solely to authenticate you and associate you with your fantasy leagues. We do not use your data for advertising, analytics, or any third-party purpose.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Data Storage</div>
+        Your data is stored on a private server hosted by DigitalOcean in the United States. We take reasonable precautions to protect it, but this is a personal project — use a unique password and don't store sensitive information in team or league names.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Cookies</div>
+        We use a single session cookie to keep you logged in. It contains a cryptographically signed token and no personally identifiable information. We do not use tracking, advertising, or analytics cookies.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Data Sharing</div>
+        We do not sell, rent, or share your data with anyone. Period.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Deletion Requests</div>
+        Want your account removed? Contact us and we'll delete your account and associated data promptly.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Contact</div>
+        Questions? Reach out via the Contact page.
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════
+     TERMS OF SERVICE MODAL
+════════════════════════════════════════════════════ -->
+<div id="terms-modal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  background:rgba(0,0,0,0.75);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  align-items:center;
+  justify-content:center;
+  padding:1.5rem;
+" onclick="if(event.target===this){closeTermsModal()}">
+
+  <div style="
+    background:var(--s1);
+    border:1px solid var(--border2);
+    border-radius:18px;
+    max-width:560px;
+    width:100%;
+    max-height:85vh;
+    overflow-y:auto;
+    padding:2.5rem;
+    position:relative;
+    box-shadow:0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(232,184,75,0.1);
+  " onclick="event.stopPropagation()">
+
+    <button onclick="closeTermsModal()" style="
+      position:absolute; top:1rem; right:1rem;
+      background:var(--s2); border:1px solid var(--border2);
+      border-radius:50%; width:32px; height:32px;
+      color:var(--muted2); font-size:1.1rem; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+    ">✕</button>
+
+    <div style="font-family:'Barlow Condensed',sans-serif; font-size:1.6rem; font-weight:900; text-transform:uppercase; letter-spacing:.06em; color:var(--gold); margin-bottom:.3rem;">Terms of Service</div>
+    <div style="font-size:.75rem; color:var(--muted); margin-bottom:1.75rem;">Last updated: May 2026</div>
+
+    <div style="font-size:.9rem; color:var(--muted2); line-height:1.75; display:flex; flex-direction:column; gap:1.25rem;">
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Acceptance</div>
+        By creating an account or using 504 Fantasy, you agree to these terms. If you don't agree, please don't use the site.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Free Service</div>
+        504 Fantasy is a free, personal project. There is no subscription, no paid tier, and no guarantee of uptime, availability, or continued operation. We may modify or shut down the service at any time without notice.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Donations</div>
+        Donations via Venmo are entirely voluntary and non-refundable. Donating does not entitle you to any additional features, support priority, or service guarantees.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Your Account</div>
+        You are responsible for keeping your login credentials secure. You are responsible for all activity that occurs under your account. Don't share your password or impersonate other users.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Acceptable Use</div>
+        Use the site fairly. Don't attempt to exploit, hack, or disrupt the service. Don't use abusive or offensive content in league or team names. We reserve the right to remove any account that violates this at our discretion.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">No Warranty</div>
+        504 Fantasy is provided "as is" without any warranty of any kind. We are not liable for lost data, scoring errors, draft issues, or any other problems arising from use of the site.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Data & Leagues</div>
+        We make reasonable efforts to preserve your league data but cannot guarantee against data loss. We recommend commissioners keep their own records of picks and scores for important leagues.
+      </div>
+
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text); margin-bottom:.4rem;">Changes</div>
+        We may update these terms at any time. Continued use of the site after changes constitutes acceptance of the new terms.
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════
+     CONTACT MODAL
+════════════════════════════════════════════════════ -->
+<div id="contact-modal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  background:rgba(0,0,0,0.75);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  align-items:center;
+  justify-content:center;
+  padding:1.5rem;
+" onclick="if(event.target===this){closeContactModal()}">
+
+  <div style="
+    background:var(--s1);
+    border:1px solid var(--border2);
+    border-radius:18px;
+    max-width:480px;
+    width:100%;
+    padding:2.5rem 2.5rem 2rem;
+    position:relative;
+    box-shadow:0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(232,184,75,0.1);
+    text-align:center;
+  " onclick="event.stopPropagation()">
+
+    <button onclick="closeContactModal()" style="
+      position:absolute; top:1rem; right:1rem;
+      background:var(--s2); border:1px solid var(--border2);
+      border-radius:50%; width:32px; height:32px;
+      color:var(--muted2); font-size:1.1rem; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+    ">✕</button>
+
+    <div style="font-size:2.8rem; margin-bottom:1rem;">📧</div>
+
+    <div style="
+      font-family:'Barlow Condensed',sans-serif;
+      font-size:1.8rem;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:.06em;
+      color:var(--gold);
+      margin-bottom:1.25rem;
+    ">Contact Us</div>
+
+    <p style="
+      font-size:1rem;
+      color:var(--muted2);
+      line-height:1.7;
+      margin-bottom:1.75rem;
+    ">
+      For any issues or suggestions you may have please email our support team.
+      <br><br>
+      <strong style="color:var(--text)">Thanks for using 504 Fantasy!</strong>
+    </p>
+
+    <div style="border-top:1px solid var(--border); margin-bottom:1.75rem;"></div>
+
+    <a href="mailto:Support@504fantasy.com" style="
+      display:inline-flex;
+      align-items:center;
+      gap:.65rem;
+      background:var(--ember);
+      color:#fff;
+      font-family:'Barlow Condensed',sans-serif;
+      font-size:1rem;
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      padding:.75rem 2rem;
+      border-radius:10px;
+      text-decoration:none;
+      transition:all .18s;
+      margin-bottom:.75rem;
+    " onmouseover="this.style.background='var(--ember2)'" onmouseout="this.style.background='var(--ember)'">
+      ✉️ Support@504fantasy.com
+    </a>
+
+    <div style="font-size:.78rem; color:var(--muted); margin-top:.5rem;">
+      We'll get back to you as soon as possible 🏈
+    </div>
+  </div>
+</div>
+
+<script>
+function openContactModal() {
+  document.getElementById('contact-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeContactModal() {
+  document.getElementById('contact-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function openPrivacyModal() {
+  document.getElementById('privacy-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closePrivacyModal() {
+  document.getElementById('privacy-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function openTermsModal() {
+  document.getElementById('terms-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeTermsModal() {
+  document.getElementById('terms-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeContactModal();
+    closePrivacyModal();
+    closeTermsModal();
+  }
+});
+</script>
+
+</body>
+</html>
