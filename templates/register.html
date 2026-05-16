@@ -34,10 +34,33 @@
   <div class="logo"><h1>504 FANTASY</h1><p>Fantasy Playoff Challenge</p></div>
   <div class="card">
     <h2>Create Account</h2>
-    {% if request.query_params.get('error')=='taken' %}<div class="alert">Username already taken.</div>{% endif %}
-    {% if request.query_params.get('error')=='short' %}<div class="alert">Password must be at least 6 characters.</div>{% endif %}
+
+    {% if request.query_params.get('error')=='taken' %}
+      <div class="alert">Username already taken.</div>
+    {% endif %}
+    {% if request.query_params.get('error')=='email_taken' %}
+      <div class="alert">An account with that email already exists.</div>
+    {% endif %}
+    {% if request.query_params.get('error')=='short' %}
+      <div class="alert">Password must be at least 6 characters.</div>
+    {% endif %}
+    {% if request.query_params.get('error')=='bad_email' %}
+      <div class="alert">Please enter a valid email address.</div>
+    {% endif %}
+    {% if request.query_params.get('error')=='db_error' %}
+      <div class="alert">Something went wrong. Please try again.</div>
+    {% endif %}
+
     <form method="post" action="/register">
-      <div class="fg"><label>Username</label><input name="username" type="text" autocomplete="username" required autofocus minlength="3"/></div>
+      <div class="fg">
+        <label>Username</label>
+        <input name="username" type="text" autocomplete="username" required autofocus minlength="3"/>
+      </div>
+      <div class="fg">
+        <label>Email Address</label>
+        <input name="email" type="email" autocomplete="email" required placeholder="you@example.com"/>
+        <p class="hint">Used for password recovery and updates</p>
+      </div>
       <div class="fg">
         <label>Password</label>
         <input name="password" type="password" autocomplete="new-password" required minlength="6"/>

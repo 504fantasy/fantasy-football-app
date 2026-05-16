@@ -785,18 +785,192 @@ def login(username: str = Form(...), password: str = Form(...)):
     return resp
 
 
+# ======================================================
+# EMAIL HELPER  (Resend API)
+# ======================================================
+
+def send_email(to: str, subject: str, html: str) -> bool:
+    """Send an email via Resend API. Returns True on success."""
+    import urllib.error
+    api_key  = os.environ.get("RESEND_API_KEY", "")
+    from_addr = os.environ.get("RESEND_FROM", "support@504fantasy.com")
+    if not api_key:
+        print("[email] RESEND_API_KEY not set — email not sent")
+        return False
+    payload = json.dumps({
+        "from": from_addr, "to": [to],
+        "subject": subject, "html": html,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=payload,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status in (200, 201)
+    except urllib.error.HTTPError as e:
+        print(f"[email] Resend error {e.code}: {e.read().decode()}")
+        return False
+    except Exception as e:
+        print(f"[email] send_email failed: {e}")
+        return False
+
+
+def create_reset_token(user_id: int) -> str:
+    import secrets
+    token      = secrets.token_urlsafe(32)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    conn = get_db()
+    conn.execute(adapt_sql("DELETE FROM password_reset_tokens WHERE user_id=?"), (user_id,))
+    conn.execute(adapt_sql(
+        "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?,?,?)"
+    ), (user_id, token, expires_at))
+    conn.commit()
+    conn.close()
+    return token
+
+
+def get_reset_token_user(token: str):
+    conn = get_db()
+    row  = conn.execute(adapt_sql(
+        "SELECT * FROM password_reset_tokens WHERE token=? AND used=0"
+    ), (token,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    expires = datetime.fromisoformat(row["expires_at"])
+    if datetime.now(timezone.utc) > expires:
+        return None
+    return get_user_by_id(row["user_id"])
+
+
+def mark_token_used(token: str):
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE password_reset_tokens SET used=1 WHERE token=?"), (token,))
+    conn.commit()
+    conn.close()
+
+
+def get_user_by_email(email: str):
+    conn = get_db()
+    row  = conn.execute(adapt_sql(
+        "SELECT * FROM users WHERE LOWER(email)=LOWER(?)"
+    ), (email.strip(),)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+# ======================================================
+# AUTH ROUTES (register with email, forgot/reset password)
+# ======================================================
+
 @app.post("/register")
-def register(username: str = Form(...), password: str = Form(...)):
+def register(
+    username: str = Form(...),
+    password: str = Form(...),
+    email:    str = Form(...),
+):
     if len(password) < 6:
         return RedirectResponse("/register?error=short", status_code=303)
     username = username.strip()
+    email    = email.strip().lower()
     if not username:
         return RedirectResponse("/register?error=empty", status_code=303)
-    if not create_user(username, password):
-        if get_user(username):
+    if not email or "@" not in email:
+        return RedirectResponse("/register?error=bad_email", status_code=303)
+    if get_user_by_email(email):
+        return RedirectResponse("/register?error=email_taken", status_code=303)
+    conn = get_db()
+    try:
+        conn.execute(adapt_sql(
+            "INSERT INTO users (username, password_hash, email) VALUES (?,?,?)"
+        ), (username, hash_password(password), email))
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        err = str(e).lower()
+        if "unique" in err or "duplicate" in err:
             return RedirectResponse("/register?error=taken", status_code=303)
         return RedirectResponse("/register?error=db_error", status_code=303)
+    conn.close()
+    send_email(
+        to=email,
+        subject="Welcome to 504 Fantasy! 🏈",
+        html=f"""<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#080a0e;color:#eaecf2;padding:2rem;border-radius:12px;">
+          <h1 style="color:#e8b84b;">Welcome to 504 Fantasy! 🏈</h1>
+          <p style="color:#8898b0;">Hey <strong style="color:#eaecf2">{username}</strong>, your account is all set up. Jump in and join or create a league!</p>
+          <a href="https://504fantasy.com/login" style="display:inline-block;margin-top:1.5rem;padding:.75rem 1.75rem;background:#e8b84b;color:#080a0e;border-radius:8px;text-decoration:none;font-weight:800;">Go to 504 Fantasy</a>
+          <p style="margin-top:2rem;font-size:.8rem;color:#5e6e88;">Questions? <a href="mailto:support@504fantasy.com" style="color:#e8b84b;">support@504fantasy.com</a></p>
+        </div>""",
+    )
     return RedirectResponse("/login?registered=1", status_code=303)
+
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request):
+    return templates.TemplateResponse("forgot_password.html", {
+        "request": request,
+        "msg":   request.query_params.get("msg", ""),
+        "error": request.query_params.get("error", ""),
+    })
+
+
+@app.post("/forgot-password")
+def forgot_password_submit(email: str = Form(...)):
+    email = email.strip().lower()
+    user  = get_user_by_email(email)
+    if user:
+        token     = create_reset_token(user["id"])
+        base_url  = os.environ.get("BASE_URL", "https://504fantasy.com")
+        reset_url = f"{base_url}/reset-password?token={token}"
+        send_email(
+            to=email,
+            subject="Reset your 504 Fantasy password",
+            html=f"""<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#080a0e;color:#eaecf2;padding:2rem;border-radius:12px;">
+              <h1 style="color:#e8b84b;">Password Reset 🏈</h1>
+              <p style="color:#8898b0;">Hey <strong style="color:#eaecf2">{user['username']}</strong>, click below to reset your password. Link expires in <strong style="color:#eaecf2">1 hour</strong>.</p>
+              <a href="{reset_url}" style="display:inline-block;margin-top:1.5rem;padding:.75rem 1.75rem;background:#e8b84b;color:#080a0e;border-radius:8px;text-decoration:none;font-weight:800;">Reset My Password</a>
+              <p style="margin-top:1.5rem;font-size:.8rem;color:#5e6e88;">If you didn't request this, ignore this email.</p>
+              <p style="font-size:.8rem;color:#5e6e88;">Or copy: <a href="{reset_url}" style="color:#e8b84b;word-break:break-all;">{reset_url}</a></p>
+            </div>""",
+        )
+    return RedirectResponse("/forgot-password?msg=sent", status_code=303)
+
+
+@app.get("/reset-password", response_class=HTMLResponse)
+def reset_password_page(request: Request, token: str = ""):
+    user = get_reset_token_user(token)
+    return templates.TemplateResponse("reset_password.html", {
+        "request": request,
+        "token":   token,
+        "invalid": not user,
+        "error":   request.query_params.get("error", ""),
+    })
+
+
+@app.post("/reset-password")
+def reset_password_submit(
+    token:    str = Form(...),
+    password: str = Form(...),
+    confirm:  str = Form(...),
+):
+    if len(password) < 6:
+        return RedirectResponse(f"/reset-password?token={token}&error=short", status_code=303)
+    if password != confirm:
+        return RedirectResponse(f"/reset-password?token={token}&error=mismatch", status_code=303)
+    user = get_reset_token_user(token)
+    if not user:
+        return RedirectResponse(f"/reset-password?token={token}&error=invalid", status_code=303)
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE users SET password_hash=? WHERE id=?"),
+                 (hash_password(password), user["id"]))
+    conn.commit()
+    conn.close()
+    mark_token_used(token)
+    write_audit(actor=user["username"], action="PASSWORD_RESET",
+                details="Password reset via email token")
+    return RedirectResponse("/login?reset=1", status_code=303)
 
 
 @app.get("/logout")
@@ -3226,7 +3400,7 @@ def api_nfl_games(week: int, season: int = None):
         completed = status_type.get("completed", False)
 
         # Live game info
-        situation = comp.get("situ     ation", {})
+        situation = comp.get("situation", {})
         period = situation.get("period", 0)
         clock = situation.get("displayClock", "")
         quarter_str = ""
@@ -3279,52 +3453,33 @@ def live_data():
 
 # ======================================================
 # SITE ADMIN  (/admin)
-# Superadmin-only dashboard with site-wide stats,
-# user management, and league management.
 # ======================================================
-
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request, user=Depends(get_current_user)):
     if not user or not user["is_superadmin"]:
         raise HTTPException(status_code=403, detail="Superadmin only")
-
     conn = get_db()
-
-    total_users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    total_leagues = conn.execute("SELECT COUNT(*) FROM leagues").fetchone()[0]
-    total_teams = conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0]
-    total_players = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
-    total_picks = conn.execute(
-        "SELECT COUNT(*) FROM team_roster WHERE is_pony=0"
-    ).fetchone()[0]
-    total_ponies = conn.execute(
-        "SELECT COUNT(*) FROM team_roster WHERE is_pony=1"
-    ).fetchone()[0]
-    total_scores = conn.execute("SELECT COUNT(*) FROM player_scores").fetchone()[0]
-    total_audits = conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
-    drafts_complete = conn.execute(
-        "SELECT COUNT(*) FROM draft_state WHERE is_complete=1"
-    ).fetchone()[0]
-    drafts_active = conn.execute(
-        "SELECT COUNT(*) FROM draft_state WHERE is_complete=0"
-    ).fetchone()[0]
-
-    users = conn.execute(
-        """
+    total_users     = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_leagues   = conn.execute("SELECT COUNT(*) FROM leagues").fetchone()[0]
+    total_teams     = conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0]
+    total_players   = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
+    total_picks     = conn.execute("SELECT COUNT(*) FROM team_roster WHERE is_pony=0").fetchone()[0]
+    total_ponies    = conn.execute("SELECT COUNT(*) FROM team_roster WHERE is_pony=1").fetchone()[0]
+    total_scores    = conn.execute("SELECT COUNT(*) FROM player_scores").fetchone()[0]
+    total_audits    = conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
+    drafts_complete = conn.execute("SELECT COUNT(*) FROM draft_state WHERE is_complete=1").fetchone()[0]
+    drafts_active   = conn.execute("SELECT COUNT(*) FROM draft_state WHERE is_complete=0").fetchone()[0]
+    users = conn.execute("""
         SELECT u.id, u.username, u.is_superadmin,
                COUNT(DISTINCT lm.league_id) AS league_count,
                COUNT(DISTINCT t.id)         AS team_count
         FROM users u
         LEFT JOIN league_members lm ON lm.user_id = u.id
         LEFT JOIN teams t           ON t.owner_id  = u.id
-        GROUP BY u.id
-        ORDER BY u.id DESC
-    """
-    ).fetchall()
-
-    leagues = conn.execute(
-        """
+        GROUP BY u.id ORDER BY u.id DESC
+    """).fetchall()
+    leagues = conn.execute("""
         SELECT l.id, l.name, l.created_at, l.invite_code,
                u.username AS commissioner,
                COUNT(DISTINCT lm.user_id) AS member_count,
@@ -3337,50 +3492,32 @@ def admin_dashboard(request: Request, user=Depends(get_current_user)):
         LEFT JOIN teams t           ON t.league_id  = l.id
         LEFT JOIN players p         ON p.league_id  = l.id
         LEFT JOIN draft_state ds    ON ds.league_id = l.id
-        GROUP BY l.id
-        ORDER BY l.created_at DESC
-    """
-    ).fetchall()
-
+        GROUP BY l.id ORDER BY l.created_at DESC
+    """).fetchall()
     recent_users = conn.execute(
         "SELECT id, username, is_superadmin FROM users ORDER BY id DESC LIMIT 10"
     ).fetchall()
-
-    recent_audit = conn.execute(
-        """
+    recent_audit = conn.execute("""
         SELECT al.ts, al.actor, al.action, al.team, al.player,
                al.details, l.name AS league_name
         FROM audit_log al
         LEFT JOIN leagues l ON al.league_id = l.id
         ORDER BY al.id DESC LIMIT 20
-    """
-    ).fetchall()
-
+    """).fetchall()
     conn.close()
-
-    return templates.TemplateResponse(
-        "admin.html",
-        {
-            "request": request,
-            "user": user,
-            "total_users": total_users,
-            "total_leagues": total_leagues,
-            "total_teams": total_teams,
-            "total_players": total_players,
-            "total_picks": total_picks,
-            "total_ponies": total_ponies,
-            "total_scores": total_scores,
-            "total_audits": total_audits,
-            "drafts_complete": drafts_complete,
-            "drafts_active": drafts_active,
-            "users": [dict(r) for r in users],
-            "leagues": [dict(r) for r in leagues],
-            "recent_users": [dict(r) for r in recent_users],
-            "recent_audit": [dict(r) for r in recent_audit],
-            "msg": request.query_params.get("msg", ""),
-            "error": request.query_params.get("error", ""),
-        },
-    )
+    return templates.TemplateResponse("admin.html", {
+        "request": request, "user": user,
+        "total_users": total_users, "total_leagues": total_leagues,
+        "total_teams": total_teams, "total_players": total_players,
+        "total_picks": total_picks, "total_ponies": total_ponies,
+        "total_scores": total_scores, "total_audits": total_audits,
+        "drafts_complete": drafts_complete, "drafts_active": drafts_active,
+        "users": [dict(r) for r in users], "leagues": [dict(r) for r in leagues],
+        "recent_users": [dict(r) for r in recent_users],
+        "recent_audit": [dict(r) for r in recent_audit],
+        "msg": request.query_params.get("msg", ""),
+        "error": request.query_params.get("error", ""),
+    })
 
 
 @app.post("/admin/user/delete")
@@ -3388,17 +3525,13 @@ def admin_delete_user(user_id: int = Form(...), user=Depends(get_current_user)):
     if not user or not user["is_superadmin"]:
         raise HTTPException(status_code=403)
     conn = get_db()
-    target = conn.execute(
-        adapt_sql("SELECT * FROM users WHERE id=?"), (user_id,)
-    ).fetchone()
+    target = conn.execute(adapt_sql("SELECT * FROM users WHERE id=?"), (user_id,)).fetchone()
     if not target:
         conn.close()
         return RedirectResponse("/admin?error=user_not_found", status_code=303)
     if target["is_superadmin"]:
         conn.close()
-        return RedirectResponse(
-            "/admin?error=cannot_delete_superadmin", status_code=303
-        )
+        return RedirectResponse("/admin?error=cannot_delete_superadmin", status_code=303)
     if target["id"] == user["id"]:
         conn.close()
         return RedirectResponse("/admin?error=cannot_delete_self", status_code=303)
@@ -3407,19 +3540,14 @@ def admin_delete_user(user_id: int = Form(...), user=Depends(get_current_user)):
         adapt_sql("SELECT id FROM leagues WHERE commissioner_id=?"), (user_id,)
     ).fetchall()
     for league in owned_leagues:
-        conn.execute(
-            adapt_sql("DELETE FROM audit_log WHERE league_id=?"), (league["id"],)
-        )
+        conn.execute(adapt_sql("DELETE FROM audit_log WHERE league_id=?"), (league["id"],))
         conn.execute(adapt_sql("DELETE FROM leagues WHERE id=?"), (league["id"],))
     conn.execute(adapt_sql("DELETE FROM league_members WHERE user_id=?"), (user_id,))
     conn.execute(adapt_sql("DELETE FROM users WHERE id=?"), (user_id,))
     conn.commit()
     conn.close()
-    write_audit(
-        actor=user["username"],
-        action="ADMIN_USER_DELETE",
-        details=f"Deleted user '{username}' (id={user_id})",
-    )
+    write_audit(actor=user["username"], action="ADMIN_USER_DELETE",
+                details=f"Deleted user '{username}' (id={user_id})")
     return RedirectResponse("/admin?msg=user_deleted", status_code=303)
 
 
@@ -3428,9 +3556,7 @@ def admin_delete_league(league_id: int = Form(...), user=Depends(get_current_use
     if not user or not user["is_superadmin"]:
         raise HTTPException(status_code=403)
     conn = get_db()
-    league = conn.execute(
-        adapt_sql("SELECT * FROM leagues WHERE id=?"), (league_id,)
-    ).fetchone()
+    league = conn.execute(adapt_sql("SELECT * FROM leagues WHERE id=?"), (league_id,)).fetchone()
     if not league:
         conn.close()
         return RedirectResponse("/admin?error=league_not_found", status_code=303)
@@ -3438,9 +3564,6 @@ def admin_delete_league(league_id: int = Form(...), user=Depends(get_current_use
     conn.execute(adapt_sql("DELETE FROM leagues WHERE id=?"), (league_id,))
     conn.commit()
     conn.close()
-    write_audit(
-        actor=user["username"],
-        action="ADMIN_LEAGUE_DELETE",
-        details=f"Deleted league '{league_name}' (id={league_id})",
-    )
+    write_audit(actor=user["username"], action="ADMIN_LEAGUE_DELETE",
+                details=f"Deleted league '{league_name}' (id={league_id})")
     return RedirectResponse("/admin?msg=league_deleted", status_code=303)

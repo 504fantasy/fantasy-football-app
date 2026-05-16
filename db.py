@@ -402,9 +402,23 @@ def init_db(conn=None):
     )""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_league ON draft_chat(league_id, ts)")
 
+    # ── PASSWORD RESET TOKENS ──────────────────────────────────────────────
+    conn.execute(f"""
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id         {pk},
+        user_id    INTEGER NOT NULL,
+        token      TEXT UNIQUE NOT NULL,
+        expires_at TEXT NOT NULL,
+        used       INTEGER DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_reset_token ON password_reset_tokens(token)")
+
     # ── MIGRATIONS (additive, safe to re-run) ──────────────────────────────
     _safe_alter(conn, "ALTER TABLE leagues     ADD COLUMN pick_timer_seconds  INTEGER DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE draft_state ADD COLUMN pick_started_at     TEXT")
+    _safe_alter(conn, "ALTER TABLE users       ADD COLUMN email               TEXT")
+    _safe_alter(conn, "ALTER TABLE users       ADD COLUMN email_verified      INTEGER DEFAULT 0")
 
     conn.commit()
     if close_after:
