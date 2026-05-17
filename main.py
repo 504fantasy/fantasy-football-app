@@ -803,7 +803,7 @@ def send_email(to: str, subject: str, html: str) -> bool:
     }).encode()
     req = urllib.request.Request(
         "https://api.resend.com/emails", data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "python-urllib/3.12"},
         method="POST",
     )
     try:
