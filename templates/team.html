@@ -351,11 +351,43 @@
 {% if msg == 'mult_saved' %}
 <div class="flash-saved">✅ Multiplier saved.</div>
 {% endif %}
+{% if msg == 'team_renamed' %}
+<div class="flash-saved">✅ Team name updated.</div>
+{% endif %}
+{% if msg == 'pony_added' %}
+<div class="flash-saved">✅ Pony pick added.</div>
+{% endif %}
 
 <!-- ── Team Hero ─────────────────────────────────────────────────────────── -->
 <div class="team-hero">
   <div>
-    <div class="team-hero-name">{{ team.name }}</div>
+    <!-- Team name — click pencil to rename -->
+    <div style="display:flex;align-items:center;gap:.6rem;">
+      <div class="team-hero-name" id="team-name-display">{{ team.name }}</div>
+      {% if is_owner or is_commissioner %}
+      <button onclick="document.getElementById('rename-form').style.display=document.getElementById('rename-form').style.display==='none'?'flex':'none'"
+              title="Rename team"
+              style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;padding:.2rem;line-height:1;">✏️</button>
+      {% endif %}
+    </div>
+    <!-- Inline rename form (hidden by default) -->
+    {% if is_owner or is_commissioner %}
+    <form id="rename-form" method="post"
+          action="/league/{{ league.id }}/team/{{ team.id }}/rename"
+          style="display:none;align-items:center;gap:.5rem;margin-top:.5rem;">
+      <input type="text" name="team_name" value="{{ team.name }}"
+             maxlength="40" required
+             style="background:var(--s2);border:1px solid var(--border2);border-radius:6px;
+                    color:var(--text);padding:.35rem .7rem;font-size:.9rem;width:200px;"/>
+      <button type="submit"
+              style="background:var(--gold);color:#080a0e;border:none;border-radius:6px;
+                     padding:.35rem .8rem;font-size:.8rem;font-weight:800;cursor:pointer;">Save</button>
+      <button type="button"
+              onclick="document.getElementById('rename-form').style.display='none'"
+              style="background:var(--s2);color:var(--muted2);border:1px solid var(--border2);
+                     border-radius:6px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer;">Cancel</button>
+    </form>
+    {% endif %}
     <div class="team-hero-owner">
       Managed by {{ owner.username if owner else "—" }}
       {% if is_commissioner and not is_owner %}
