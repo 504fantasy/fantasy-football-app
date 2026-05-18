@@ -4,151 +4,256 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}504 Fantasy Survivor{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;1,700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --surface2: #21262d;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #1f6feb;
-      --accent-hover: #388bfd;
-      --green: #3fb950;
-      --red: #f85149;
-      --gold: #d29922;
-      --orange: #db6d28;
-      --radius: 8px;
+      --bg:      #0a0c10; --s1: #111418; --s2: #181c23; --s3: #1e2330;
+      --border:  #252a34; --gold: #e8b84b; --gold2: #f5d06a;
+      --ember:   #c9451a; --green: #22c55e; --red: #ef4444; --blue: #3b82f6;
+      --text:    #e8eaf0; --muted: #64748b; --muted2: #8898b0; --r: 8px;
+      --survivor: #3b82f6; --survivor2: #60a5fa;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
-    a { color: var(--accent-hover); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+    html { scroll-behavior:smooth }
+    body { font-family:'Barlow',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; line-height:1.55 }
+    a { color:var(--survivor2); text-decoration:none }
+    a:hover { text-decoration:underline }
 
-    /* NAV */
-    nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 56px; }
-    nav .brand { font-weight: 700; font-size: 16px; color: var(--text); letter-spacing: .5px; }
-    nav .brand span { color: var(--accent-hover); }
-    nav .spacer { flex: 1; }
-    nav a { color: var(--muted); font-size: 13px; }
-    nav a:hover { color: var(--text); text-decoration: none; }
-
-    /* LAYOUT */
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { font-size: 22px; font-weight: 600; }
-    .page-header p { color: var(--muted); margin-top: 4px; }
-
-    /* CARDS */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
-    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-
-    /* TABLES */
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-    th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: var(--surface2); }
-
-    /* FORMS */
-    .form-group { margin-bottom: 14px; }
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
-    input[type=text], input[type=password], input[type=number], input[type=email], select, textarea {
-      width: 100%; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); font-size: 14px;
+    nav {
+      background:var(--s1); border-bottom:2px solid var(--survivor);
+      height:54px; display:flex; align-items:center;
+      padding:0 1.5rem; position:sticky; top:0; z-index:200;
     }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
-    select option { background: var(--surface2); }
-
-    /* BUTTONS */
-    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 6px;
-           font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent;
-           transition: opacity .15s; text-decoration: none; }
-    .btn:hover { opacity: .85; text-decoration: none; }
-    .btn-primary  { background: var(--accent);  color: #fff; }
-    .btn-success  { background: var(--green);   color: #000; }
-    .btn-danger   { background: var(--red);     color: #fff; }
-    .btn-secondary{ background: var(--surface2); color: var(--text); border-color: var(--border); }
-    .btn-sm { padding: 4px 10px; font-size: 12px; }
-
-    /* BADGES */
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-    .badge-green  { background: rgba(63,185,80,.15);  color: var(--green); }
-    .badge-red    { background: rgba(248,81,73,.15);  color: var(--red);   }
-    .badge-gold   { background: rgba(210,153,34,.15); color: var(--gold);  }
-    .badge-blue   { background: rgba(31,111,235,.15); color: var(--accent-hover); }
-    .badge-muted  { background: var(--surface2); color: var(--muted); }
-
-    /* ALERTS */
-    .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
-    .alert-success { background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.3); color: var(--green); }
-    .alert-error   { background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.3); color: var(--red); }
-    .alert-info    { background: rgba(31,111,235,.12); border: 1px solid rgba(31,111,235,.3); color: var(--accent-hover); }
-
-    /* POSITION CHIPS */
-    .pos { display: inline-block; width: 36px; text-align: center; padding: 2px 0; border-radius: 4px; font-size: 11px; font-weight: 700; }
-    .pos-QB  { background: rgba(31,111,235,.2); color: #79c0ff; }
-    .pos-RB  { background: rgba(63,185,80,.2); color: #7ee787; }
-    .pos-WR  { background: rgba(210,153,34,.2); color: #f0c14b; }
-    .pos-TE  { background: rgba(219,109,40,.2); color: #ffa657; }
-    .pos-DST { background: rgba(139,73,235,.2); color: #d2a8ff; }
-    .pos-K   { background: rgba(139,148,158,.2); color: #8b949e; }
-
-    /* WEEK NAV */
-    .week-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
-    .week-nav span { font-size: 16px; font-weight: 600; }
-    .week-btn { padding: 4px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; cursor: pointer; }
-    .week-btn:disabled { opacity: .4; cursor: default; }
-
-    /* USED BADGE */
-    .used-tag { font-size: 10px; color: var(--red); font-weight: 600; }
-
-    /* LINEUP GRID */
-    .lineup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-    .lineup-slot { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
-    .lineup-slot .slot-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .lineup-slot select { margin-top: 4px; }
-    .lineup-slot .player-locked { font-weight: 600; color: var(--text); font-size: 15px; }
-    .lineup-slot .player-team   { font-size: 11px; color: var(--muted); }
-
-    /* STANDINGS */
-    .rank-1 td:first-child { color: var(--gold); font-weight: 700; }
-    .rank-2 td:first-child { color: #c0c0c0; font-weight: 700; }
-    .rank-3 td:first-child { color: #cd7f32; font-weight: 700; }
-
-    /* RESPONSIVE */
-    @media (max-width: 640px) {
-      nav { gap: 12px; padding: 0 12px; }
-      .container { padding: 16px 10px; }
-      .lineup-grid { grid-template-columns: 1fr; }
+    .nav-brand {
+      font-family:'Barlow Condensed',sans-serif; font-size:1.35rem; font-weight:800;
+      letter-spacing:.08em; text-transform:uppercase; color:var(--gold);
+      text-decoration:none; margin-right:.25rem; white-space:nowrap; flex-shrink:0;
     }
+    .nav-brand-tag {
+      font-family:'Barlow Condensed',sans-serif; font-size:.8rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.1em; color:var(--survivor2);
+      background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.25);
+      border-radius:4px; padding:.1rem .4rem; margin-right:.75rem; flex-shrink:0;
+    }
+    .nav-sep { color:var(--border); margin:0 .4rem; flex-shrink:0 }
+    .nav-league {
+      font-family:'Barlow Condensed',sans-serif; font-size:.95rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      max-width:180px; margin-right:1rem; flex-shrink:1;
+    }
+    .nav-links { display:flex; gap:.1rem; flex:1 }
+    .nav-links a {
+      font-family:'Barlow Condensed',sans-serif; font-size:.82rem; font-weight:700;
+      letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+      text-decoration:none; padding:.35rem .9rem; border-radius:var(--r);
+      transition:all .15s; white-space:nowrap;
+    }
+    .nav-links a:hover  { color:var(--text); background:var(--s3) }
+    .nav-links a.active { color:var(--survivor2); background:rgba(59,130,246,.1) }
+    .nav-end {
+      margin-left:auto; display:flex; align-items:center;
+      gap:.65rem; font-size:.82rem; color:var(--muted); flex-shrink:0;
+    }
+    .nav-end strong { color:var(--text) }
+    .nav-btn {
+      font-family:'Barlow Condensed',sans-serif; font-size:.8rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+      text-decoration:none; padding:.35rem .75rem;
+      border:1px solid var(--border); border-radius:var(--r);
+      transition:all .15s; background:none; cursor:pointer;
+    }
+    .nav-btn:hover { color:var(--text); border-color:var(--muted); text-decoration:none }
+    .nav-btn.main:hover { color:var(--gold); border-color:var(--gold) }
+
+    main { max-width:1200px; margin:0 auto; padding:1.75rem 1.5rem }
+
+    .card { background:var(--s1); border:1px solid var(--border); border-radius:var(--r); padding:1.4rem; margin-bottom:1rem }
+    .card h2 {
+      font-family:'Barlow Condensed',sans-serif; font-size:1rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.08em; color:var(--survivor2);
+      margin-bottom:1rem; padding-bottom:.65rem; border-bottom:1px solid var(--border);
+    }
+
+    .page-header { margin-bottom:1.5rem }
+    .page-header h1 {
+      font-family:'Barlow Condensed',sans-serif; font-size:1.9rem; font-weight:800;
+      text-transform:uppercase; letter-spacing:.05em;
+    }
+    .page-header p { color:var(--muted2); font-size:.875rem; margin-top:.3rem }
+
+    .btn {
+      display:inline-flex; align-items:center; gap:.35rem;
+      padding:.45rem 1rem; border:none; border-radius:var(--r);
+      font-family:'Barlow Condensed',sans-serif; font-size:.85rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.06em;
+      cursor:pointer; text-decoration:none; transition:all .15s; white-space:nowrap;
+    }
+    .btn:hover { text-decoration:none; opacity:.9 }
+    .btn-primary   { background:var(--survivor); color:#fff }
+    .btn-success   { background:#16a34a; color:#fff }
+    .btn-danger    { background:var(--ember); color:#fff }
+    .btn-secondary { background:var(--s2); color:var(--muted2); border:1px solid var(--border) }
+    .btn-secondary:hover { color:var(--text); border-color:var(--muted) }
+    .btn-gold      { background:var(--gold); color:#080a0e }
+    .btn-sm { padding:.28rem .65rem; font-size:.75rem }
+
+    .form-group { margin-bottom:.85rem }
+    label {
+      display:block; font-size:.74rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:.3rem;
+    }
+    input[type=text],input[type=password],input[type=number],input[type=email],select,textarea {
+      background:var(--s2); border:1px solid var(--border); border-radius:var(--r);
+      color:var(--text); padding:.48rem .75rem; font-family:'Barlow',sans-serif;
+      font-size:.875rem; width:100%; transition:border-color .15s;
+    }
+    input:focus,select:focus,textarea:focus { outline:none; border-color:var(--survivor) }
+    select option { background:var(--s2) }
+
+    table { width:100%; border-collapse:collapse; font-size:.855rem }
+    th {
+      font-family:'Barlow Condensed',sans-serif; font-size:.73rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+      text-align:left; padding:.55rem .75rem; border-bottom:1px solid var(--border);
+    }
+    td { padding:.6rem .75rem; border-bottom:1px solid var(--border); vertical-align:middle }
+    tr:last-child td { border-bottom:none }
+    tbody tr:hover td { background:rgba(255,255,255,.02) }
+
+    .badge {
+      display:inline-block; padding:.13rem .45rem; border-radius:4px;
+      font-family:'Barlow Condensed',sans-serif; font-size:.7rem; font-weight:700;
+      text-transform:uppercase; letter-spacing:.05em;
+    }
+    .badge-green { background:rgba(34,197,94,.12);  color:var(--green);  border:1px solid rgba(34,197,94,.25) }
+    .badge-red   { background:rgba(239,68,68,.12);  color:#fca5a5;       border:1px solid rgba(239,68,68,.25) }
+    .badge-gold  { background:rgba(232,184,75,.12); color:var(--gold);   border:1px solid rgba(232,184,75,.25) }
+    .badge-blue  { background:rgba(59,130,246,.12); color:#93c5fd;       border:1px solid rgba(59,130,246,.25) }
+    .badge-muted { background:rgba(94,110,136,.12); color:var(--muted2); border:1px solid rgba(94,110,136,.25) }
+
+    .alert { padding:.65rem 1rem; border-radius:var(--r); font-size:.855rem; margin-bottom:1rem; border-left:3px solid }
+    .alert-success { background:rgba(34,197,94,.08);  border-color:var(--green); color:var(--green) }
+    .alert-error   { background:rgba(239,68,68,.08);  border-color:var(--red);   color:#fca5a5 }
+    .alert-info    { background:rgba(59,130,246,.08); border-color:var(--blue);  color:#93c5fd }
+
+    .pos { display:inline-block; width:36px; text-align:center; padding:2px 0; border-radius:4px; font-size:11px; font-weight:700; font-family:'Barlow Condensed',sans-serif }
+    .pos-QB  { background:rgba(124,58,237,.2);  color:#a78bfa }
+    .pos-RB  { background:rgba(22,163,74,.2);   color:#4ade80 }
+    .pos-WR  { background:rgba(3,105,161,.2);   color:#38bdf8 }
+    .pos-TE  { background:rgba(180,83,0,.2);    color:#fb923c }
+    .pos-DST { background:rgba(185,17,34,.2);   color:#f87171 }
+    .pos-K   { background:rgba(113,113,122,.2); color:#a1a1aa }
+
+    .week-nav { display:flex; align-items:center; gap:.5rem; margin-bottom:1.25rem }
+    .week-nav span { font-family:'Barlow Condensed',sans-serif; font-size:1.1rem; font-weight:700 }
+    .week-btn {
+      padding:.28rem .75rem; background:var(--s2); border:1px solid var(--border);
+      border-radius:var(--r); color:var(--muted2); font-family:'Barlow Condensed',sans-serif;
+      font-size:.8rem; font-weight:700; cursor:pointer; text-decoration:none; transition:all .15s;
+    }
+    .week-btn:hover { color:var(--text); border-color:var(--muted) }
+    .week-btn:disabled { opacity:.4; cursor:default }
+
+    .rank-1 td:first-child { color:var(--gold); font-weight:700 }
+    .rank-2 td:first-child { color:#c0c0c0; font-weight:700 }
+    .rank-3 td:first-child { color:#cd7f32; font-weight:700 }
+
+    .lineup-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:.85rem }
+    .lineup-slot { background:var(--s2); border:1px solid var(--border); border-radius:var(--r); padding:1rem }
+    .lineup-slot .slot-header { display:flex; align-items:center; gap:.5rem; margin-bottom:.65rem }
+    .lineup-slot .player-locked { font-weight:700; color:var(--text); font-size:1rem }
+    .lineup-slot .player-team   { font-size:.75rem; color:var(--muted2) }
+    .used-tag { font-size:.7rem; color:var(--red); font-weight:700 }
+
+    hr { border:none; border-top:1px solid var(--border); margin:1.25rem 0 }
+
+    ::-webkit-scrollbar { width:5px; height:5px }
+    ::-webkit-scrollbar-track { background:var(--bg) }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px }
+
+    @media(max-width:768px) {
+      main { padding:.85rem .75rem }
+      nav  { padding:0 .85rem; height:52px }
+      .nav-league { display:none }
+      .nav-links  { display:none }
+      .nav-links.open {
+        display:flex; flex-direction:column; position:fixed;
+        top:52px; left:0; right:0; background:var(--s1);
+        border-bottom:2px solid var(--survivor);
+        padding:.5rem .75rem .75rem; gap:.2rem; z-index:300;
+      }
+      .nav-links.open a { padding:.6rem .85rem; font-size:.9rem }
+      .hamburger { display:flex; flex-direction:column; gap:4px; cursor:pointer; padding:.4rem; margin-left:.25rem; background:none; border:none }
+      .hamburger span { display:block; width:20px; height:2px; background:var(--muted); border-radius:2px; transition:all .2s }
+      .hamburger.open span:nth-child(1) { transform:translateY(6px) rotate(45deg) }
+      .hamburger.open span:nth-child(2) { opacity:0 }
+      .hamburger.open span:nth-child(3) { transform:translateY(-6px) rotate(-45deg) }
+      .lineup-grid { grid-template-columns:1fr }
+    }
+    @media(min-width:769px) { .hamburger { display:none } }
   </style>
   {% block head %}{% endblock %}
 </head>
 <body>
 <nav>
-  <span class="brand">504 Fantasy <span>Survivor</span></span>
+  <a class="nav-brand" href="/dashboard">504 FANTASY</a>
+  <span class="nav-brand-tag">Survivor</span>
+
   {% if user %}
-    {% if league is defined %}
-      <a href="/survivor/{{ league.id }}">Home</a>
-      <a href="/survivor/{{ league.id }}/lineup">My Lineup</a>
-      <a href="/survivor/{{ league.id }}/scores">Scores</a>
-      {% if is_commissioner %}
-        <a href="/survivor/{{ league.id }}/manage">Manage</a>
+    {% if league is defined and league %}
+    <span class="nav-sep">/</span>
+    <span class="nav-league">{{ league.name }}</span>
+    <div class="nav-links" id="nav-links">
+      <a href="/survivor/{{ league.id }}">🏠 Home</a>
+      <a href="/survivor/{{ league.id }}/lineup">📋 My Lineup</a>
+      <a href="/survivor/{{ league.id }}/scores">📊 Scores</a>
+      {% if is_commissioner is defined and is_commissioner %}
+        <a href="/survivor/{{ league.id }}/manage">⚙ Manage</a>
+        <a href="/survivor/{{ league.id }}/audit">🧾 Audit</a>
       {% endif %}
+    </div>
+    {% else %}
+    <div class="nav-links" id="nav-links">
+      <a href="/survivor/dashboard">My Leagues</a>
+    </div>
     {% endif %}
-    <span class="spacer"></span>
-    <a href="/survivor/dashboard">My Leagues</a>
-    <span style="color:var(--muted);">{{ user.username }}</span>
-    <a href="/survivor/logout">Sign out</a>
+
+    <div class="nav-end">
+      <strong>{{ user.username }}</strong>
+      <a href="/dashboard" class="nav-btn main">⚡ Main Site</a>
+      <a href="/survivor/logout" class="nav-btn">Logout</a>
+      <button class="hamburger" id="hamburger" onclick="toggleNav()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
   {% else %}
-    <span class="spacer"></span>
-    <a href="/survivor/login">Sign in</a>
-    <a href="/survivor/register" class="btn btn-primary btn-sm">Register</a>
+    <div class="nav-links" id="nav-links"></div>
+    <div class="nav-end">
+      <a href="/survivor/login" style="color:var(--muted2);text-decoration:none;font-size:.85rem;">Sign in</a>
+      <a href="/survivor/register" class="btn btn-primary btn-sm">Register</a>
+    </div>
   {% endif %}
 </nav>
-<div class="container">
-  {% block content %}{% endblock %}
-</div>
+
+<script>
+function toggleNav() {
+  const links = document.getElementById('nav-links');
+  const ham   = document.getElementById('hamburger');
+  links.classList.toggle('open');
+  ham.classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  const links = document.getElementById('nav-links');
+  const ham   = document.getElementById('hamburger');
+  if (links && !links.contains(e.target) && ham && !ham.contains(e.target)) {
+    links.classList.remove('open');
+    ham.classList.remove('open');
+  }
+});
+</script>
+
+<main>{% block content %}{% endblock %}</main>
 </body>
 </html>
