@@ -411,7 +411,7 @@ def create_user(username: str, password: str, is_superadmin: bool = False) -> bo
 
 def get_user(username: str):
     conn = get_db()
-    row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    row = conn.execute("SELECT * FROM users WHERE LOWER(username)=LOWER(?)", (username,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -720,6 +720,8 @@ def multipliers_locked_for(league: dict) -> bool:
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
+
 
 
 def get_current_user(request: Request):
@@ -3567,3 +3569,77 @@ def admin_delete_league(league_id: int = Form(...), user=Depends(get_current_use
     write_audit(actor=user["username"], action="ADMIN_LEAGUE_DELETE",
                 details=f"Deleted league '{league_name}' (id={league_id})")
     return RedirectResponse("/admin?msg=league_deleted", status_code=303)
+
+
+# ======================================================
+# TEAM: RENAME (owner self-service)
+# ======================================================
+
+@app.post("/league/{league_id}/team/{team_id}/rename")
+def team_rename(
+    league_id: int,
+    team_id: int,
+    team_name: str = Form(...),
+    user=Depends(get_current_user),
+):
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    team_name = team_name.strip()
+    if not team_name:
+        return RedirectResponse(f"/league/{league_id}/team/{team_id}?error=empty_name", status_code=303)
+    conn = get_db()
+    team = conn.execute(adapt_sql(
+        "SELECT * FROM teams WHERE id=? AND league_id=?"
+    ), (team_id, league_id)).fetchone()
+    if not team or (team["owner_id"] != user["id"] and not is_commissioner(league, user)):
+        conn.close()
+        raise HTTPException(status_code=403)
+    conn.execute(adapt_sql(
+        "UPDATE teams SET name=? WHERE id=? AND league_id=?"
+    ), (team_name, team_id, league_id))
+    conn.commit()
+    conn.close()
+    write_audit(actor=user["username"], action="TEAM_RENAME", league_id=league_id,
+                team=team_name, details=f"team_id={team_id} new_name={team_name}")
+    return RedirectResponse(f"/league/{league_id}/team/{team_id}?msg=team_renamed", status_code=303)
+
+
+# ======================================================
+# TEAM RENAME
+# ======================================================
+
+@app.post("/league/{league_id}/team/{team_id}/rename")
+def rename_team(
+    league_id: int, team_id: int,
+    team_name: str = Form(...),
+    user=Depends(get_current_user)
+):
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    conn = get_db()
+    team = conn.execute(adapt_sql(
+        "SELECT * FROM teams WHERE id=? AND league_id=?"
+    ), (team_id, league_id)).fetchone()
+    conn.close()
+    if not team:
+        raise HTTPException(status_code=404)
+    if user["id"] != team["owner_id"] and not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    name = team_name.strip()[:40]
+    if not name:
+        return RedirectResponse(f"/league/{league_id}/team/{team_id}?error=empty_name", status_code=303)
+    conn = get_db()
+    try:
+        conn.execute(adapt_sql(
+            "UPDATE teams SET name=? WHERE id=? AND league_id=?"
+        ), (name, team_id, league_id))
+        conn.commit()
+    except Exception:
+        conn.close()
+        return RedirectResponse(f"/league/{league_id}/team/{team_id}?error=name_taken", status_code=303)
+    conn.close()
+    write_audit(actor=user["username"], action="TEAM_RENAME", league_id=league_id,
+                team=name, details=f"Renamed from '{team['name']}' to '{name}'")
+    return RedirectResponse(f"/league/{league_id}/team/{team_id}?msg=team_renamed", status_code=303)
