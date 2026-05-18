@@ -994,12 +994,32 @@ def dashboard(request: Request, user=Depends(get_current_user)):
     if not user:
         return RedirectResponse("/login", status_code=303)
     leagues = get_user_leagues(user["id"])
+
+    # Load survivor leagues for same user
+    survivor_leagues = []
+    try:
+        from survivor_db import get_connection as _surv_conn
+        sconn = _surv_conn()
+        rows = sconn.execute("""
+            SELECT l.*, slm.joined_at,
+                   (l.commissioner_id = ?) as is_commissioner
+            FROM survivor_leagues l
+            JOIN survivor_league_members slm ON slm.league_id = l.id
+            WHERE slm.user_id = ?
+            ORDER BY l.created_at DESC
+        """, (user["id"], user["id"])).fetchall()
+        sconn.close()
+        survivor_leagues = [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[dashboard] survivor leagues error: {e}")
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "user": user,
             "leagues": leagues,
+            "survivor_leagues": survivor_leagues,
             "msg": request.query_params.get("msg", ""),
             "error": request.query_params.get("error", ""),
         },

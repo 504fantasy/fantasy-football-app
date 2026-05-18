@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ league.name }} — Survivor{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ league.name }}</h1>
+  <p>Season {{ league.season }} &nbsp;·&nbsp; Week {{ current_week }} of {{ total_weeks }}
+     &nbsp;·&nbsp; Invite code: <strong style="color:var(--gold)">{{ league.invite_code }}</strong></p>
+</div>
+
+{% if msg == 'league_created' %}
+  <div class="alert alert-success">League created! Share the invite code above so others can join.</div>
+{% elif msg == 'team_created' %}
+  <div class="alert alert-success">Team created successfully.</div>
+{% endif %}
+{% if error == 'no_team' %}
+  <div class="alert alert-error">You need to create a team before submitting a lineup.</div>
+{% elif error == 'team_name_taken' %}
+  <div class="alert alert-error">That team name is already taken in this league.</div>
+{% endif %}
+
+{% if not my_team %}
+<div class="card">
+  <h2>Create Your Team</h2>
+  <form method="post" action="/survivor/{{ league.id }}/create-team" style="display:flex;gap:10px;align-items:flex-end;">
+    <div class="form-group" style="flex:1;margin:0;">
+      <label>Team Name</label>
+      <input type="text" name="team_name" placeholder="My Team Name" required maxlength="50">
+    </div>
+    <button type="submit" class="btn btn-primary">Create Team</button>
+  </form>
+</div>
+{% else %}
+<div style="margin-bottom:16px;display:flex;gap:10px;">
+  <a href="/survivor/{{ league.id }}/lineup" class="btn btn-primary">📋 Submit Week {{ current_week }} Lineup</a>
+  <a href="/survivor/{{ league.id }}/scores" class="btn btn-secondary">📊 Scores</a>
+</div>
+{% endif %}
+
+<!-- STANDINGS -->
+<div class="card">
+  <h2>Standings — Through Week {{ current_week }}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Team</th>
+        <th>Owner</th>
+        <th>Season Pts</th>
+        <th>Wk {{ current_week }} Pts</th>
+        <th>Lineup</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in standings %}
+      <tr class="rank-{{ loop.index }}">
+        <td>{{ loop.index }}</td>
+        <td><strong>{{ row.team.name }}</strong></td>
+        <td style="color:var(--muted)">{{ row.owner.username if row.owner else '—' }}</td>
+        <td><strong>{{ row.season_pts }}</strong></td>
+        <td>{{ row.week_pts }}</td>
+        <td>
+          {% if row.lineup_locked %}
+            <span class="badge badge-green">Locked ✓</span>
+          {% elif row.lineup_complete %}
+            <span class="badge badge-blue">Submitted</span>
+          {% else %}
+            <span class="badge badge-red">Incomplete</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px;">No teams yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="card" style="background:rgba(31,111,235,.06);">
+  <h2>How This Game Works</h2>
+  <p style="color:var(--muted);line-height:1.8;">
+    Every week (Weeks 1–{{ total_weeks }}) you pick one player at each position:
+    <strong>QB · RB · WR · TE · DST · K</strong>.<br>
+    Once you use a player, they're <span style="color:var(--red)">locked out</span> for you for the rest of the season.<br>
+    There's no draft — just smart weekly selection. The team with the most fantasy points at the end of Week {{ total_weeks }} wins.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Manage — {{ league.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Commissioner Panel</h1>
+  <p>{{ league.name }} &nbsp;·&nbsp; Season {{ league.season }}&nbsp;·&nbsp;
+     Invite: <strong style="color:var(--gold)">{{ league.invite_code }}</strong></p>
+</div>
+
+{% if msg %}<div class="alert alert-success">✓ {{ msg | replace('_', ' ') | title }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">⚠ {{ error | replace('_', ' ') | title }}</div>{% endif %}
+
+<!-- SECTION TABS -->
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+  <a href="#week"    class="btn btn-secondary btn-sm">Week Controls</a>
+  <a href="#scores"  class="btn btn-secondary btn-sm">Score Entry</a>
+  <a href="#players" class="btn btn-secondary btn-sm">Players</a>
+  <a href="#teams"   class="btn btn-secondary btn-sm">Teams</a>
+  <a href="#settings"class="btn btn-secondary btn-sm">Settings</a>
+  <a href="/survivor/{{ league.id }}/audit" class="btn btn-secondary btn-sm">Audit Log</a>
+</div>
+
+<!-- ── WEEK CONTROLS ───────────────────────────────────────────────────── -->
+<div class="card" id="week">
+  <h2>Week Controls &nbsp;<span style="color:var(--muted);font-weight:400;font-size:13px;">Current: Week {{ current_week }}</span></h2>
+  <p style="color:var(--muted);margin-bottom:14px;font-size:13px;">
+    Locking a week prevents teams from editing lineups. Advancing moves to the next week.
+  </p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <form method="post" action="/survivor/{{ league.id }}/manage/lock-week">
+      <button type="submit" class="btn btn-secondary"
+        onclick="return confirm('Lock Week {{ current_week }} lineups?')">
+        🔒 Lock Week {{ current_week }}
+      </button>
+    </form>
+    <form method="post" action="/survivor/{{ league.id }}/manage/advance-week">
+      <button type="submit" class="btn btn-primary"
+        onclick="return confirm('Advance to Week {{ current_week + 1 }}? This will lock all current lineups.')">
+        ▶ Advance to Week {{ current_week + 1 }}
+      </button>
+    </form>
+  </div>
+
+  <!-- SYNC -->
+  <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+    <p style="font-size:13px;font-weight:600;margin-bottom:8px;">Sync Scores from Main Game DB</p>
+    <form method="post" action="/survivor/{{ league.id }}/manage/sync/week" style="display:flex;gap:8px;align-items:flex-end;">
+      <div class="form-group" style="margin:0;">
+        <label>NFL Week</label>
+        <input type="number" name="week" value="{{ current_week }}" min="1" max="{{ total_weeks }}" style="width:80px;">
+      </div>
+      <button type="submit" class="btn btn-secondary">Sync Scores</button>
+    </form>
+    <form method="post" action="/survivor/{{ league.id }}/manage/sync/roster" style="margin-top:8px;">
+      <button type="submit" class="btn btn-secondary"
+        onclick="return confirm('Import players from the main game player pool?')">
+        ↻ Import Players from Main Game
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── SCORE ENTRY ─────────────────────────────────────────────────────── -->
+<div class="card" id="scores">
+  <h2>Score Entry</h2>
+  <form method="post" action="/survivor/{{ league.id }}/manage/scores/entry">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+      <div class="form-group">
+        <label>Player</label>
+        <select name="player_id" required>
+          <option value="">— Select —</option>
+          {% for pos in required_positions %}
+            <optgroup label="{{ pos }}">
+              {% for p in players if p.position == pos %}
+                <option value="{{ p.id }}">{{ p.name }} ({{ p.nfl_team }})</option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Week</label>
+        <input type="number" name="week" value="{{ current_week }}" min="1" max="{{ total_weeks }}">
+      </div>
+      <div class="form-group"><label>Receptions</label><input type="number" name="receptions" value="0" step="0.5"></div>
+      <div class="form-group"><label>Rec Yards</label><input type="number" name="receiving_yards" value="0" step="0.5"></div>
+      <div class="form-group"><label>Rush Yards</label><input type="number" name="rushing_yards" value="0" step="0.5"></div>
+      <div class="form-group"><label>Pass Yards</label><input type="number" name="passing_yards" value="0" step="0.5"></div>
+      <div class="form-group"><label>Return Yards</label><input type="number" name="return_yards" value="0" step="0.5"></div>
+      <div class="form-group"><label>Total TDs</label><input type="number" name="total_tds" value="0"></div>
+      <div class="form-group"><label>Fumbles Lost</label><input type="number" name="fumbles_lost" value="0"></div>
+      <div class="form-group"><label>INTs Thrown</label><input type="number" name="interceptions" value="0"></div>
+      <div class="form-group"><label>Override Pts</label><input type="number" name="override_points" value="" step="0.01" placeholder="Optional"></div>
+      <div class="form-group"><label>Override Note</label><input type="text" name="override_note" placeholder="Reason"></div>
+    </div>
+    <button type="submit" class="btn btn-primary" style="margin-top:8px;">Save Score</button>
+  </form>
+</div>
+
+<!-- ── PLAYERS ─────────────────────────────────────────────────────────── -->
+<div class="card" id="players">
+  <h2>Player Pool ({{ players | length }} players)</h2>
+  <form method="post" action="/survivor/{{ league.id }}/manage/player/add"
+        style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;">
+    <div class="form-group" style="margin:0;flex:2;min-width:160px;">
+      <label>Name</label>
+      <input type="text" name="name" placeholder="Patrick Mahomes" required>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label>Position</label>
+      <select name="position" required>
+        {% for pos in required_positions %}<option value="{{ pos }}">{{ pos }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label>NFL Team</label>
+      <input type="text" name="nfl_team" placeholder="KC" maxlength="4" style="width:70px;" required>
+    </div>
+    <button type="submit" class="btn btn-success">+ Add</button>
+  </form>
+
+  <table>
+    <thead><tr><th>Name</th><th>Pos</th><th>Team</th><th></th></tr></thead>
+    <tbody>
+      {% for p in players %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td><span class="pos pos-{{ p.position }}">{{ p.position }}</span></td>
+        <td style="color:var(--muted)">{{ p.nfl_team }}</td>
+        <td>
+          <form method="post" action="/survivor/{{ league.id }}/manage/player/delete" style="display:inline;">
+            <input type="hidden" name="player_id" value="{{ p.id }}">
+            <button type="submit" class="btn btn-danger btn-sm"
+              onclick="return confirm('Delete {{ p.name }}?')">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:var(--muted);text-align:center;padding:20px;">No players yet. Import from the main game or add manually.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ── TEAMS ───────────────────────────────────────────────────────────── -->
+<div class="card" id="teams">
+  <h2>Teams ({{ teams | length }})</h2>
+  <table>
+    <thead><tr><th>Team</th><th>Owner</th><th></th></tr></thead>
+    <tbody>
+      {% for t in teams %}
+      <tr>
+        <td><strong>{{ t.name }}</strong></td>
+        <td style="color:var(--muted)">{{ t.owner_name }}</td>
+        <td>
+          <form method="post" action="/survivor/{{ league.id }}/manage/team/delete"
+                style="display:inline;" onsubmit="return confirm('Delete team {{ t.name }}?')">
+            <input type="hidden" name="team_id" value="{{ t.id }}">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" style="color:var(--muted);text-align:center;padding:20px;">No teams yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ── SETTINGS ────────────────────────────────────────────────────────── -->
+<div class="card" id="settings">
+  <h2>League Settings</h2>
+  <form method="post" action="/survivor/{{ league.id }}/manage/settings" style="max-width:420px;">
+    <div class="form-group">
+      <label>League Name</label>
+      <input type="text" name="league_name" value="{{ league.name }}" required>
+    </div>
+    <div class="form-group">
+      <label>NFL Season Year</label>
+      <input type="number" name="season" value="{{ league.season }}" min="2020" max="2040">
+    </div>
+    <div class="form-group">
+      <label>Submission Deadline Day (0=Sun … 6=Sat)</label>
+      <input type="number" name="deadline_day" value="{{ league.submission_deadline_day }}" min="0" max="6">
+    </div>
+    <div class="form-group">
+      <label>Submission Deadline Hour (UTC, 0-23)</label>
+      <input type="number" name="deadline_hour" value="{{ league.submission_deadline_hour }}" min="0" max="23">
+    </div>
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+  </form>
+</div>
+
+<!-- ── MEMBERS ─────────────────────────────────────────────────────────── -->
+<div class="card">
+  <h2>Members ({{ members | length }})</h2>
+  <table>
+    <thead><tr><th>Username</th><th>Joined</th></tr></thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td>{{ m.username }}</td>
+        <td style="color:var(--muted);font-size:12px;">{{ m.joined_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -351,8 +351,8 @@
   <span class="nav-sep">/</span>
   <span class="nav-league">{{ league.name }}</span>
   <div class="nav-links" id="nav-links">
-    <a href="/league/{{ league.id }}"
-       {% if request.url.path == '/league/' ~ league.id %}class="active"{% endif %}>🏠 Home</a>
+    <a href="/dashboard"
+       {% if request.url.path == '/dashboard' %}class="active"{% endif %}>🏠 Home</a>
     <a href="/league/{{ league.id }}/draft"
        {% if request.url.path == '/league/' ~ league.id ~ '/draft' %}class="active"{% endif %}>📋 Draft</a>
     <a href="/league/{{ league.id }}/scores"

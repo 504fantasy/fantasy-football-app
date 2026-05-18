@@ -2189,7 +2189,7 @@ body {
 
 <!-- ════════════════════════════════════════════════════
      JAVASCRIPT
-════════════════════════════════════════════════════ */
+════════════════════════════════════════════════════ -->
 <script>
 // ── Page routing ──────────────────────────────────
 const PAGE_MAP = {
@@ -2269,7 +2269,7 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.step-card, .testi-card, .pricing-card, .hiw-s
+document.querySelectorAll('.step-card, .testi-card, .pricing-card').forEach(el => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; observer.observe(el); });
 
 // ── Init ──────────────────────────────────────────
 showPage('home');

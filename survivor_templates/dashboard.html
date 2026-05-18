@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}My Leagues — Survivor{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>My Leagues</h1>
+  <p>Welcome back, <strong>{{ user.username }}</strong></p>
+</div>
+
+{% if msg %}<div class="alert alert-success">{{ msg | replace('_', ' ') | title }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error | replace('_', ' ') | title }}</div>{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+  <!-- Create League -->
+  <div class="card">
+    <h2>Create a League</h2>
+    <form method="post" action="/survivor/league/create">
+      <div class="form-group"><label>League Name</label><input type="text" name="league_name" placeholder="My Survivor League" required></div>
+      <div class="form-group"><label>NFL Season</label><input type="number" name="season" value="2025" min="2020" max="2040"></div>
+      <button type="submit" class="btn btn-primary">Create</button>
+    </form>
+  </div>
+  <!-- Join League -->
+  <div class="card">
+    <h2>Join a League</h2>
+    <form method="post" action="/survivor/league/join">
+      <div class="form-group"><label>Invite Code</label><input type="text" name="invite_code" placeholder="ABCD1234" required maxlength="8" style="text-transform:uppercase"></div>
+      <button type="submit" class="btn btn-success">Join</button>
+    </form>
+  </div>
+</div>
+
+{% if leagues %}
+<div class="card">
+  <h2>Your Leagues</h2>
+  <table>
+    <thead><tr><th>League</th><th>Season</th><th>Week</th><th>Role</th><th></th></tr></thead>
+    <tbody>
+      {% for league in leagues %}
+      <tr>
+        <td><strong>{{ league.name }}</strong></td>
+        <td>{{ league.season }}</td>
+        <td>{{ league.current_week }} / 18</td>
+        <td>
+          {% if league.is_commissioner %}
+            <span class="badge badge-gold">Commissioner</span>
+          {% else %}
+            <span class="badge badge-muted">Member</span>
+          {% endif %}
+        </td>
+        <td><a href="/survivor/{{ league.id }}" class="btn btn-secondary btn-sm">Enter →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:40px;color:var(--muted);">
+  You're not in any leagues yet. Create one or enter an invite code above.
+</div>
+{% endif %}
+{% endblock %}

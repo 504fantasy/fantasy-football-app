@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week }} Lineup — {{ league.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Week {{ week }} Lineup</h1>
+  <p>{{ league.name }} &nbsp;·&nbsp; {{ my_team.name }}</p>
+</div>
+
+{% if msg == 'lineup_saved' %}
+  <div class="alert alert-success">✓ Lineup saved for Week {{ week }}.</div>
+{% endif %}
+{% if error %}
+  {% if 'already_used' in error %}
+    <div class="alert alert-error">⚠ One or more players have already been used by your team this season.</div>
+  {% elif error == 'duplicate_players' %}
+    <div class="alert alert-error">⚠ You cannot use the same player in two slots.</div>
+  {% elif error == 'wrong_week' %}
+    <div class="alert alert-error">⚠ You can only edit the current week's lineup.</div>
+  {% else %}
+    <div class="alert alert-error">⚠ Error: {{ error }}</div>
+  {% endif %}
+{% endif %}
+
+<!-- WEEK NAV -->
+<div class="week-nav">
+  {% if week > 1 %}
+    <a href="/survivor/{{ league.id }}/lineup?week={{ week - 1 }}" class="week-btn">← Wk {{ week - 1 }}</a>
+  {% else %}
+    <button class="week-btn" disabled>←</button>
+  {% endif %}
+  <span>Week {{ week }} of {{ total_weeks }}</span>
+  {% if week < current_week or (week < total_weeks and is_commissioner) %}
+    <a href="/survivor/{{ league.id }}/lineup?week={{ week + 1 }}" class="week-btn">Wk {{ week + 1 }} →</a>
+  {% else %}
+    <button class="week-btn" disabled>→</button>
+  {% endif %}
+</div>
+
+{% if locked %}
+<div class="alert alert-info">🔒 This week's lineup is locked and can no longer be edited.</div>
+{% endif %}
+
+<!-- USED PLAYERS SUMMARY -->
+{% set used_count = used_ids | length %}
+{% if used_count > 0 %}
+<div class="card" style="padding:12px 16px;">
+  <p style="color:var(--muted);font-size:13px;">
+    You have used <strong style="color:var(--text)">{{ used_count }}</strong> player(s) from the pool this season.
+    Used players are <span class="used-tag">marked in red</span> and cannot be selected again.
+  </p>
+</div>
+{% endif %}
+
+{% if editable %}
+<!-- LINEUP FORM -->
+<form method="post" action="/survivor/{{ league.id }}/lineup/submit" id="lineup-form">
+  <input type="hidden" name="week" value="{{ week }}">
+
+  <div class="lineup-grid">
+    {% for pos in required_positions %}
+    {% set avail = available_by_pos.get(pos, []) %}
+    {% set cur   = current_picks.get(pos) %}
+    <div class="lineup-slot">
+      <div class="slot-header">
+        <span class="pos pos-{{ pos }}">{{ pos }}</span>
+        <span style="font-size:13px;font-weight:600;">{{ pos }}
+          {% if pos == 'QB' %}Quarterback
+          {% elif pos == 'RB' %}Running Back
+          {% elif pos == 'WR' %}Wide Receiver
+          {% elif pos == 'TE' %}Tight End
+          {% elif pos == 'DST' %}Defense / ST
+          {% elif pos == 'K' %}Kicker
+          {% endif %}
+        </span>
+        {% if avail | length == 0 %}
+          <span class="badge badge-red">All Used!</span>
+        {% endif %}
+      </div>
+      <select name="{{ pos | lower }}" required {% if avail | length == 0 %}disabled{% endif %}>
+        <option value="">— Select {{ pos }} —</option>
+        {% for p in avail | sort(attribute='name') %}
+          <option value="{{ p.id }}"
+            {% if cur and cur.player_id == p.id %}selected{% endif %}>
+            {{ p.name }} ({{ p.nfl_team }})
+          </option>
+        {% endfor %}
+      </select>
+      {% if avail | length == 0 %}
+        <p style="color:var(--red);font-size:11px;margin-top:6px;">
+          No {{ pos }}s available — all have been used this season.
+        </p>
+        <input type="hidden" name="{{ pos | lower }}" value="0">
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="margin-top:20px;display:flex;gap:10px;align-items:center;">
+    <button type="submit" class="btn btn-success">✓ Save Lineup</button>
+    <a href="/survivor/{{ league.id }}" class="btn btn-secondary">Cancel</a>
+    {% if lineup_complete %}
+      <span class="badge badge-green">Lineup complete</span>
+    {% else %}
+      <span class="badge badge-muted">Incomplete — fill all 6 positions</span>
+    {% endif %}
+  </div>
+</form>
+
+{% else %}
+<!-- READ-ONLY LINEUP VIEW -->
+{% if current_lineup %}
+<div class="lineup-grid">
+  {% for row in current_lineup %}
+  <div class="lineup-slot">
+    <div class="slot-header">
+      <span class="pos pos-{{ row.position }}">{{ row.position }}</span>
+    </div>
+    <div class="player-locked">{{ row.player_name }}</div>
+    <div class="player-team">{{ row.nfl_team }}</div>
+    {% if locked %}
+      <div style="margin-top:4px;"><span class="badge badge-green">Locked</span></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <p style="color:var(--muted);text-align:center;padding:20px;">No lineup submitted for this week.</p>
+</div>
+{% endif %}
+
+{% if is_commissioner and not locked %}
+<div class="alert alert-info" style="margin-top:16px;">
+  As commissioner, you can edit this lineup from the
+  <a href="/survivor/{{ league.id }}/manage">manage panel</a>.
+</div>
+{% endif %}
+{% endif %}
+
+<!-- PREVIOUSLY USED PLAYERS (collapsible) -->
+{% if used_ids %}
+<details style="margin-top:24px;">
+  <summary style="cursor:pointer;color:var(--muted);font-size:13px;padding:8px 0;">
+    ▸ View your used players this season ({{ used_count }})
+  </summary>
+  <div class="card" style="margin-top:8px;">
+    {% set all_players = available_by_pos.values() | sum(start=[]) %}
+    <table>
+      <thead><tr><th>Player</th><th>Position</th><th>Team</th></tr></thead>
+      <tbody>
+        {# We need to pull used player info — passed from the route #}
+        <tr><td colspan="3" style="color:var(--muted);">
+          Check the <a href="/api/survivor/{{ league.id }}/used-players">API</a> for the full list.
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+{% endblock %}
