@@ -3483,7 +3483,17 @@ def admin_dashboard(request: Request, user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Superadmin only")
     conn = get_db()
     total_users     = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    total_leagues   = conn.execute("SELECT COUNT(*) FROM leagues").fetchone()[0]
+    playoff_leagues = conn.execute("SELECT COUNT(*) FROM leagues").fetchone()[0]
+    total_leagues   = playoff_leagues
+    survivor_leagues_count = 0
+    try:
+        from survivor_db import get_connection as _surv_conn
+        sconn = _surv_conn()
+        survivor_leagues_count = sconn.execute("SELECT COUNT(*) FROM survivor_leagues").fetchone()[0]
+        sconn.close()
+        total_leagues = playoff_leagues + survivor_leagues_count
+    except Exception:
+        pass
     total_teams     = conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0]
     total_players   = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
     total_picks     = conn.execute("SELECT COUNT(*) FROM team_roster WHERE is_pony=0").fetchone()[0]
@@ -3527,9 +3537,39 @@ def admin_dashboard(request: Request, user=Depends(get_current_user)):
         ORDER BY al.id DESC LIMIT 20
     """).fetchall()
     conn.close()
+
+    # Survivor leagues for admin
+    survivor_leagues_list = []
+    try:
+        from survivor_db import get_connection as _surv_conn
+        import sqlite3 as _sq
+        sconn = _surv_conn()
+        mconn = _sq.connect(os.environ.get("DB_PATH", "data/fantasy.db"))
+        mconn.row_factory = _sq.Row
+        srows = sconn.execute("""
+            SELECT l.id, l.name, l.created_at, l.invite_code,
+                   l.commissioner_id, l.season, l.current_week,
+                   COUNT(DISTINCT lm.user_id) AS member_count,
+                   COUNT(DISTINCT t.id)       AS team_count,
+                   COUNT(DISTINCT p.id)       AS player_count
+            FROM survivor_leagues l
+            LEFT JOIN survivor_league_members lm ON lm.league_id = l.id
+            LEFT JOIN survivor_teams t           ON t.league_id  = l.id
+            LEFT JOIN survivor_players p         ON p.league_id  = l.id
+            GROUP BY l.id ORDER BY l.created_at DESC
+        """).fetchall()
+        for row in srows:
+            row = dict(row)
+            u = mconn.execute("SELECT username FROM users WHERE id=?", (row["commissioner_id"],)).fetchone()
+            row["commissioner"] = u["username"] if u else "?"
+            survivor_leagues_list.append(row)
+        sconn.close()
+        mconn.close()
+    except Exception as e:
+        print(f"[admin] survivor leagues error: {e}")
     return templates.TemplateResponse("admin.html", {
         "request": request, "user": user,
-        "total_users": total_users, "total_leagues": total_leagues,
+        "total_users": total_users, "total_leagues": total_leagues, "playoff_leagues": playoff_leagues, "survivor_leagues_count": survivor_leagues_count, "survivor_leagues_list": survivor_leagues_list,
         "total_teams": total_teams, "total_players": total_players,
         "total_picks": total_picks, "total_ponies": total_ponies,
         "total_scores": total_scores, "total_audits": total_audits,

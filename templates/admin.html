@@ -247,6 +247,16 @@ tr:hover td { background: rgba(255,255,255,.02) }
       <div class="stat-val">{{ total_leagues }}</div>
     </div>
     <div class="stat-card">
+      <div class="stat-icon">🏈</div>
+      <div class="stat-label">Playoff Leagues</div>
+      <div class="stat-val blue">{{ playoff_leagues }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🎯</div>
+      <div class="stat-label">Survivor Leagues</div>
+      <div class="stat-val blue">{{ survivor_leagues_count }}</div>
+    </div>
+    <div class="stat-card">
       <div class="stat-icon">🛡️</div>
       <div class="stat-label">Total Teams</div>
       <div class="stat-val blue">{{ total_teams }}</div>
@@ -294,7 +304,7 @@ tr:hover td { background: rgba(255,255,255,.02) }
     <!-- Recent Signups -->
     <div class="section">
       <div class="section-head">
-        <div class="section-title">Recent Signups</div>
+        <div class="section-title" style="cursor:pointer" onclick="toggleSection('recent-signups')">Recent Signups <span id="recent-signups-arrow">▼</span></div>
         <span class="section-count">Last 10</span>
       </div>
       <div class="tbl-wrap">
@@ -328,7 +338,7 @@ tr:hover td { background: rgba(255,255,255,.02) }
     <!-- Recent Audit -->
     <div class="section">
       <div class="section-head">
-        <div class="section-title">Recent Activity</div>
+        <div class="section-title" style="cursor:pointer" onclick="toggleSection('recent-activity')">Recent Activity <span id="recent-activity-arrow">▼</span></div>
         <span class="section-count">Last 20</span>
       </div>
       <div class="tbl-wrap">
@@ -362,10 +372,10 @@ tr:hover td { background: rgba(255,255,255,.02) }
   <!-- All Users -->
   <div class="section">
     <div class="section-head">
-      <div class="section-title">All Users</div>
+      <div class="section-title" style="cursor:pointer" onclick="toggleSection('all-users')">All Users <span id="all-users-arrow">▼</span></div>
       <span class="section-count">{{ users|length }} total</span>
     </div>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" id="all-users-body">
       <table>
         <thead>
           <tr>
@@ -408,13 +418,13 @@ tr:hover td { background: rgba(255,255,255,.02) }
     </div>
   </div>
 
-  <!-- All Leagues -->
+  <!-- Playoff Challenge Leagues -->
   <div class="section">
     <div class="section-head">
-      <div class="section-title">All Leagues</div>
+      <div class="section-title" style="cursor:pointer" onclick="toggleSection('playoff')">Playoff Challenge Leagues <span id="playoff-arrow">▼</span></div>
       <span class="section-count">{{ leagues|length }} total</span>
     </div>
-    <div class="tbl-wrap">
+    <div class="tbl-wrap" id="playoff-body">
       <table>
         <thead>
           <tr>
@@ -454,6 +464,46 @@ tr:hover td { background: rgba(255,255,255,.02) }
             <td>
               <button class="btn btn-red btn-sm"
                 onclick="confirmDelete('league', {{ l.id }}, '{{ l.name }}')">
+                Delete
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Survivor Leagues -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title" style="cursor:pointer" onclick="toggleSection('survivor')">🎯 Survivor Leagues <span id="survivor-arrow">▼</span></div>
+      <span class="section-count">{{ survivor_leagues_list|length }} total</span>
+    </div>
+    <div class="tbl-wrap" id="survivor-body">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>League Name</th><th>Commissioner</th>
+            <th>Season</th><th>Week</th><th>Members</th>
+            <th>Teams</th><th>Players</th><th>Created</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in survivor_leagues_list %}
+          <tr>
+            <td class="mono" style="color:var(--muted)">{{ l.id }}</td>
+            <td><a href="/survivor/{{ l.id }}" style="color:var(--gold);text-decoration:none;font-weight:600" target="_blank">{{ l.name }}</a></td>
+            <td>{{ l.commissioner }}</td>
+            <td>{{ l.season }}</td>
+            <td>{{ l.current_week }}/18</td>
+            <td>{{ l.member_count }}</td>
+            <td>{{ l.team_count }}</td>
+            <td>{{ l.player_count }}</td>
+            <td style="color:var(--muted2);font-size:.75rem">{{ l.created_at[:10] if l.created_at else "—" }}</td>
+            <td>
+              <button class="btn btn-red btn-sm"
+                onclick="confirmDelete('survivor_league', {{ l.id }}, '{{ l.name }}')">
                 Delete
               </button>
             </td>
@@ -523,6 +573,14 @@ document.getElementById('confirm-modal').addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeModal();
 });
+
+function toggleSection(name) {
+  const body  = document.getElementById(name + '-body');
+  const arrow = document.getElementById(name + '-arrow');
+  const hidden = body.style.display === 'none';
+  body.style.display  = hidden ? '' : 'none';
+  arrow.textContent   = hidden ? '▼' : '▶';
+}
 </script>
 
 </body>
