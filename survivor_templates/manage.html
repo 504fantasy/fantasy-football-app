@@ -43,7 +43,7 @@
 
   <!-- SYNC -->
   <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
-    <p style="font-size:13px;font-weight:600;margin-bottom:8px;">Sync Scores from Main Game DB</p>
+    <p style="font-size:13px;font-weight:600;margin-bottom:8px;">Sync Scores from NFL</p>
     <form method="post" action="/survivor/{{ league.id }}/manage/sync/week" style="display:flex;gap:8px;align-items:flex-end;">
       <div class="form-group" style="margin:0;">
         <label>NFL Week</label>
@@ -54,7 +54,7 @@
     <form method="post" action="/survivor/{{ league.id }}/manage/sync/roster" style="margin-top:8px;">
       <button type="submit" class="btn btn-secondary"
         onclick="return confirm('Import players from the main game player pool?')">
-        ↻ Import Players from Main Game
+        ↻ Import Players from NFL
       </button>
     </form>
   </div>
