@@ -1048,15 +1048,18 @@ def manage_page(league_id: int, request: Request):
         raise HTTPException(status_code=403, detail="Commissioner only")
 
     conn = get_db()
-    members = conn.execute(
-        """
-        SELECT u.id, u.username, lm.joined_at
-        FROM survivor_league_members lm
-        JOIN users u ON lm.user_id = u.id
-        WHERE lm.league_id=?
-    """,
-        (league_id,),
+    # members query needs main DB for users table
+    _mconn = _get_main_db()
+    member_ids = conn.execute(
+        "SELECT user_id, joined_at FROM survivor_league_members WHERE league_id=?",
+        (league_id,)
     ).fetchall()
+    members = []
+    for m in member_ids:
+        u = _mconn.execute("SELECT id, username FROM users WHERE id=?", (m["user_id"],)).fetchone()
+        if u:
+            members.append({"id": u["id"], "username": u["username"], "joined_at": m["joined_at"]})
+    _mconn.close()
     current_wk = league["current_week"]
     week_scores = {
         r["player_id"]: dict(r)

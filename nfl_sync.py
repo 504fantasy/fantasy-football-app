@@ -396,6 +396,34 @@ def seed_players(league_id: int, season: int = CURRENT_SEASON,
     conn.close()
 
     logger.info(f"[league {league_id}] Roster seed: added={added} skipped={skipped} errors={errors}")
+    # Add all 32 NFL team DSTs
+    dst_teams = [
+        ("Arizona Cardinals DST","ARI"),("Atlanta Falcons DST","ATL"),
+        ("Baltimore Ravens DST","BAL"),("Buffalo Bills DST","BUF"),
+        ("Carolina Panthers DST","CAR"),("Chicago Bears DST","CHI"),
+        ("Cincinnati Bengals DST","CIN"),("Cleveland Browns DST","CLE"),
+        ("Dallas Cowboys DST","DAL"),("Denver Broncos DST","DEN"),
+        ("Detroit Lions DST","DET"),("Green Bay Packers DST","GB"),
+        ("Houston Texans DST","HOU"),("Indianapolis Colts DST","IND"),
+        ("Jacksonville Jaguars DST","JAX"),("Kansas City Chiefs DST","KC"),
+        ("Las Vegas Raiders DST","LV"),("Los Angeles Chargers DST","LAC"),
+        ("Los Angeles Rams DST","LAR"),("Miami Dolphins DST","MIA"),
+        ("Minnesota Vikings DST","MIN"),("New England Patriots DST","NE"),
+        ("New Orleans Saints DST","NO"),("New York Giants DST","NYG"),
+        ("New York Jets DST","NYJ"),("Philadelphia Eagles DST","PHI"),
+        ("Pittsburgh Steelers DST","PIT"),("San Francisco 49ers DST","SF"),
+        ("Seattle Seahawks DST","SEA"),("Tampa Bay Buccaneers DST","TB"),
+        ("Tennessee Titans DST","TEN"),("Washington Commanders DST","WAS"),
+    ]
+    for name, team in dst_teams:
+        try:
+            conn.execute(
+                "INSERT INTO players (league_id, name, position, nfl_team) VALUES (?,?,?,?)",
+                (league_id, name, "DST", team)
+            )
+            added += 1
+        except Exception:
+            skipped += 1
     return {"added": added, "skipped": skipped, "errors": errors}
 
 
