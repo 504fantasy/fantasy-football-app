@@ -30,6 +30,9 @@
   width: 2.5rem;
   text-align: center;
   flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
 }
 .lc-name {
   font-family: 'Barlow Condensed', sans-serif;
@@ -111,7 +114,7 @@
       {% if leagues %}
       <div class="league-grid">
         {% for lg in leagues %}
-        <a href="/league/{{ lg.id }}/draft" class="league-card {% if lg.is_commissioner %}is-comm{% endif %}">
+        <div class="league-card {% if lg.is_commissioner %}is-comm{% endif %}">
           <div class="lc-icon">🏈</div>
           <div>
             <div class="lc-name">{{ lg.name }}</div>
@@ -124,7 +127,7 @@
               &nbsp;Joined {{ lg.joined_at[:10] }}
             </div>
             {% if lg.is_commissioner %}
-            <div class="invite-box" onclick="event.preventDefault()">
+            <div class="invite-box">
               <span class="invite-code">{{ lg.invite_code }}</span>
               <button class="btn btn-ghost copy-btn"
                       onclick="copyCode('{{ lg.invite_code }}', this)">Copy</button>
@@ -132,13 +135,13 @@
             {% endif %}
           </div>
           <div class="lc-actions">
-            <a href="/league/{{ lg.id }}/draft"  class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Draft</a>
-            <a href="/league/{{ lg.id }}/scores" class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Scores</a>
+            <a href="/league/{{ lg.id }}/draft"  class="btn btn-ghost btn-sm">Draft</a>
+            <a href="/league/{{ lg.id }}/scores" class="btn btn-ghost btn-sm">Scores</a>
             {% if lg.is_commissioner %}
-            <a href="/league/{{ lg.id }}/manage" class="btn btn-gold btn-sm"  onclick="event.stopPropagation()">Manage</a>
+            <a href="/league/{{ lg.id }}/manage" class="btn btn-gold btn-sm">Manage</a>
             {% endif %}
           </div>
-        </a>
+        </div>
         {% endfor %}
       </div>
       {% else %}
@@ -155,7 +158,7 @@
       {% if survivor_leagues %}
       <div class="league-grid">
         {% for lg in survivor_leagues %}
-        <a href="/survivor/{{ lg.id }}" class="league-card {% if lg.is_commissioner %}is-comm{% endif %}"
+        <div class="league-card {% if lg.is_commissioner %}is-comm{% endif %}"
            style="border-left-color:var(--ember)">
           <div class="lc-icon">🎯</div>
           <div>
@@ -169,7 +172,7 @@
               &nbsp;Season {{ lg.season }} · Week {{ lg.current_week }}/18
             </div>
             {% if lg.is_commissioner %}
-            <div class="invite-box" onclick="event.preventDefault()">
+            <div class="invite-box">
               <span class="invite-code">{{ lg.invite_code }}</span>
               <button class="btn btn-ghost copy-btn"
                       onclick="copyCode('{{ lg.invite_code }}', this)">Copy</button>
@@ -177,14 +180,14 @@
             {% endif %}
           </div>
           <div class="lc-actions">
-            <a href="/survivor/{{ lg.id }}/lineup"  class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Lineup</a>
-            <a href="/survivor/{{ lg.id }}/scores"  class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Scores</a>
+            <a href="/survivor/{{ lg.id }}"        class="btn btn-ghost btn-sm">Home</a>
+            <a href="/survivor/{{ lg.id }}/lineup"  class="btn btn-ghost btn-sm">Lineup</a>
+            <a href="/survivor/{{ lg.id }}/scores"  class="btn btn-ghost btn-sm">Scores</a>
             {% if lg.is_commissioner %}
-            <a href="/survivor/{{ lg.id }}/manage"  class="btn btn-sm"
-               style="background:var(--ember);color:#fff" onclick="event.stopPropagation()">Manage</a>
+            <a href="/survivor/{{ lg.id }}/manage"  class="btn btn-gold btn-sm">Manage</a>
             {% endif %}
           </div>
-        </a>
+        </div>
         {% endfor %}
       </div>
       {% else %}
