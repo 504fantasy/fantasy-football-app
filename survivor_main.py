@@ -138,6 +138,32 @@ except Exception as _e:
 # ──────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI()
+
+# ── Background schedule auto-sync (once per day) ──────────────────────────
+import threading as _threading
+
+def _auto_sync_schedules():
+    """Refresh game schedules for all active leagues once per day."""
+    import time as _time
+    while True:
+        try:
+            conn = get_db()
+            leagues = conn.execute(
+                "SELECT id, season FROM survivor_leagues WHERE is_active=1"
+            ).fetchall()
+            conn.close()
+            for league in leagues:
+                try:
+                    seed_game_schedule(league["id"], league["season"])
+                    print(f"[survivor] Auto-synced schedule for league {league['id']}")
+                except Exception as e:
+                    print(f"[survivor] Auto-sync error league {league['id']}: {e}")
+        except Exception as e:
+            print(f"[survivor] Auto-sync thread error: {e}")
+        _time.sleep(86400)  # 24 hours
+
+_sync_thread = _threading.Thread(target=_auto_sync_schedules, daemon=True)
+_sync_thread.start()
 templates = Jinja2Templates(directory="survivor_templates")
 
 # ──────────────────────────────────────────────────────────────────────────────

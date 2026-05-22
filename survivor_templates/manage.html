@@ -48,8 +48,13 @@
     </form>
     <form method="post" action="/survivor/{{ league.id }}/manage/sync/roster" style="margin-top:8px;">
       <button type="submit" class="btn btn-secondary"
-        onclick="return confirm('Import players from the main game player pool?')">
+        onclick="return confirm('Import players from NFL?')">
         ↻ Import Players from NFL
+      </button>
+    </form>
+    <form method="post" action="/survivor/{{ league.id }}/manage/sync/schedule" style="margin-top:8px;">
+      <button type="submit" class="btn btn-secondary">
+        📅 Sync Game Schedule
       </button>
     </form>
   </div>
