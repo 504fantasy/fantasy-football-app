@@ -503,7 +503,7 @@ tr:hover td { background: rgba(255,255,255,.02) }
             <td style="color:var(--muted2);font-size:.75rem">{{ l.created_at[:10] if l.created_at else "—" }}</td>
             <td>
               <button class="btn btn-red btn-sm"
-                onclick="confirmDelete('survivor_league', {{ l.id }}, '{{ l.name }}')">
+                onclick="confirmSurvivorDelete({{ l.id }}, '{{ l.name }}')">
                 Delete
               </button>
             </td>
@@ -573,6 +573,20 @@ document.getElementById('confirm-modal').addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeModal();
 });
+
+function confirmSurvivorDelete(id, name) {
+  const modal  = document.getElementById('confirm-modal');
+  const form   = document.getElementById('delete-form');
+  const body   = document.getElementById('modal-body');
+  const title  = document.getElementById('modal-title');
+  document.getElementById('form-user-id').value   = '';
+  document.getElementById('form-league-id').value = id;
+  title.textContent = 'Delete Survivor League';
+  body.innerHTML = `Are you sure you want to delete the survivor league <strong style="color:var(--text)">${name}</strong>?
+    <br><br><strong>This will permanently delete all teams, players, rosters and scores</strong> in this league. This cannot be undone.`;
+  form.action = '/admin/survivor/league/delete';
+  modal.classList.add('open');
+}
 
 function toggleSection(name) {
   const body  = document.getElementById(name + '-body');

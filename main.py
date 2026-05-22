@@ -3703,3 +3703,27 @@ def rename_team(
     write_audit(actor=user["username"], action="TEAM_RENAME", league_id=league_id,
                 team=name, details=f"Renamed from '{team['name']}' to '{name}'")
     return RedirectResponse(f"/league/{league_id}/team/{team_id}?msg=team_renamed", status_code=303)
+
+
+@app.post("/admin/survivor/league/delete")
+def admin_delete_survivor_league(league_id: int = Form(...), user=Depends(get_current_user)):
+    if not user or not user["is_superadmin"]:
+        raise HTTPException(status_code=403)
+    try:
+        from survivor_db import get_connection as _surv_conn
+        sconn = _surv_conn()
+        league = sconn.execute(
+            "SELECT * FROM survivor_leagues WHERE id=?", (league_id,)
+        ).fetchone()
+        if not league:
+            sconn.close()
+            return RedirectResponse("/admin?error=league_not_found", status_code=303)
+        league_name = league["name"]
+        sconn.execute("DELETE FROM survivor_leagues WHERE id=?", (league_id,))
+        sconn.commit()
+        sconn.close()
+    except Exception as e:
+        return RedirectResponse(f"/admin?error=delete_failed", status_code=303)
+    write_audit(actor=user["username"], action="ADMIN_SURVIVOR_LEAGUE_DELETE",
+                details=f"Deleted survivor league '{league_name}' (id={league_id})")
+    return RedirectResponse("/admin?msg=league_deleted", status_code=303)
