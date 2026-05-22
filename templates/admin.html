@@ -381,6 +381,7 @@ tr:hover td { background: rgba(255,255,255,.02) }
           <tr>
             <th>ID</th>
             <th>Username</th>
+            <th>Email</th>
             <th>Role</th>
             <th>Leagues</th>
             <th>Teams</th>
@@ -392,6 +393,7 @@ tr:hover td { background: rgba(255,255,255,.02) }
           <tr>
             <td class="mono" style="color:var(--muted)">{{ u.id }}</td>
             <td><strong>{{ u.username }}</strong></td>
+            <td style="color:var(--muted2);font-size:.8rem">{{ u.email or '—' }}</td>
             <td>
               {% if u.is_superadmin %}
                 <span class="badge badge-gold">Admin</span>

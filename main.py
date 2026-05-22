@@ -3503,7 +3503,7 @@ def admin_dashboard(request: Request, user=Depends(get_current_user)):
     drafts_complete = conn.execute("SELECT COUNT(*) FROM draft_state WHERE is_complete=1").fetchone()[0]
     drafts_active   = conn.execute("SELECT COUNT(*) FROM draft_state WHERE is_complete=0").fetchone()[0]
     users = conn.execute("""
-        SELECT u.id, u.username, u.is_superadmin,
+        SELECT u.id, u.username, u.email, u.is_superadmin,
                COUNT(DISTINCT lm.league_id) AS league_count,
                COUNT(DISTINCT t.id)         AS team_count
         FROM users u
