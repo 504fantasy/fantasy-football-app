@@ -425,14 +425,42 @@ def get_used_player_ids_for_team(team_id: int, exclude_week: int = None) -> set:
 def get_available_players_for_team(league_id: int, team_id: int, week: int) -> dict:
     """
     Returns {position: [player, ...]} for players NOT yet used by this
-    team in any prior locked week.
+    team in any prior locked week. Each player dict includes:
+      - kicked_off: True if their game has started (player locked)
+      - bye_week: True if team has no game this week
     """
+    from datetime import datetime, timezone
     used = get_used_player_ids_for_team(team_id, exclude_week=week)
     all_players = get_league_players(league_id)
+
+    # Cache kickoff times for this week to avoid repeated DB queries
+    conn = get_db()
+    sched_rows = conn.execute(
+        "SELECT team, kickoff_utc FROM survivor_game_schedule WHERE league_id=? AND week=?",
+        (league_id, week)
+    ).fetchall()
+    conn.close()
+    kickoff_map = {r["team"].upper(): r["kickoff_utc"] for r in sched_rows}
+    now_utc = datetime.now(timezone.utc)
+
     by_pos: dict = {}
     for p in all_players:
-        if p["id"] not in used:
-            by_pos.setdefault(p["position"], []).append(p)
+        if p["id"] in used:
+            continue
+        team = (p["nfl_team"] or "").upper()
+        kickoff_str = kickoff_map.get(team)
+        kicked_off = False
+        bye_week   = kickoff_str is None
+        if kickoff_str:
+            try:
+                kt = datetime.fromisoformat(kickoff_str).replace(tzinfo=timezone.utc)
+                kicked_off = now_utc >= kt
+            except Exception:
+                pass
+        player = dict(p)
+        player["kicked_off"] = kicked_off
+        player["bye_week"]   = bye_week
+        by_pos.setdefault(p["position"], []).append(player)
     return by_pos
 
 
@@ -544,6 +572,78 @@ def get_team_season_score(team_id: int, through_week: int) -> float:
 # Seed players (adapts nfl_sync.seed_players to survivor_players table)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
+
+def seed_game_schedule(league_id: int, season: int) -> dict:
+    """Pull NFL schedule/kickoff times and store per team per week."""
+    import nfl_data_py as nfl
+    from datetime import datetime, timezone
+    added = skipped = 0
+    try:
+        sched = nfl.import_schedules([season])
+        conn = get_db()
+        for _, row in sched.iterrows():
+            week     = int(row.get("week", 0))
+            gameday  = str(row.get("gameday", "") or "")
+            gametime = str(row.get("gametime", "") or "")
+            if not gameday or not gametime or not week:
+                continue
+            # Parse kickoff as UTC (gametime is Eastern — add 5h for UTC)
+            try:
+                naive = datetime.strptime(f"{gameday} {gametime}", "%Y-%m-%d %H:%M")
+                # Convert ET to UTC (approximate — doesn't handle DST perfectly)
+                from datetime import timedelta
+                utc_dt = naive + timedelta(hours=5)
+                kickoff_utc = utc_dt.isoformat()
+            except Exception:
+                continue
+            for team_col in ["away_team", "home_team"]:
+                team = str(row.get(team_col, "") or "").upper().strip()
+                if not team:
+                    continue
+                try:
+                    conn.execute(
+                        "INSERT INTO survivor_game_schedule (league_id, season, week, team, kickoff_utc) "
+                        "VALUES (?,?,?,?,?) ON CONFLICT(league_id, week, team) DO UPDATE SET kickoff_utc=excluded.kickoff_utc",
+                        (league_id, season, week, team, kickoff_utc)
+                    )
+                    added += 1
+                except Exception:
+                    skipped += 1
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[survivor] seed_game_schedule error: {e}")
+    return {"added": added, "skipped": skipped}
+
+
+def get_team_kickoff_utc(league_id: int, week: int, team: str) -> str | None:
+    """Return kickoff UTC ISO string for a team in a given week, or None if bye/not found."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT kickoff_utc FROM survivor_game_schedule WHERE league_id=? AND week=? AND team=?",
+        (league_id, week, team.upper())
+    ).fetchone()
+    conn.close()
+    return row["kickoff_utc"] if row else None
+
+
+def team_has_kicked_off(league_id: int, week: int, team: str) -> bool:
+    """Return True if the team's game has already started."""
+    from datetime import datetime, timezone
+    kickoff = get_team_kickoff_utc(league_id, week, team)
+    if not kickoff:
+        return False
+    try:
+        kt = datetime.fromisoformat(kickoff).replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) >= kt
+    except Exception:
+        return False
+
+
+def team_has_bye(league_id: int, week: int, team: str) -> bool:
+    """Return True if team has no game this week (bye)."""
+    return get_team_kickoff_utc(league_id, week, team) is None
 
 def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
     """
@@ -695,12 +795,17 @@ def league_create(
         league_id=lid,
         details=f"name={league_name.strip()} season={season}",
     )
-    # Auto-seed players from NFL data on league creation
+    # Auto-seed players and schedule from NFL data on league creation
     try:
         result = seed_survivor_players(lid, overwrite=False)
         print(f"[survivor] Auto-seeded league {lid}: {result}")
     except Exception as e:
         print(f"[survivor] Auto-seed failed for league {lid}: {e}")
+    try:
+        sched_result = seed_game_schedule(lid, season)
+        print(f"[survivor] Schedule seeded league {lid}: {sched_result}")
+    except Exception as e:
+        print(f"[survivor] Schedule seed failed for league {lid}: {e}")
     return RedirectResponse(f"/survivor/{lid}?msg=league_created", status_code=303)
 
 
@@ -906,11 +1011,29 @@ def lineup_submit(
 
     picks = {"QB": qb, "RB": rb, "WR": wr, "TE": te, "DST": dst, "K": k}
     base = f"/survivor/{league_id}/lineup?week={week}"
+    from datetime import datetime, timezone as _tz
+    now_utc = datetime.now(_tz.utc)
 
-    # Validate: all players must be real, belong to this league, correct position
+    # Load kickoff times for this week
+    _sconn = get_db()
+    sched_rows = _sconn.execute(
+        "SELECT team, kickoff_utc FROM survivor_game_schedule WHERE league_id=? AND week=?",
+        (league_id, week)
+    ).fetchall()
+    _sconn.close()
+    kickoff_map = {r["team"].upper(): r["kickoff_utc"] for r in sched_rows}
+
+    def _has_kicked_off(nfl_team: str) -> bool:
+        k = kickoff_map.get(nfl_team.upper())
+        if not k:
+            return False
+        try:
+            return now_utc >= datetime.fromisoformat(k).replace(tzinfo=_tz.utc)
+        except Exception:
+            return False
+
     conn = get_db()
     used = get_used_player_ids_for_team(my_team["id"], exclude_week=week)
-
     for pos, pid in picks.items():
         row = conn.execute(
             "SELECT * FROM survivor_players WHERE id=? AND league_id=?",
@@ -918,44 +1041,38 @@ def lineup_submit(
         ).fetchone()
         if not row:
             conn.close()
-            return RedirectResponse(
-                f"{base}&error=invalid_player_{pos}", status_code=303
-            )
+            return RedirectResponse(f"{base}&error=invalid_player_{pos}", status_code=303)
         if row["position"].upper() != pos:
             conn.close()
-            return RedirectResponse(
-                f"{base}&error=wrong_position_{pos}", status_code=303
-            )
+            return RedirectResponse(f"{base}&error=wrong_position_{pos}", status_code=303)
         if pid in used:
             conn.close()
-            return RedirectResponse(
-                f"{base}&error=player_already_used_{pos}", status_code=303
-            )
-
-    # Validate: no duplicate players within the lineup
+            return RedirectResponse(f"{base}&error=player_already_used_{pos}", status_code=303)
+        if _has_kicked_off(row["nfl_team"] or ""):
+            conn.close()
+            return RedirectResponse(f"{base}&error=game_started_{pos}", status_code=303)
     if len(set(picks.values())) != len(picks):
         conn.close()
         return RedirectResponse(f"{base}&error=duplicate_players", status_code=303)
-
-    # Upsert each position slot
     ts = datetime.now(timezone.utc).isoformat()
     for pos, pid in picks.items():
+        prow = conn.execute("SELECT nfl_team FROM survivor_players WHERE id=?", (pid,)).fetchone()
+        auto_locked = 1 if (prow and _has_kicked_off(prow["nfl_team"] or "")) else 0
         conn.execute(
-            adapt_sql(
-                """
+            adapt_sql("""
             INSERT INTO survivor_lineups
                 (league_id, team_id, week, position, player_id, locked, submitted_at)
-            VALUES (?,?,?,?,?,0,?)
+            VALUES (?,?,?,?,?,?,?)
             ON CONFLICT(team_id, week, position)
             DO UPDATE SET player_id=excluded.player_id,
                           submitted_at=excluded.submitted_at,
-                          locked=0
-        """
-            ),
-            (league_id, my_team["id"], week, pos, pid, ts),
+                          locked=excluded.locked
+            """),
+            (league_id, my_team["id"], week, pos, pid, auto_locked, ts),
         )
-
     conn.commit()
+    conn.close()
+
     conn.close()
 
     write_audit(

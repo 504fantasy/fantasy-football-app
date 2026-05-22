@@ -27,12 +27,7 @@
     Locking a week prevents teams from editing lineups. Advancing moves to the next week.
   </p>
   <div style="display:flex;gap:10px;flex-wrap:wrap;">
-    <form method="post" action="/survivor/{{ league.id }}/manage/lock-week">
-      <button type="submit" class="btn btn-secondary"
-        onclick="return confirm('Lock Week {{ current_week }} lineups?')">
-        🔒 Lock Week {{ current_week }}
-      </button>
-    </form>
+    
     <form method="post" action="/survivor/{{ league.id }}/manage/advance-week">
       <button type="submit" class="btn btn-primary"
         onclick="return confirm('Advance to Week {{ current_week + 1 }}? This will lock all current lineups.')">

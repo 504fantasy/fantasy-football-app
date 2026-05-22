@@ -283,6 +283,19 @@ def init_db(conn=None):
         FOREIGN KEY (league_id) REFERENCES survivor_leagues(id) ON DELETE SET NULL
     )""")
 
+    # ── GAME SCHEDULE ─────────────────────────────────────────────────────────
+    conn.execute(f"""
+    CREATE TABLE IF NOT EXISTS survivor_game_schedule (
+        id         {pk},
+        league_id  INTEGER NOT NULL,
+        season     INTEGER NOT NULL,
+        week       INTEGER NOT NULL,
+        team       TEXT NOT NULL,
+        kickoff_utc TEXT NOT NULL,
+        FOREIGN KEY (league_id) REFERENCES survivor_leagues(id) ON DELETE CASCADE,
+        UNIQUE(league_id, week, team)
+    )""")
+
     # ── INDEXES ───────────────────────────────────────────────────────────────
     _idx = [
         ("sidx_lineups_team_week",    "survivor_lineups(team_id, week)"),

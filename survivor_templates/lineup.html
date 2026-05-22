@@ -79,10 +79,20 @@
       <select name="{{ pos | lower }}" required {% if avail | length == 0 %}disabled{% endif %}>
         <option value="">— Select {{ pos }} —</option>
         {% for p in avail | sort(attribute='name') %}
-          <option value="{{ p.id }}"
-            {% if cur and cur.player_id == p.id %}selected{% endif %}>
-            {{ p.name }} ({{ p.nfl_team }})
-          </option>
+          {% if p.kicked_off %}
+            <option value="" disabled style="color:#6b7280">
+              {{ p.name }} ({{ p.nfl_team }}) — 🔒 Game Started
+            </option>
+          {% elif p.bye_week %}
+            <option value="" disabled style="color:#6b7280">
+              {{ p.name }} ({{ p.nfl_team }}) — Bye Week
+            </option>
+          {% else %}
+            <option value="{{ p.id }}"
+              {% if cur and cur.player_id == p.id %}selected{% endif %}>
+              {{ p.name }} ({{ p.nfl_team }})
+            </option>
+          {% endif %}
         {% endfor %}
       </select>
       {% if avail | length == 0 %}
