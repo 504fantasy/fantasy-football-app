@@ -38,23 +38,72 @@
       </div>
     </div>
     {% if ts.players %}
-    <table style="font-size:12px;">
-      <thead>
-        <tr>
-          <th>Pos</th><th>Player</th><th>NFL Team</th><th style="text-align:right">Pts</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in ts.players | sort(attribute='final_points', reverse=True) %}
-        <tr>
-          <td><span class="pos pos-{{ p.position }}">{{ p.position }}</span></td>
-          <td>{{ p.name }}</td>
-          <td style="color:var(--muted)">{{ p.nfl_team }}</td>
-          <td style="text-align:right;font-weight:600">{{ p.final_points }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <style>
+    .stat-chips{display:flex;flex-wrap:wrap;gap:.25rem;align-items:center}
+    .sc{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;background:var(--s3);color:var(--muted2);border:1px solid var(--border)}
+    .sc.highlight{background:rgba(232,184,75,.12);color:var(--gold);border-color:rgba(232,184,75,.3)}
+    .sc.neg{background:rgba(239,68,68,.12);color:#fca5a5;border-color:rgba(239,68,68,.3)}
+    .player-row{display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+    .player-row:last-child{border-bottom:none}
+    .player-pts{margin-left:auto;font-family:"Barlow Condensed",sans-serif;font-size:1.2rem;font-weight:800;color:var(--gold);min-width:2.5rem;text-align:right}
+    .player-pts.zero{color:var(--muted)}
+    </style>
+    {% for p in ts.players | sort(attribute='final_points', reverse=True) %}
+    <div class="player-row">
+      <span class="badge badge-{{ p.position|lower if p.position in ['QB','RB','WR','TE','DST','K'] else 'muted' }}" style="
+        {% if p.position == 'QB' %}background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.3)
+        {% elif p.position == 'RB' %}background:rgba(22,163,74,.2);color:#4ade80;border:1px solid rgba(22,163,74,.3)
+        {% elif p.position == 'WR' %}background:rgba(3,105,161,.2);color:#38bdf8;border:1px solid rgba(3,105,161,.3)
+        {% elif p.position == 'TE' %}background:rgba(180,83,0,.2);color:#fb923c;border:1px solid rgba(180,83,0,.3)
+        {% elif p.position == 'DST' %}background:rgba(185,17,34,.2);color:#f87171;border:1px solid rgba(185,17,34,.3)
+        {% elif p.position == 'K' %}background:rgba(113,113,122,.2);color:#a1a1aa;border:1px solid rgba(113,113,122,.3)
+        {% endif %}
+      ">{{ p.position }}</span>
+      <span style="font-weight:600;font-size:.9rem">{{ p.name }}</span>
+      <span style="color:var(--muted2);font-size:.8rem">{{ p.nfl_team }}</span>
+      <div class="stat-chips">
+        {% set pos = p.position or '' %}
+        {% if pos == 'K' %}
+          {% if p.field_goals_json and p.field_goals_json != '[]' %}
+          <span class="sc highlight">FG ✓</span>
+          {% endif %}
+        {% elif pos == 'DST' %}
+          {% if p.return_yards and p.return_yards > 0 %}
+          <span class="sc highlight">{{ p.return_yards | int }} ret yds</span>
+          {% endif %}
+        {% else %}
+          {% if p.receptions and p.receptions > 0 %}
+          <span class="sc {% if p.receptions >= 5 %}highlight{% endif %}">{{ p.receptions | int }} rec</span>
+          {% endif %}
+          {% if p.receiving_yards and p.receiving_yards > 0 %}
+          <span class="sc {% if p.receiving_yards >= 50 %}highlight{% endif %}">{{ p.receiving_yards | int }} rec yds</span>
+          {% endif %}
+          {% if p.rushing_yards and p.rushing_yards > 0 %}
+          <span class="sc {% if p.rushing_yards >= 50 %}highlight{% endif %}">{{ p.rushing_yards | int }} rush yds</span>
+          {% endif %}
+          {% if p.passing_yards and p.passing_yards > 0 %}
+          <span class="sc {% if p.passing_yards >= 200 %}highlight{% endif %}">{{ p.passing_yards | int }} pass yds</span>
+          {% endif %}
+          {% if p.total_tds and p.total_tds > 0 %}
+          <span class="sc highlight">{{ p.total_tds | int }} TD{% if p.total_tds > 1 %}s{% endif %}</span>
+          {% endif %}
+          {% if p.interceptions and p.interceptions > 0 %}
+          <span class="sc neg">{{ p.interceptions | int }} INT</span>
+          {% endif %}
+          {% if p.fumbles_lost and p.fumbles_lost > 0 %}
+          <span class="sc neg">{{ p.fumbles_lost | int }} FUM</span>
+          {% endif %}
+          {% if not (p.receptions or p.receiving_yards or p.rushing_yards or p.passing_yards or p.total_tds) %}
+          <span class="sc" style="font-style:italic">no stats</span>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% if p.override_note %}
+      <span style="font-size:.72rem;color:var(--muted2);font-style:italic">✎ {{ p.override_note }}</span>
+      {% endif %}
+      <span class="player-pts {% if p.final_points == 0 %}zero{% endif %}">{{ p.final_points }}</span>
+    </div>
+    {% endfor %}
     {% else %}
     <p style="color:var(--muted);font-size:12px;">No lineup submitted.</p>
     {% endif %}
