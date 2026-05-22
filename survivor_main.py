@@ -547,75 +547,69 @@ def get_team_season_score(team_id: int, through_week: int) -> float:
 
 def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
     """
-    Pull players from the shared nfl_sync source and insert them into
-    survivor_players for this league.  If overwrite=True, re-inserts
-    even if the player already exists (name match).
+    Seed survivor_players directly from nfl-data-py (same source as playoff challenge).
+    Also adds all 32 NFL team DSTs.
     """
-    # We create a temporary in-memory staging using the standard seed path
-    # then copy over to survivor_players.
-    import sqlite3 as _sqlite3
-
-    staging = _sqlite3.connect(":memory:")
-    staging.row_factory = _sqlite3.Row
-    staging.execute(
-        """
-        CREATE TABLE players (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            league_id INTEGER,
-            name TEXT,
-            position TEXT,
-            nfl_team TEXT,
-            UNIQUE(league_id, name)
-        )
-    """
-    )
-    staging.commit()
-
-    try:
-        result = (
-            _seed_players.__wrapped__(staging, league_id)
-            if hasattr(_seed_players, "__wrapped__")
-            else _seed_players(league_id, overwrite=overwrite)
-        )
-    except Exception:
-        result = {"added": 0, "skipped": 0}
-
-    # Fallback: read from main game's players table if it exists
-    main_db_path = os.environ.get("DB_PATH", "data/fantasy.db")
     added = skipped = 0
-
-    if os.path.exists(main_db_path):
-        import sqlite3 as _s
-
-        mconn = _s.connect(main_db_path)
-        mconn.row_factory = _s.Row
-        rows = mconn.execute(
-            "SELECT name, position, nfl_team FROM players WHERE league_id=? "
-            "AND position IN ('QB','RB','WR','TE','DST','K')",
-            (league_id,),
-        ).fetchall()
-        mconn.close()
-
+    try:
+        import nfl_data_py as nfl
+        import os as _os
+        season = int(_os.environ.get("NFL_SEASON", "2024"))
+        roster = nfl.import_seasonal_rosters([season])
+        VALID_POS = {"QB", "RB", "WR", "TE", "K"}
+        TEAM_MAP  = {"LA": "LAR", "LV": "LAS", "JAC": "JAX"}
         conn = get_db()
-        for row in rows:
+        for _, row in roster.iterrows():
+            pos = str(row.get("position", "") or "").upper().strip()
+            if pos not in VALID_POS:
+                continue
+            name    = str(row.get("player_name") or row.get("full_name") or "").strip()
+            team    = str(row.get("team") or "").upper().strip()
+            team    = TEAM_MAP.get(team, team)
+            if not name or not team:
+                continue
             try:
                 conn.execute(
-                    "INSERT INTO survivor_players (league_id, name, position, nfl_team) "
-                    "VALUES (?,?,?,?)",
-                    (
-                        league_id,
-                        row["name"],
-                        row["position"].upper(),
-                        row["nfl_team"].upper(),
-                    ),
+                    "INSERT INTO survivor_players (league_id, name, position, nfl_team) VALUES (?,?,?,?)",
+                    (league_id, name, pos, team)
+                )
+                added += 1
+            except Exception:
+                skipped += 1
+        # Add all 32 DSTs
+        dst_teams = [
+            ("Arizona Cardinals DST","ARI"),("Atlanta Falcons DST","ATL"),
+            ("Baltimore Ravens DST","BAL"),("Buffalo Bills DST","BUF"),
+            ("Carolina Panthers DST","CAR"),("Chicago Bears DST","CHI"),
+            ("Cincinnati Bengals DST","CIN"),("Cleveland Browns DST","CLE"),
+            ("Dallas Cowboys DST","DAL"),("Denver Broncos DST","DEN"),
+            ("Detroit Lions DST","DET"),("Green Bay Packers DST","GB"),
+            ("Houston Texans DST","HOU"),("Indianapolis Colts DST","IND"),
+            ("Jacksonville Jaguars DST","JAX"),("Kansas City Chiefs DST","KC"),
+            ("Las Vegas Raiders DST","LV"),("Los Angeles Chargers DST","LAC"),
+            ("Los Angeles Rams DST","LAR"),("Miami Dolphins DST","MIA"),
+            ("Minnesota Vikings DST","MIN"),("New England Patriots DST","NE"),
+            ("New Orleans Saints DST","NO"),("New York Giants DST","NYG"),
+            ("New York Jets DST","NYJ"),("Philadelphia Eagles DST","PHI"),
+            ("Pittsburgh Steelers DST","PIT"),("San Francisco 49ers DST","SF"),
+            ("Seattle Seahawks DST","SEA"),("Tampa Bay Buccaneers DST","TB"),
+            ("Tennessee Titans DST","TEN"),("Washington Commanders DST","WAS"),
+        ]
+        for name, team in dst_teams:
+            try:
+                conn.execute(
+                    "INSERT INTO survivor_players (league_id, name, position, nfl_team) VALUES (?,?,?,?)",
+                    (league_id, name, "DST", team)
                 )
                 added += 1
             except Exception:
                 skipped += 1
         conn.commit()
         conn.close()
-
+    except Exception as e:
+        print(f"[survivor] seed_survivor_players error: {e}")
     return {"added": added, "skipped": skipped}
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -701,6 +695,12 @@ def league_create(
         league_id=lid,
         details=f"name={league_name.strip()} season={season}",
     )
+    # Auto-seed players from NFL data on league creation
+    try:
+        result = seed_survivor_players(lid, overwrite=False)
+        print(f"[survivor] Auto-seeded league {lid}: {result}")
+    except Exception as e:
+        print(f"[survivor] Auto-seed failed for league {lid}: {e}")
     return RedirectResponse(f"/survivor/{lid}?msg=league_created", status_code=303)
 
 
