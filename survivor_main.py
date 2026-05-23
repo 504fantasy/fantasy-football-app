@@ -142,14 +142,45 @@ app = FastAPI()
 # ── Background schedule auto-sync (once per day) ──────────────────────────
 import threading as _threading
 
+def _auto_advance_week(league_id: int, current_week: int) -> bool:
+    """Advance league to next week if all games for current week have finished."""
+    from datetime import datetime, timezone as _tz
+    now_utc = datetime.now(_tz.utc)
+    conn = get_db()
+    # Get all games scheduled for this week
+    games = conn.execute(
+        "SELECT kickoff_utc FROM survivor_game_schedule WHERE league_id=? AND week=?",
+        (league_id, current_week)
+    ).fetchall()
+    conn.close()
+    if not games:
+        return False
+    # Check if all games have kicked off plus 4 hours (game should be done)
+    from datetime import timedelta
+    all_done = all(
+        now_utc >= datetime.fromisoformat(g["kickoff_utc"]).replace(tzinfo=_tz.utc) + timedelta(hours=4)
+        for g in games
+    )
+    if all_done and current_week < 18:
+        conn = get_db()
+        conn.execute(
+            "UPDATE survivor_leagues SET current_week=? WHERE id=?",
+            (current_week + 1, league_id)
+        )
+        conn.commit()
+        conn.close()
+        print(f"[survivor] Auto-advanced league {league_id} to week {current_week + 1}")
+        return True
+    return False
+
 def _auto_sync_schedules():
-    """Refresh game schedules for all active leagues once per day."""
+    """Refresh game schedules and auto-advance weeks for all active leagues once per day."""
     import time as _time
     while True:
         try:
             conn = get_db()
             leagues = conn.execute(
-                "SELECT id, season FROM survivor_leagues WHERE is_active=1"
+                "SELECT id, season, current_week FROM survivor_leagues"
             ).fetchall()
             conn.close()
             for league in leagues:
@@ -158,6 +189,10 @@ def _auto_sync_schedules():
                     print(f"[survivor] Auto-synced schedule for league {league['id']}")
                 except Exception as e:
                     print(f"[survivor] Auto-sync error league {league['id']}: {e}")
+                try:
+                    _auto_advance_week(league["id"], league["current_week"])
+                except Exception as e:
+                    print(f"[survivor] Auto-advance error league {league['id']}: {e}")
         except Exception as e:
             print(f"[survivor] Auto-sync thread error: {e}")
         _time.sleep(86400)  # 24 hours
