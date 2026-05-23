@@ -231,10 +231,7 @@
           <label>Create Survivor League</label>
           <input name="league_name" required placeholder="e.g. The 504 Survivors"/>
         </div>
-        <div class="fg">
-          <label>NFL Season Year</label>
-          <input name="season" type="number" value="2025" min="2020" max="2040"/>
-        </div>
+        <input type="hidden" name="season" value="2026"/>
         <button class="btn btn-sm" style="width:100%;background:var(--ember);color:#fff">Create Survivor League</button>
       </form>
       <form method="post" action="/survivor/league/join">

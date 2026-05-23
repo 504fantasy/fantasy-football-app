@@ -59,7 +59,7 @@
         {% elif p.position == 'K' %}background:rgba(113,113,122,.2);color:#a1a1aa;border:1px solid rgba(113,113,122,.3)
         {% endif %}
       ">{{ p.position }}</span>
-      <span style="font-weight:600;font-size:.9rem">{{ p.name }}</span>
+      <span style="font-weight:600;font-size:.9rem;cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}')">{{ p.name }}</span>
       <span style="color:var(--muted2);font-size:.8rem">{{ p.nfl_team }}</span>
       <div class="stat-chips">
         {% set pos = p.position or '' %}
