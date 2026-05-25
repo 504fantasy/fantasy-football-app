@@ -140,6 +140,25 @@ def execute_returning(conn, sql: str, params: tuple = ()) -> int:
 # ──────────────────────────────────────────────────────────────────────────────
 
 REQUIRED_POSITIONS = ("QB", "RB", "WR", "TE", "DST", "K")
+
+def get_league_slots(league_id: int) -> dict:
+    """Return {position: count} for how many slots each position has."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT slots_qb, slots_rb, slots_wr, slots_te, slots_dst, slots_k FROM survivor_leagues WHERE id=?",
+        (league_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return {p: 1 for p in REQUIRED_POSITIONS}
+    return {
+        "QB":  row["slots_qb"]  or 1,
+        "RB":  row["slots_rb"]  or 1,
+        "WR":  row["slots_wr"]  or 1,
+        "TE":  row["slots_te"]  or 1,
+        "DST": row["slots_dst"] or 1,
+        "K":   row["slots_k"]   or 1,
+    }
 NFL_REGULAR_SEASON_WEEKS = 18
 
 

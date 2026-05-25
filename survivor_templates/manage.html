@@ -28,6 +28,12 @@
   </p>
   <div style="display:flex;gap:10px;flex-wrap:wrap;">
     
+    <form method="post" action="/survivor/{{ league.id }}/manage/lock-week">
+      <button type="submit" class="btn btn-secondary"
+        onclick="return confirm('Lock Week {{ current_week }} lineups? Players used this week will be unavailable in future weeks.')">
+        🔒 Lock Week {{ current_week }}
+      </button>
+    </form>
     <form method="post" action="/survivor/{{ league.id }}/manage/advance-week">
       <button type="submit" class="btn btn-primary"
         onclick="return confirm('Advance to Week {{ current_week + 1 }}? This will lock all current lineups.')">
@@ -178,6 +184,34 @@
     <div class="form-group">
       <label>NFL Season Year</label>
       <input type="number" name="season" value="{{ league.season }}" min="2020" max="2040">
+    </div>
+    <hr style="margin:1rem 0">
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Roster Slots Per Week</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;">
+      <div class="form-group">
+        <label>QB Slots (max 2)</label>
+        <input type="number" name="slots_qb" value="{{ league.slots_qb or 1 }}" min="1" max="2">
+      </div>
+      <div class="form-group">
+        <label>RB Slots (max 3)</label>
+        <input type="number" name="slots_rb" value="{{ league.slots_rb or 1 }}" min="1" max="3">
+      </div>
+      <div class="form-group">
+        <label>WR Slots (max 3)</label>
+        <input type="number" name="slots_wr" value="{{ league.slots_wr or 1 }}" min="1" max="3">
+      </div>
+      <div class="form-group">
+        <label>TE Slots (max 2)</label>
+        <input type="number" name="slots_te" value="{{ league.slots_te or 1 }}" min="1" max="2">
+      </div>
+      <div class="form-group">
+        <label>DST Slots</label>
+        <input type="number" name="slots_dst" value="{{ league.slots_dst or 1 }}" min="1" max="1">
+      </div>
+      <div class="form-group">
+        <label>K Slots</label>
+        <input type="number" name="slots_k" value="{{ league.slots_k or 1 }}" min="1" max="1">
+      </div>
     </div>
     <div class="form-group">
       <label>Submission Deadline Day (0=Sun … 6=Sat)</label>

@@ -64,6 +64,7 @@ from passlib.context import CryptContext
 # Reuse scoring engine and NFL sync from the main game
 from scoring import calculate_fantasy_points
 from survivor_db import (
+    get_league_slots,
     NFL_REGULAR_SEASON_WEEKS,
     REQUIRED_POSITIONS,
     adapt_sql,
@@ -470,13 +471,13 @@ def get_used_player_ids_for_team(team_id: int, exclude_week: int = None) -> set:
     if exclude_week is not None:
         rows = conn.execute(
             "SELECT DISTINCT player_id FROM survivor_lineups "
-            "WHERE team_id=? AND locked=1 AND week != ?",
+            "WHERE team_id=? AND week != ?",
             (team_id, exclude_week),
         ).fetchall()
     else:
         rows = conn.execute(
             "SELECT DISTINCT player_id FROM survivor_lineups "
-            "WHERE team_id=? AND locked=1",
+            "WHERE team_id=?",
             (team_id,),
         ).fetchall()
     conn.close()
@@ -547,9 +548,19 @@ def get_team_lineup(team_id: int, week: int) -> list:
     return [dict(r) for r in rows]
 
 
-def lineup_is_complete(lineup: list) -> bool:
-    submitted = {row["position"] for row in lineup}
-    return set(REQUIRED_POSITIONS) == submitted
+def lineup_is_complete(lineup: list, slots: dict = None) -> bool:
+    if not slots:
+        submitted = {row["position"] for row in lineup}
+        return set(REQUIRED_POSITIONS) == submitted
+    # Check each position has all required slots filled
+    from collections import defaultdict
+    submitted = defaultdict(set)
+    for row in lineup:
+        submitted[row["position"]].add(row.get("slot", 1) or 1)
+    for pos, count in slots.items():
+        if len(submitted[pos]) < count:
+            return False
+    return True
 
 
 def lineup_is_locked(lineup: list) -> bool:
@@ -990,7 +1001,14 @@ def lineup_page(league_id: int, request: Request, week: int = None):
     used_ids = get_used_player_ids_for_team(my_team["id"], exclude_week=week)
 
     # Map current picks for the template
-    current_picks = {row["position"]: row for row in current_lineup}
+    # Get per-position slot counts for this league
+    slots = get_league_slots(league_id)
+    # Build current_picks as {position: {slot: row}}
+    current_picks = {}
+    for row in current_lineup:
+        pos = row["position"]
+        slot = row.get("slot", 1) or 1
+        current_picks.setdefault(pos, {})[slot] = row
 
     # Build full pool by position (for pool-usage bars)
     all_players = get_league_players(league_id)
@@ -1033,6 +1051,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
             "used_ids": used_ids,
             "used_players": used_players,
             "required_positions": REQUIRED_POSITIONS,
+            "slots": slots,
             "lineup_complete": lineup_is_complete(current_lineup),
             "is_commissioner": is_comm,
             "msg": request.query_params.get("msg", ""),
@@ -1042,17 +1061,13 @@ def lineup_page(league_id: int, request: Request, week: int = None):
 
 
 @app.post("/survivor/{league_id}/lineup/submit")
-def lineup_submit(
+async def lineup_submit(
     league_id: int,
     request: Request,
-    week: int = Form(...),
-    qb: int = Form(...),
-    rb: int = Form(...),
-    wr: int = Form(...),
-    te: int = Form(...),
-    dst: int = Form(...),
-    k: int = Form(...),
 ):
+    from survivor_db import get_league_slots
+    form = await request.form()
+    week = int(form.get("week", 1))
     user = get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
@@ -1060,21 +1075,30 @@ def lineup_submit(
     my_team = get_user_team_in_league(league_id, user["id"])
     if not my_team:
         return RedirectResponse(f"/survivor/{league_id}?error=no_team", status_code=303)
-
     is_comm = is_commissioner(league, user)
     current_wk = league["current_week"]
-
+    slots = get_league_slots(league_id)
+    # Build picks from form: {(position, slot): player_id}
+    picks = {}
+    for pos in ("QB", "RB", "WR", "TE", "DST", "K"):
+        n = slots.get(pos, 1)
+        for slot in range(1, n + 1):
+            key = f"{pos.lower()}_{slot}" if n > 1 else pos.lower()
+            val = form.get(key)
+            if val and str(val) != "0":
+                picks[(pos, slot)] = int(val)
     # Non-commissioners can only submit the current week
     if week != current_wk and not is_comm:
         return RedirectResponse(
             f"/survivor/{league_id}/lineup?error=wrong_week", status_code=303
         )
+        return RedirectResponse(
+            f"/survivor/{league_id}/lineup?error=wrong_week", status_code=303
+        )
 
-    picks = {"QB": qb, "RB": rb, "WR": wr, "TE": te, "DST": dst, "K": k}
     base = f"/survivor/{league_id}/lineup?week={week}"
     from datetime import datetime, timezone as _tz
     now_utc = datetime.now(_tz.utc)
-
     # Load kickoff times for this week
     _sconn = get_db()
     sched_rows = _sconn.execute(
@@ -1083,7 +1107,6 @@ def lineup_submit(
     ).fetchall()
     _sconn.close()
     kickoff_map = {r["team"].upper(): r["kickoff_utc"] for r in sched_rows}
-
     def _has_kicked_off(nfl_team: str) -> bool:
         k = kickoff_map.get(nfl_team.upper())
         if not k:
@@ -1092,10 +1115,14 @@ def lineup_submit(
             return now_utc >= datetime.fromisoformat(k).replace(tzinfo=_tz.utc)
         except Exception:
             return False
-
     conn = get_db()
     used = get_used_player_ids_for_team(my_team["id"], exclude_week=week)
-    for pos, pid in picks.items():
+    # Validate all picks
+    all_pids = list(picks.values())
+    if len(set(all_pids)) != len(all_pids):
+        conn.close()
+        return RedirectResponse(f"{base}&error=duplicate_players", status_code=303)
+    for (pos, slot), pid in picks.items():
         row = conn.execute(
             "SELECT * FROM survivor_players WHERE id=? AND league_id=?",
             (pid, league_id),
@@ -1112,36 +1139,31 @@ def lineup_submit(
         if _has_kicked_off(row["nfl_team"] or ""):
             conn.close()
             return RedirectResponse(f"{base}&error=game_started_{pos}", status_code=303)
-    if len(set(picks.values())) != len(picks):
-        conn.close()
-        return RedirectResponse(f"{base}&error=duplicate_players", status_code=303)
-    ts = datetime.now(timezone.utc).isoformat()
-    for pos, pid in picks.items():
+    # Upsert each slot
+    ts = datetime.now(_tz.utc).isoformat()
+    for (pos, slot), pid in picks.items():
         prow = conn.execute("SELECT nfl_team FROM survivor_players WHERE id=?", (pid,)).fetchone()
         auto_locked = 1 if (prow and _has_kicked_off(prow["nfl_team"] or "")) else 0
         conn.execute(
             adapt_sql("""
             INSERT INTO survivor_lineups
-                (league_id, team_id, week, position, player_id, locked, submitted_at)
-            VALUES (?,?,?,?,?,?,?)
-            ON CONFLICT(team_id, week, position)
+                (league_id, team_id, week, position, slot, player_id, locked, submitted_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            ON CONFLICT(team_id, week, position, slot)
             DO UPDATE SET player_id=excluded.player_id,
                           submitted_at=excluded.submitted_at,
                           locked=excluded.locked
             """),
-            (league_id, my_team["id"], week, pos, pid, auto_locked, ts),
+            (league_id, my_team["id"], week, pos, slot, pid, auto_locked, ts),
         )
     conn.commit()
     conn.close()
-
-    conn.close()
-
     write_audit(
         actor=user["username"],
         action="LINEUP_SUBMIT",
         league_id=league_id,
         team=my_team["name"],
-        details=f"week={week} QB={qb} RB={rb} WR={wr} TE={te} DST={dst} K={k}",
+        details=f"week={week} picks={len(picks)}",
     )
     return RedirectResponse(f"{base}&msg=lineup_saved", status_code=303)
 
@@ -1325,6 +1347,12 @@ def manage_settings(
     season: int = Form(2025),
     deadline_day: int = Form(0),
     deadline_hour: int = Form(13),
+    slots_qb: int = Form(1),
+    slots_rb: int = Form(1),
+    slots_wr: int = Form(1),
+    slots_te: int = Form(1),
+    slots_dst: int = Form(1),
+    slots_k: int = Form(1),
 ):
     user = get_current_user(request)
     if not user:
@@ -1332,20 +1360,26 @@ def manage_settings(
     league = league_ctx(league_id, user)
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403)
+    # Enforce maximums
+    slots_qb  = max(1, min(2, slots_qb))
+    slots_rb  = max(1, min(3, slots_rb))
+    slots_wr  = max(1, min(3, slots_wr))
+    slots_te  = max(1, min(2, slots_te))
+    slots_dst = max(1, min(1, slots_dst))
+    slots_k   = max(1, min(1, slots_k))
     conn = get_db()
     conn.execute(
-        adapt_sql(
-            """
+        adapt_sql("""
         UPDATE survivor_leagues
-        SET name=?, season=?, submission_deadline_day=?, submission_deadline_hour=?
+        SET name=?, season=?, submission_deadline_day=?, submission_deadline_hour=?,
+            slots_qb=?, slots_rb=?, slots_wr=?, slots_te=?, slots_dst=?, slots_k=?
         WHERE id=?
-    """
-        ),
+        """),
         (
-            league_name.strip(),
-            season,
+            league_name.strip(), season,
             max(0, min(6, deadline_day)),
             max(0, min(23, deadline_hour)),
+            slots_qb, slots_rb, slots_wr, slots_te, slots_dst, slots_k,
             league_id,
         ),
     )
@@ -1355,7 +1389,7 @@ def manage_settings(
         actor=user["username"],
         action="SETTINGS_UPDATE",
         league_id=league_id,
-        details=f"name={league_name} season={season}",
+        details=f"name={league_name} season={season} slots=QB{slots_qb}/RB{slots_rb}/WR{slots_wr}/TE{slots_te}/DST{slots_dst}/K{slots_k}",
     )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=settings_saved", status_code=303
