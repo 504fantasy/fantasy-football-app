@@ -163,10 +163,18 @@
     <table>
       <thead><tr><th>Player</th><th>Position</th><th>Team</th></tr></thead>
       <tbody>
-        {# We need to pull used player info — passed from the route #}
-        <tr><td colspan="3" style="color:var(--muted);">
-          Check the <a href="/api/survivor/{{ league.id }}/used-players">API</a> for the full list.
-        </td></tr>
+        {% for up in used_players %}
+        <tr>
+          <td style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b"
+              onclick="showPlayerNews('{{ up.name }}','{{ up.nfl_team }}','{{ up.position }}')">
+            {{ up.name }}
+          </td>
+          <td><span class="pos pos-{{ up.position }}">{{ up.position }}</span></td>
+          <td style="color:var(--muted2)">{{ up.nfl_team }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" style="color:var(--muted);text-align:center;padding:12px;">No players used yet.</td></tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
