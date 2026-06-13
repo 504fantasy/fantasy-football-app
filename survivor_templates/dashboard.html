@@ -9,24 +9,26 @@
 {% if msg %}<div class="alert alert-success">{{ msg | replace('_', ' ') | title }}</div>{% endif %}
 {% if error %}<div class="alert alert-error">{{ error | replace('_', ' ') | title }}</div>{% endif %}
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
-  <!-- Create League -->
-  <div class="card">
-    <h2>Create a League</h2>
-    <form method="post" action="/survivor/league/create">
-      <div class="form-group"><label>League Name</label><input type="text" name="league_name" placeholder="My Survivor League" required></div>
-      <input type="hidden" name="season" value="2026">
-      <button type="submit" class="btn btn-primary">Create</button>
-    </form>
-  </div>
+<div style="margin-bottom:24px;">
   <!-- Join League -->
-  <div class="card">
+  <div class="card" style="max-width:480px;">
     <h2>Join a League</h2>
     <form method="post" action="/survivor/league/join">
       <div class="form-group"><label>Invite Code</label><input type="text" name="invite_code" placeholder="ABCD1234" required maxlength="8" style="text-transform:uppercase"></div>
       <button type="submit" class="btn btn-success">Join</button>
     </form>
   </div>
+  {% if user.is_superadmin %}
+  <!-- Create League (admin only) -->
+  <div class="card" style="max-width:480px;margin-top:16px;border-color:rgba(59,130,246,.3);">
+    <h2 style="color:var(--survivor2)">⚙ Create League <span style="font-size:.75rem;color:var(--muted);font-weight:400;text-transform:none">(Admin Only)</span></h2>
+    <form method="post" action="/survivor/league/create">
+      <div class="form-group"><label>League Name</label><input type="text" name="league_name" placeholder="504 Fantasy Survivor 2026" required></div>
+      <input type="hidden" name="season" value="2026">
+      <button type="submit" class="btn btn-primary">Create</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 
 {% if leagues %}
