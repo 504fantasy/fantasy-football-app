@@ -12,10 +12,28 @@
 {% elif msg == 'team_created' %}
   <div class="alert alert-success">Team created successfully.</div>
 {% endif %}
+
+{% if league.entry_fee and league.entry_fee > 0 and my_team %}
+  {% if my_team.paid %}
+    <div class="alert alert-success">✅ Entry fee paid. You're all set!</div>
+  {% else %}
+    <div class="alert alert-error" style="border-left-color:var(--red)">
+      ⚠ <strong>Entry fee required: ${{ league.entry_fee }}</strong>
+      {% if league.payment_deadline %} — due by <strong>{{ league.payment_deadline }}</strong>{% endif %}<br>
+      Send payment via Venmo to <strong>{{ league.venmo_handle or '@504fantasy' }}</strong>
+      and include your team name in the note.
+      {% if league.payment_deadline %}
+      After the deadline, unpaid teams will be locked out of submitting lineups.
+      {% endif %}
+    </div>
+  {% endif %}
+{% endif %}
 {% if error == 'no_team' %}
   <div class="alert alert-error">You need to create a team before submitting a lineup.</div>
 {% elif error == 'team_name_taken' %}
   <div class="alert alert-error">That team name is already taken in this league.</div>
+{% elif error == 'payment_required' %}
+  <div class="alert alert-error">⚠ Your entry fee payment is past due. Please pay via Venmo to {{ league.venmo_handle or '@504fantasy' }} to submit lineups.</div>
 {% endif %}
 
 {% if not my_team %}

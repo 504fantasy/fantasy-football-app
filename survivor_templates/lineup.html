@@ -9,6 +9,15 @@
 {% if msg == 'lineup_saved' %}
   <div class="alert alert-success">✓ Lineup saved for Week {{ week }}.</div>
 {% endif %}
+
+{% if league.entry_fee and league.entry_fee > 0 and my_team and not my_team.paid %}
+<div class="alert alert-error">
+  ⚠ <strong>Entry fee of ${{ league.entry_fee }} unpaid.</strong>
+  {% if league.payment_deadline %}Due by {{ league.payment_deadline }}.{% endif %}
+  Send via Venmo to <strong>{{ league.venmo_handle or '@504fantasy' }}</strong> with your team name.
+  After the deadline you will be locked out of submitting lineups.
+</div>
+{% endif %}
 {% if error %}
   {% if 'already_used' in error %}
     <div class="alert alert-error">⚠ One or more players have already been used by your team this season.</div>

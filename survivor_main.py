@@ -1078,6 +1078,22 @@ async def lineup_submit(
     is_comm = is_commissioner(league, user)
     current_wk = league["current_week"]
     slots = get_league_slots(league_id)
+
+    # Block unpaid teams after payment deadline
+    if not is_comm and league.get("entry_fee") and league["entry_fee"] > 0:
+        if not my_team.get("paid"):
+            deadline = league.get("payment_deadline")
+            if deadline:
+                from datetime import date
+                try:
+                    if date.today() > date.fromisoformat(deadline):
+                        return RedirectResponse(
+                            f"/survivor/{league_id}?error=payment_required",
+                            status_code=303
+                        )
+                except Exception:
+                    pass
+
     # Build picks from form: {(position, slot): player_id}
     picks = {}
     for pos in ("QB", "RB", "WR", "TE", "DST", "K"):
@@ -1339,6 +1355,37 @@ def manage_page(league_id: int, request: Request):
 # ── League settings ──────────────────────────────────────────────────────────
 
 
+@app.post("/survivor/{league_id}/manage/team/payment")
+def manage_team_payment(
+    league_id: int, request: Request,
+    team_id: int = Form(...),
+    paid: int = Form(...),
+    payment_note: str = Form(""),
+):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    from datetime import datetime, timezone
+    payment_date = datetime.now(timezone.utc).strftime("%Y-%m-%d") if paid else None
+    conn = get_db()
+    conn.execute(
+        adapt_sql("UPDATE survivor_teams SET paid=?, payment_date=?, payment_note=? WHERE id=? AND league_id=?"),
+        (paid, payment_date, payment_note.strip() or None, team_id, league_id)
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"],
+        action="PAYMENT_UPDATE",
+        league_id=league_id,
+        details=f"team_id={team_id} paid={'yes' if paid else 'no'}",
+    )
+    return RedirectResponse(f"/survivor/{league_id}/manage?msg=payment_updated#teams", status_code=303)
+
+
 @app.post("/survivor/{league_id}/manage/settings")
 def manage_settings(
     league_id: int,
@@ -1353,6 +1400,9 @@ def manage_settings(
     slots_te: int = Form(1),
     slots_dst: int = Form(1),
     slots_k: int = Form(1),
+    entry_fee: float = Form(0),
+    payment_deadline: str = Form(""),
+    venmo_handle: str = Form(""),
 ):
     user = get_current_user(request)
     if not user:
@@ -1372,7 +1422,8 @@ def manage_settings(
         adapt_sql("""
         UPDATE survivor_leagues
         SET name=?, season=?, submission_deadline_day=?, submission_deadline_hour=?,
-            slots_qb=?, slots_rb=?, slots_wr=?, slots_te=?, slots_dst=?, slots_k=?
+            slots_qb=?, slots_rb=?, slots_wr=?, slots_te=?, slots_dst=?, slots_k=?,
+            entry_fee=?, payment_deadline=?, venmo_handle=?
         WHERE id=?
         """),
         (
@@ -1380,6 +1431,9 @@ def manage_settings(
             max(0, min(6, deadline_day)),
             max(0, min(23, deadline_hour)),
             slots_qb, slots_rb, slots_wr, slots_te, slots_dst, slots_k,
+            entry_fee,
+            payment_deadline.strip() or None,
+            venmo_handle.strip() or None,
             league_id,
         ),
     )
