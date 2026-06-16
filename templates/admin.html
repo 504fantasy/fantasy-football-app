@@ -516,6 +516,60 @@ tr:hover td { background: rgba(255,255,255,.02) }
     </div>
   </div>
 
+  <!-- Survivor Teams -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-title" style="cursor:pointer" onclick="toggleSection('survivor-teams')">
+        🏈 Survivor Teams <span id="survivor-teams-arrow">▼</span>
+      </div>
+      <span class="section-count">{{ survivor_teams_list|length }} total</span>
+    </div>
+    <div class="tbl-wrap" id="survivor-teams-body">
+      <table>
+        <thead>
+          <tr>
+            <th>League</th>
+            <th>Team</th>
+            <th>Owner</th>
+            <th>Email</th>
+            <th>Entry Fee</th>
+            <th>Payment</th>
+            <th>Paid Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in survivor_teams_list %}
+          <tr>
+            <td style="color:var(--muted2);font-size:.8rem">{{ t.league_name }}</td>
+            <td><strong>{{ t.name }}</strong></td>
+            <td>{{ t.username }}</td>
+            <td style="font-size:.8rem;color:var(--muted2)">{{ t.email or '—' }}</td>
+            <td>
+              {% if t.entry_fee and t.entry_fee > 0 %}
+                ${{ t.entry_fee }}
+              {% else %}
+                <span style="color:var(--muted)">Free</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if not t.entry_fee or t.entry_fee == 0 %}
+                <span style="color:var(--muted)">N/A</span>
+              {% elif t.paid %}
+                <span class="badge b-green">✓ Paid</span>
+              {% else %}
+                <span class="badge b-red">Unpaid</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--muted2);font-size:.8rem">{{ t.payment_date or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" style="color:var(--muted);text-align:center;padding:20px;">No teams yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div><!-- /admin-wrap -->
 
 

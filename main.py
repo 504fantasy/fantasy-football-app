@@ -3563,13 +3563,31 @@ def admin_dashboard(request: Request, user=Depends(get_current_user)):
             u = mconn.execute("SELECT username FROM users WHERE id=?", (row["commissioner_id"],)).fetchone()
             row["commissioner"] = u["username"] if u else "?"
             survivor_leagues_list.append(row)
+
+        # Also fetch survivor teams with owner emails
+        survivor_teams_list = []
+        steam_rows = sconn.execute("""
+            SELECT t.id, t.name, t.owner_id, t.league_id, t.paid, t.payment_date,
+                   l.name as league_name, l.entry_fee
+            FROM survivor_teams t
+            JOIN survivor_leagues l ON l.id = t.league_id
+            ORDER BY l.id, t.name
+        """).fetchall()
+        for tr in steam_rows:
+            tr = dict(tr)
+            u = mconn.execute("SELECT username, email FROM users WHERE id=?", (tr["owner_id"],)).fetchone()
+            tr["username"] = u["username"] if u else "?"
+            tr["email"] = u["email"] if u else ""
+            survivor_teams_list.append(tr)
         sconn.close()
         mconn.close()
     except Exception as e:
         print(f"[admin] survivor leagues error: {e}")
+        survivor_teams_list = []
     return templates.TemplateResponse("admin.html", {
         "request": request, "user": user,
         "total_users": total_users, "total_leagues": total_leagues, "playoff_leagues": playoff_leagues, "survivor_leagues_count": survivor_leagues_count, "survivor_leagues_list": survivor_leagues_list,
+        "survivor_teams_list": survivor_teams_list,
         "total_teams": total_teams, "total_players": total_players,
         "total_picks": total_picks, "total_ponies": total_ponies,
         "total_scores": total_scores, "total_audits": total_audits,
