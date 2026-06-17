@@ -832,6 +832,7 @@ let lastPick     = {{ draft_state.current_pick }};
 let lastComplete = {{ 1 if draft_state.is_complete else 0 }};
 let timerInterval = null, clientSeconds = null;
 
+let autoPickTriggered = false;
 function startClientTimer(remaining) {
   clearInterval(timerInterval);
   clientSeconds = remaining;
@@ -840,6 +841,7 @@ function startClientTimer(remaining) {
     if (clientSeconds === null) return;
     clientSeconds = Math.max(0, clientSeconds - 1);
     renderTimer();
+
   }, 1000);
 }
 function renderTimer() {
@@ -853,6 +855,7 @@ function renderTimer() {
   const colour = urgent ? 'var(--ember)' : 'var(--gold)';
   display.style.color = colour;
   if (bar) bar.style.background = colour;
+
 }
 
 let retryDelay = 2000;
@@ -863,7 +866,8 @@ function connectSSE() {
     let data; try { data = JSON.parse(evt.data); } catch { return; }
     const s = data.state || {};
     if (TIMER_TOTAL > 0 && data.timer_remaining != null) {
-      if (clientSeconds === null || Math.abs(clientSeconds - data.timer_remaining) > 2)
+      // Don't reset timer if it's already near 0 (about to auto-pick)
+      if (!autoPickTriggered && (clientSeconds === null || (clientSeconds > 2 && Math.abs(clientSeconds - data.timer_remaining) > 2)))
         startClientTimer(data.timer_remaining);
     }
     if (s.current_round !== lastRound || s.current_pick !== lastPick ||

@@ -147,13 +147,11 @@ def get_timer_remaining(
 
 
 def _auto_skip(league_id: int, expected_round: int, expected_pick: int) -> None:
-    """
-    Called by the timer thread when a pick expires.
-    Advances the draft clock without inserting a roster entry — the
-    'skipped' slot stays empty so the commissioner can fill it manually.
-    """
+    """Auto-pick next available player when timer expires."""
     conn = get_db()
     conn.isolation_level = None
+    player_name = None
+    team_name = None
     try:
         conn.execute("BEGIN IMMEDIATE")
         state = conn.execute(
@@ -161,19 +159,11 @@ def _auto_skip(league_id: int, expected_round: int, expected_pick: int) -> None:
             (league_id,),
         ).fetchone()
         if not state:
-            conn.execute("ROLLBACK")
-            return
-        # Only skip if we're still on the same pick we were called for
-        if (
-            state["current_round"] != expected_round
-            or state["current_pick"] != expected_pick
-        ):
-            conn.execute("ROLLBACK")
-            return
+            conn.execute("ROLLBACK"); return
+        if state["current_round"] != expected_round or state["current_pick"] != expected_pick:
+            conn.execute("ROLLBACK"); return
         if state["is_complete"]:
-            conn.execute("ROLLBACK")
-            return
-
+            conn.execute("ROLLBACK"); return
         teams = conn.execute(
             "SELECT * FROM teams WHERE league_id=? ORDER BY id", (league_id,)
         ).fetchall()
@@ -181,45 +171,55 @@ def _auto_skip(league_id: int, expected_round: int, expected_pick: int) -> None:
             "SELECT * FROM leagues WHERE id=?", (league_id,)
         ).fetchone()
         if not teams or not league:
-            conn.execute("ROLLBACK")
-            return
-
+            conn.execute("ROLLBACK"); return
+        ordered = get_snake_order(teams, state["current_round"])
+        team_on_clock = ordered[state["current_pick"] % len(ordered)]
+        team_name = team_on_clock["name"]
+        drafted_ids = {
+            r[0] for r in conn.execute(
+                "SELECT player_id FROM team_roster WHERE team_id IN "
+                "(SELECT id FROM teams WHERE league_id=?)", (league_id,)
+            ).fetchall()
+        }
+        available = conn.execute(
+            "SELECT * FROM players WHERE league_id=? ORDER BY name ASC", (league_id,)
+        ).fetchall()
+        auto_player = next((p for p in available if p["id"] not in drafted_ids), None)
+        picks_per_team = league["picks_per_team"] or 15
+        picks_made = (state["current_round"] - 1) * len(teams) + state["current_pick"] + 1
         new_pick = state["current_pick"] + 1
         new_round = state["current_round"]
         if new_pick >= len(teams):
             new_pick = 0
             new_round += 1
-
-        picks_per_team = league["picks_per_team"] or 15
-        picks_made = (
-            (state["current_round"] - 1) * len(teams) + state["current_pick"] + 1
-        )
         draft_now_complete = picks_made >= picks_per_team * len(teams)
-
         now_iso = datetime.now(timezone.utc).isoformat()
+        if auto_player:
+            conn.execute(
+                "INSERT INTO team_roster (team_id, player_id, is_pony) VALUES (?,?,0)",
+                (team_on_clock["id"], auto_player["id"]),
+            )
+            player_name = auto_player["name"]
         conn.execute(
             "UPDATE draft_state SET current_round=?, current_pick=?, is_complete=?, "
             "pick_started_at=? WHERE league_id=?",
             (new_round, new_pick, int(draft_now_complete), now_iso, league_id),
         )
         conn.execute("COMMIT")
-        write_audit(
-            actor="system",
-            action="DRAFT_SKIP",
-            league_id=league_id,
-            details=f"Timer expired R{expected_round} P{expected_pick+1}",
-        )
-
         if not draft_now_complete and league["pick_timer_seconds"]:
             arm_pick_timer(league_id, league["pick_timer_seconds"], new_round, new_pick)
     except Exception as e:
-        try:
-            conn.execute("ROLLBACK")
-        except:
-            pass
+        try: conn.execute("ROLLBACK")
+        except: pass
     finally:
         conn.close()
-
+    if player_name:
+        write_audit(actor="system", action="DRAFT_PICK", league_id=league_id,
+            team=team_name, player=player_name,
+            details=f"AUTO-PICK R{expected_round} P{expected_pick+1}")
+    else:
+        write_audit(actor="system", action="DRAFT_SKIP", league_id=league_id,
+            details=f"Timer expired R{expected_round} P{expected_pick+1}")
 
 # ======================================================
 # AUDIT LOG
@@ -535,6 +535,10 @@ def is_league_member(league_id: int, user_id: int) -> bool:
 
 
 def is_commissioner(league: dict, user: dict) -> bool:
+    return league["commissioner_id"] == user["id"]
+
+def is_admin_or_commissioner(league: dict, user: dict) -> bool:
+    """Superadmin OR commissioner — use this for admin-only actions like deleting."""
     return bool(user["is_superadmin"]) or league["commissioner_id"] == user["id"]
 
 
@@ -1187,6 +1191,95 @@ def draft_page(league_id: int, request: Request, user=Depends(get_current_user))
     )
 
 
+
+@app.post("/league/{league_id}/draft/autopick")
+def draft_autopick(league_id: int, user=Depends(get_current_user)):
+    """Auto-pick the next available player when the timer expires."""
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    # Only commissioner or the team on clock can trigger autopick
+    if not is_admin_or_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        state = conn.execute(
+            "SELECT current_round, current_pick, is_complete, pick_started_at FROM draft_state WHERE league_id=?",
+            (league_id,),
+        ).fetchone()
+        if not state or state["is_complete"]:
+            conn.execute("ROLLBACK")
+            return {"status": "complete"}
+        # Check timer actually expired
+        import time as _time
+        if state["pick_started_at"] and league.get("pick_timer_seconds"):
+            try:
+                elapsed = _time.time() - float(state["pick_started_at"])
+                if elapsed < float(league["pick_timer_seconds"]):
+                    conn.execute("ROLLBACK")
+                    return {"status": "timer_not_expired"}
+            except Exception:
+                pass
+        teams = conn.execute(
+            "SELECT * FROM teams WHERE league_id=? ORDER BY id", (league_id,)
+        ).fetchall()
+        ordered = get_snake_order(teams, state["current_round"])
+        team_on_clock = ordered[state["current_pick"] % len(ordered)]
+        # Get already-drafted player IDs
+        drafted_ids = {
+            r[0] for r in conn.execute(
+                "SELECT player_id FROM team_roster WHERE team_id IN "
+                "(SELECT id FROM teams WHERE league_id=?)", (league_id,)
+            ).fetchall()
+        }
+        # Pick first available player alphabetically
+        available = conn.execute(
+            "SELECT * FROM players WHERE league_id=? ORDER BY name ASC",
+            (league_id,)
+        ).fetchall()
+        auto_player = None
+        for p in available:
+            if p["id"] not in drafted_ids:
+                auto_player = p
+                break
+        if not auto_player:
+            conn.execute("ROLLBACK")
+            return {"status": "no_players"}
+        import time as _time2
+        now = int(_time2.time())
+        # Insert roster pick
+        conn.execute(
+            "INSERT INTO team_roster (team_id, player_id, is_pony) VALUES (?,?,0)",
+            (team_on_clock["id"], auto_player["id"]),
+        )
+        new_pick = state["current_pick"] + 1
+        new_round = state["current_round"]
+        is_complete = 0
+        if new_pick >= len(teams):
+            new_pick = 0
+            new_round += 1
+        conn.execute(
+            "UPDATE draft_state SET current_round=?, current_pick=?, pick_started_at=? WHERE league_id=?",
+            (new_round, new_pick, now, league_id),
+        )
+        conn.execute("COMMIT")
+        write_audit(
+            actor="system",
+            action="DRAFT_PICK",
+            league_id=league_id,
+            team=team_on_clock["name"],
+            player=auto_player["name"],
+            details=f"AUTO-PICK (timer expired) Rd {state['current_round']} Pk {state['current_pick']+1}",
+        )
+        return {"status": "ok", "player": auto_player["name"], "team": team_on_clock["name"]}
+    except Exception as e:
+        conn.execute("ROLLBACK")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
 @app.post("/league/{league_id}/draft/pick")
 def draft_pick(
     league_id: int, player_name: str = Form(...), user=Depends(get_current_user)
@@ -1225,7 +1318,7 @@ def draft_pick(
         ordered = get_snake_order(teams, state["current_round"])
         team_on_clock = ordered[state["current_pick"] % len(ordered)]
 
-        if user["id"] != team_on_clock["owner_id"] and not is_comm:
+        if user["id"] != team_on_clock["owner_id"]:
             conn.execute("ROLLBACK")
             raise HTTPException(status_code=403, detail="Not your pick")
 
@@ -1468,7 +1561,7 @@ def set_multiplier(
         conn.close()
         return RedirectResponse(f"{base}/draft", status_code=303)
 
-    if not row or (row["owner_id"] != user["id"] and not is_commissioner(league, user)):
+    if not row or (row["owner_id"] != user["id"] and not is_admin_or_commissioner(league, user)):
         conn.close()
         return RedirectResponse(f"{base}/draft", status_code=303)
 
@@ -1564,7 +1657,7 @@ def set_pony_multiplier(
         conn.close()
         return RedirectResponse(f"{base}/draft", status_code=303)
 
-    if not row or (row["owner_id"] != user["id"] and not is_commissioner(league, user)):
+    if not row or (row["owner_id"] != user["id"] and not is_admin_or_commissioner(league, user)):
         conn.close()
         return RedirectResponse(f"{base}/draft", status_code=303)
 
@@ -1614,7 +1707,7 @@ def team_add_pony(
     conn.close()
     if not team:
         raise HTTPException(status_code=404)
-    if user["id"] != team["owner_id"] and not is_commissioner(league, user):
+    if user["id"] != team["owner_id"] and not is_admin_or_commissioner(league, user):
         raise HTTPException(status_code=403)
 
     roster = get_team_roster(team_id)
@@ -3703,7 +3796,7 @@ def rename_team(
     conn.close()
     if not team:
         raise HTTPException(status_code=404)
-    if user["id"] != team["owner_id"] and not is_commissioner(league, user):
+    if user["id"] != team["owner_id"] and not is_admin_or_commissioner(league, user):
         raise HTTPException(status_code=403)
     name = team_name.strip()[:40]
     if not name:
