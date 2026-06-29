@@ -184,7 +184,30 @@ def _auto_skip(league_id: int, expected_round: int, expected_pick: int) -> None:
         available = conn.execute(
             "SELECT * FROM players WHERE league_id=? ORDER BY name ASC", (league_id,)
         ).fetchall()
-        auto_player = next((p for p in available if p["id"] not in drafted_ids), None)
+        # Check team's queue first
+        queue_rows = conn.execute(
+            """SELECT dq.player_id FROM draft_queue dq
+               WHERE dq.team_id=?
+               ORDER BY dq.sort_order ASC""",
+            (team_on_clock["id"],)
+        ).fetchall()
+        auto_player = None
+        # Try queue players first
+        for qrow in queue_rows:
+            if qrow[0] not in drafted_ids:
+                auto_player = conn.execute(
+                    "SELECT * FROM players WHERE id=?", (qrow[0],)
+                ).fetchone()
+                if auto_player:
+                    # Remove from queue since we're picking them
+                    conn.execute(
+                        "DELETE FROM draft_queue WHERE team_id=? AND player_id=?",
+                        (team_on_clock["id"], qrow[0])
+                    )
+                    break
+        # Fall back to alphabetical if no queue picks available
+        if not auto_player:
+            auto_player = next((p for p in available if p["id"] not in drafted_ids), None)
         picks_per_team = league["picks_per_team"] or 15
         picks_made = (state["current_round"] - 1) * len(teams) + state["current_pick"] + 1
         new_pick = state["current_pick"] + 1
@@ -1191,6 +1214,106 @@ def draft_page(league_id: int, request: Request, user=Depends(get_current_user))
     )
 
 
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DRAFT QUEUE
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/league/{league_id}/draft/queue/add")
+def queue_add(league_id: int, player_id: int = Form(...), user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(status_code=401)
+    conn = get_db()
+    my_team = conn.execute(
+        "SELECT id FROM teams WHERE league_id=? AND owner_id=?", (league_id, user["id"])
+    ).fetchone()
+    if not my_team:
+        conn.close()
+        raise HTTPException(status_code=403)
+    # Get max sort order
+    max_order = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), 0) FROM draft_queue WHERE team_id=?",
+        (my_team["id"],)
+    ).fetchone()[0]
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        conn.execute(
+            "INSERT INTO draft_queue (team_id, player_id, sort_order, added_at) VALUES (?,?,?,?)",
+            (my_team["id"], player_id, max_order + 1, ts)
+        )
+        conn.commit()
+    except Exception:
+        pass  # already in queue
+    conn.close()
+    return {"status": "ok"}
+
+
+@app.post("/league/{league_id}/draft/queue/remove")
+def queue_remove(league_id: int, player_id: int = Form(...), user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(status_code=401)
+    conn = get_db()
+    my_team = conn.execute(
+        "SELECT id FROM teams WHERE league_id=? AND owner_id=?", (league_id, user["id"])
+    ).fetchone()
+    if not my_team:
+        conn.close()
+        raise HTTPException(status_code=403)
+    conn.execute(
+        "DELETE FROM draft_queue WHERE team_id=? AND player_id=?",
+        (my_team["id"], player_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
+@app.post("/league/{league_id}/draft/queue/reorder")
+def queue_reorder(league_id: int, player_ids: str = Form(...), user=Depends(get_current_user)):
+    """Reorder queue — player_ids is comma-separated list in new order."""
+    if not user:
+        raise HTTPException(status_code=401)
+    conn = get_db()
+    my_team = conn.execute(
+        "SELECT id FROM teams WHERE league_id=? AND owner_id=?", (league_id, user["id"])
+    ).fetchone()
+    if not my_team:
+        conn.close()
+        raise HTTPException(status_code=403)
+    ids = [int(x) for x in player_ids.split(",") if x.strip().isdigit()]
+    for i, pid in enumerate(ids):
+        conn.execute(
+            "UPDATE draft_queue SET sort_order=? WHERE team_id=? AND player_id=?",
+            (i + 1, my_team["id"], pid)
+        )
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
+@app.get("/api/league/{league_id}/draft/queue")
+def queue_get(league_id: int, user=Depends(get_current_user)):
+    """Get current user's queue for this league."""
+    if not user:
+        raise HTTPException(status_code=401)
+    conn = get_db()
+    my_team = conn.execute(
+        "SELECT id FROM teams WHERE league_id=? AND owner_id=?", (league_id, user["id"])
+    ).fetchone()
+    if not my_team:
+        conn.close()
+        return {"queue": []}
+    rows = conn.execute(
+        """SELECT dq.player_id, dq.sort_order, p.name, p.position, p.nfl_team
+           FROM draft_queue dq
+           JOIN players p ON p.id = dq.player_id
+           WHERE dq.team_id=?
+           ORDER BY dq.sort_order ASC""",
+        (my_team["id"],)
+    ).fetchall()
+    conn.close()
+    return {"queue": [dict(r) for r in rows]}
 
 @app.post("/league/{league_id}/draft/autopick")
 def draft_autopick(league_id: int, user=Depends(get_current_user)):

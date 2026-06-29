@@ -467,7 +467,7 @@
           {% for p in available_players %}
           <tr data-pos="{{ p.position or 'UNK' }}" data-nfl="{{ p.nfl_team or '' }}" data-name="{{ p.name | lower }}" data-player="{{ p.name }}">
             <td>
-              <button class="queue-star" data-name="{{ p.name }}" data-pos="{{ p.position or 'UNK' }}"
+              <button class="queue-star" data-name="{{ p.name }}" data-pos="{{ p.position or 'UNK' }}" data-pid="{{ p.id }}"
                       title="Add to queue" style="background:none;border:none;cursor:pointer;padding:0 .3rem 0 0;color:var(--muted);font-size:.85rem;transition:color .15s">☆</button>
               <span class="player-pick-name" style="cursor:pointer;color:var(--gold)">{{ p.name }}</span>
             </td>
@@ -895,12 +895,38 @@ const DRAFTED_NOW  = new Set({{ available_players | map(attribute='name') | list
 const draftedNames = new Set();
 document.querySelectorAll('.rcp-name').forEach(el => draftedNames.add(el.textContent.trim()));
 
-function queueLoad() {
-  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); }
-  catch { return []; }
+// Server-side queue cache
+let _queueCache = null;
+
+async function queueLoad() {
+  if (_queueCache !== null) return _queueCache;
+  try {
+    const r = await fetch(`/api/league/{{ league.id }}/draft/queue`, {credentials: 'same-origin'});
+    const d = await r.json();
+    _queueCache = d.queue.map(p => ({name: p.name, pos: p.position, player_id: p.player_id}));
+  } catch { _queueCache = []; }
+  return _queueCache;
 }
-function queueSave(q) {
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+
+async function queueAdd(playerName, pos, playerId) {
+  const fd = new FormData();
+  fd.append('player_id', playerId);
+  await fetch(`/league/{{ league.id }}/draft/queue/add`, {method:'POST', credentials:'same-origin', body: fd});
+  _queueCache = null;
+}
+
+async function queueRemove(playerName, playerId) {
+  const fd = new FormData();
+  fd.append('player_id', playerId);
+  await fetch(`/league/{{ league.id }}/draft/queue/remove`, {method:'POST', credentials:'same-origin', body: fd});
+  _queueCache = null;
+}
+
+async function queueReorder(playerIds) {
+  const fd = new FormData();
+  fd.append('player_ids', playerIds.join(','));
+  await fetch(`/league/{{ league.id }}/draft/queue/reorder`, {method:'POST', credentials:'same-origin', body: fd});
+  _queueCache = null;
 }
 function queueAvailableNames() {
   // Names still in the available players table (not drafted)
@@ -908,92 +934,37 @@ function queueAvailableNames() {
     .map(r => r.dataset.player).filter(Boolean));
 }
 
-function renderQueue() {
-  const q        = queueLoad();
+async function renderQueue() {
+  const q        = await queueLoad();
   const avail    = queueAvailableNames();
   const list     = document.getElementById('queue-list');
-  const empty    = document.getElementById('queue-empty');
   const countEl  = document.getElementById('queue-count');
   if (!list) return;
-
-  // Filter out drafted players silently
   const cleaned = q.filter(item => avail.has(item.name));
-  if (cleaned.length !== q.length) queueSave(cleaned);
-
   countEl.textContent = cleaned.length || '';
-
   if (!cleaned.length) {
-    list.innerHTML = '';
-    list.appendChild(empty || (() => {
-      const d = document.createElement('div');
-      d.className = 'queue-empty';
-      d.innerHTML = 'Click ☆ next to any<br>available player to queue them';
-      return d;
-    })());
+    list.innerHTML = '<div class="queue-empty">Click ☆ next to any<br>available player to queue them</div>';
     return;
   }
-
   list.innerHTML = cleaned.map((item, i) => `
-    <div class="queue-item" draggable="true" data-idx="${i}" data-name="${item.name}">
+    <div class="queue-item" draggable="true" data-idx="${i}" data-name="${item.name}" data-pid="${item.player_id||''}">
       <span class="qi-rank">${i + 1}</span>
       <span class="qi-pos"><span class="badge b-${item.pos||'UNK'}">${item.pos||'?'}</span></span>
       <span class="qi-name">${item.name}</span>
-      <span class="qi-del" data-del="${i}" title="Remove">✕</span>
+      <span class="qi-del" data-name="${item.name}" data-pid="${item.player_id||''}" title="Remove">&#x2715;</span>
     </div>`).join('');
-
-  // Remove buttons
   list.querySelectorAll('.qi-del').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const q2 = queueLoad();
-      q2.splice(parseInt(btn.dataset.del), 1);
-      queueSave(q2);
+    btn.addEventListener('click', async () => {
+      await queueRemove(btn.dataset.name, btn.dataset.pid);
+      _queueCache = null;
       renderQueue();
       updateStars();
     });
   });
 
-  // Click item → fill pick form
-  list.querySelectorAll('.queue-item').forEach(item => {
-    item.addEventListener('click', e => {
-      if (e.target.classList.contains('qi-del')) return;
-      selectPlayer(item.dataset.name);
-      if (searchInput) {
-        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        searchInput.focus();
-      }
-    });
-  });
-
-  // Drag-to-reorder
-  let dragIdx = null;
-  list.querySelectorAll('.queue-item').forEach(item => {
-    item.addEventListener('dragstart', () => {
-      dragIdx = parseInt(item.dataset.idx);
-      item.classList.add('dragging');
-    });
-    item.addEventListener('dragend', () => item.classList.remove('dragging'));
-    item.addEventListener('dragover', e => {
-      e.preventDefault();
-      list.querySelectorAll('.queue-item').forEach(i => i.classList.remove('drag-over'));
-      item.classList.add('drag-over');
-    });
-    item.addEventListener('drop', e => {
-      e.preventDefault();
-      item.classList.remove('drag-over');
-      const dropIdx = parseInt(item.dataset.idx);
-      if (dragIdx === null || dragIdx === dropIdx) return;
-      const q2 = queueLoad();
-      const [moved] = q2.splice(dragIdx, 1);
-      q2.splice(dropIdx, 0, moved);
-      queueSave(q2);
-      renderQueue();
-      updateStars();
-    });
-  });
 }
-
-function updateStars() {
-  const q = queueLoad();
+async function updateStars() {
+  const q = await queueLoad();
   const queued = new Set(q.map(i => i.name));
   document.querySelectorAll('.queue-star').forEach(btn => {
     const inQ = queued.has(btn.dataset.name);
@@ -1002,22 +973,22 @@ function updateStars() {
     btn.title = inQ ? 'Remove from queue' : 'Add to queue';
   });
 }
-
 // Star button toggle
-document.addEventListener('click', e => {
+document.addEventListener('click', async e => {
   const btn = e.target.closest('.queue-star');
   if (!btn) return;
   e.stopPropagation();
   const name = btn.dataset.name;
   const pos  = btn.dataset.pos;
-  let q = queueLoad();
+  const pid  = btn.dataset.pid;
+  const q = await queueLoad();
   const idx = q.findIndex(i => i.name === name);
   if (idx >= 0) {
-    q.splice(idx, 1);
+    await queueRemove(name, pid);
   } else {
-    q.push({ name, pos });
+    await queueAdd(name, pos, pid);
   }
-  queueSave(q);
+  _queueCache = null;
   renderQueue();
   updateStars();
 });
