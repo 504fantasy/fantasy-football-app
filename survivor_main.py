@@ -538,7 +538,7 @@ def get_team_lineup(team_id: int, week: int) -> list:
     conn = get_db()
     rows = conn.execute(
         """
-        SELECT sl.*, p.name as player_name, p.nfl_team, p.position as player_pos
+        SELECT sl.*, p.name as player_name, p.nfl_team, p.position as player_pos, p.headshot_url
         FROM survivor_lineups sl
         JOIN survivor_players p ON sl.player_id = p.id
         WHERE sl.team_id=? AND sl.week=?
@@ -1025,7 +1025,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
     used_rows = conn.execute(
         """
         SELECT DISTINCT sl.player_id, sl.week as used_week,
-               p.name, p.position, p.nfl_team
+               p.name, p.position, p.nfl_team, p.headshot_url
         FROM survivor_lineups sl
         JOIN survivor_players p ON sl.player_id = p.id
         WHERE sl.team_id=? AND sl.locked=1 AND sl.week != ?

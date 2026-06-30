@@ -469,6 +469,9 @@
             <td>
               <button class="queue-star" data-name="{{ p.name }}" data-pos="{{ p.position or 'UNK' }}" data-pid="{{ p.id }}"
                       title="Add to queue" style="background:none;border:none;cursor:pointer;padding:0 .3rem 0 0;color:var(--muted);font-size:.85rem;transition:color .15s">☆</button>
+              {% if p.headshot_url %}
+              <img src="{{ p.headshot_url }}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;background:#1a1f2e;vertical-align:middle;margin-right:.35rem" onerror="this.style.display='none'">
+              {% endif %}
               <span class="player-pick-name" style="cursor:pointer;color:var(--gold)">{{ p.name }}</span>
             </td>
             <td><span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span></td>
@@ -636,6 +639,11 @@
           {% if regulars %}
             {% for p in regulars %}
             <div class="rc-player">
+              {% if p.headshot_url %}
+              <img src="{{ p.headshot_url }}" alt="" style="width:24px;height:24px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0" onerror="this.style.display='none'">
+              {% else %}
+              <div style="width:24px;height:24px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.6rem;color:#64748b">{{ (p.position or '?')[:1] }}</div>
+              {% endif %}
               <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
               <span class="rcp-name">{{ p.name }}</span>
               <span class="rcp-nfl">{{ p.nfl_team or '' }}</span>
@@ -649,6 +657,11 @@
           <div style="padding:.35rem .85rem .1rem;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ember)">🐴 Ponies</div>
             {% for p in ponies %}
             <div class="rc-player">
+              {% if p.headshot_url %}
+              <img src="{{ p.headshot_url }}" alt="" style="width:24px;height:24px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0" onerror="this.style.display='none'">
+              {% else %}
+              <div style="width:24px;height:24px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.6rem;color:#64748b">{{ (p.position or '?')[:1] }}</div>
+              {% endif %}
               <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
               <span class="rcp-name">{{ p.name }}</span>
               <span class="rcp-nfl">{{ p.nfl_team or '' }}</span>

@@ -431,6 +431,18 @@
       {% macro player_row(p) %}
       <div class="tsb-row" data-nfl="{{ p.nfl_team or '' }}">
 
+        {# Headshot #}
+        {% if p.headshot_url %}
+        <img src="{{ p.headshot_url }}" alt="" class="player-headshot"
+             style="width:32px;height:32px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0"
+             onerror="this.style.display='none'">
+        {% else %}
+        <div class="player-headshot-fallback"
+             style="width:32px;height:32px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.7rem;color:#64748b">
+          {{ (p.position or '?')[:1] }}
+        </div>
+        {% endif %}
+
         {# Position badge #}
         <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
 
@@ -588,6 +600,16 @@
     {% set my_ponies = week_data.players | selectattr('is_pony', 'equalto', 1) | list %}
     {% for p in my_ponies %}
     <div class="pony-private-row">
+      {% if p.headshot_url %}
+      <img src="{{ p.headshot_url }}" alt="" class="player-headshot"
+           style="width:28px;height:28px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0"
+           onerror="this.style.display='none'">
+      {% else %}
+      <div class="player-headshot-fallback"
+           style="width:28px;height:28px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.65rem;color:#64748b">
+        {{ (p.position or '?')[:1] }}
+      </div>
+      {% endif %}
       <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
       <span style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}')">{{ p.name }}</span></span>
       <span style="font-size:.78rem;color:var(--muted)">{{ p.nfl_team or '' }}</span>

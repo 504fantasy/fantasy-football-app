@@ -50,6 +50,11 @@
     </style>
     {% for p in ts.players | sort(attribute='final_points', reverse=True) %}
     <div class="player-row">
+      {% if p.headshot_url %}
+      <img src="{{ p.headshot_url }}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0" onerror="this.style.display='none'">
+      {% else %}
+      <div style="width:32px;height:32px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.7rem;color:#64748b">{{ (p.position or '?')[:1] }}</div>
+      {% endif %}
       <span class="badge badge-{{ p.position|lower if p.position in ['QB','RB','WR','TE','DST','K'] else 'muted' }}" style="
         {% if p.position == 'QB' %}background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.3)
         {% elif p.position == 'RB' %}background:rgba(22,163,74,.2);color:#4ade80;border:1px solid rgba(22,163,74,.3)

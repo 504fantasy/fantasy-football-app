@@ -139,6 +139,9 @@
     <div class="slot-header">
       <span class="pos pos-{{ row.position }}">{{ row.position }}</span>
     </div>
+    {% if row.headshot_url %}
+    <img src="{{ row.headshot_url }}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#1a1f2e;display:block;margin:0 auto .4rem" onerror="this.style.display='none'">
+    {% endif %}
     <div class="player-locked">{{ row.player_name }}</div>
     <div class="player-team">{{ row.nfl_team }}</div>
     {% if locked %}
@@ -176,6 +179,9 @@
         <tr>
           <td style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b"
               onclick="showPlayerNews('{{ up.name }}','{{ up.nfl_team }}','{{ up.position }}')">
+            {% if up.headshot_url %}
+            <img src="{{ up.headshot_url }}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;background:#1a1f2e;vertical-align:middle;margin-right:.35rem" onerror="this.style.display='none'">
+            {% endif %}
             {{ up.name }}
           </td>
           <td><span class="pos pos-{{ up.position }}">{{ up.position }}</span></td>
