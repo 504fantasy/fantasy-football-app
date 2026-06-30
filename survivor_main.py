@@ -602,7 +602,7 @@ def get_team_week_score(team_id: int, week: int) -> dict:
     rows = conn.execute(
         """
         SELECT sl.position, sl.locked,
-               p.id as player_id, p.name, p.nfl_team, p.position as player_pos,
+               p.id as player_id, p.name, p.nfl_team, p.position as player_pos, p.headshot_url,
                ps.receptions, ps.receiving_yards, ps.rushing_yards,
                ps.return_yards, ps.passing_yards, ps.total_tds,
                ps.fumbles_lost, ps.interceptions, ps.field_goals_json,
@@ -742,6 +742,8 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
             team     = TEAM_MAP.get(team, team)
             headshot = row.get("headshot_url")
             headshot = str(headshot).strip() if headshot is not None and str(headshot) != "nan" else None
+            if headshot and "/upload/f_auto,q_auto/" in headshot:
+                headshot = headshot.replace("/upload/f_auto,q_auto/", "/upload/f_auto,q_auto,c_thumb,g_face,w_150,h_150/")
             if not name or not team:
                 continue
             try:

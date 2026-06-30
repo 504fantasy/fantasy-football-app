@@ -188,6 +188,8 @@ def fetch_rosters(season: int = CURRENT_SEASON) -> list[dict]:
         status = str(row.get("status") or "").strip().upper()
         headshot = row.get("headshot_url")
         headshot = str(headshot).strip() if headshot and str(headshot) != "nan" else None
+        if headshot and "/upload/f_auto,q_auto/" in headshot:
+            headshot = headshot.replace("/upload/f_auto,q_auto/", "/upload/f_auto,q_auto,c_thumb,g_face,w_150,h_150/")
 
         if not name or not pos:
             continue
