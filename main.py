@@ -305,7 +305,7 @@ def get_team_week_score(
     roster = conn.execute(
         """
         SELECT tr.id AS roster_id, tr.team_id, tr.player_id, tr.is_pony, tr.pony_revealed, tr.multiplier,
-               p.name, p.position, p.nfl_team,
+               p.name, p.position, p.nfl_team, p.headshot_url,
                ps.receptions, ps.receiving_yards, ps.rushing_yards,
                ps.return_yards, ps.passing_yards, ps.total_tds,
                ps.fumbles_lost, ps.interceptions, ps.field_goals_json,
@@ -621,7 +621,7 @@ def get_team_roster(team_id: int) -> list:
     conn = get_db()
     rows = conn.execute(
         """
-        SELECT tr.id AS roster_id, tr.id, p.id as player_id, p.name, p.position, p.nfl_team,
+        SELECT tr.id AS roster_id, tr.id, p.id as player_id, p.name, p.position, p.nfl_team, p.headshot_url,
                tr.multiplier, tr.is_pony, tr.pony_revealed
         FROM team_roster tr
         JOIN players p ON tr.player_id = p.id

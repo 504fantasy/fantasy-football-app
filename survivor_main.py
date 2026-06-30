@@ -737,15 +737,17 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
             pos = str(row.get("position", "") or "").upper().strip()
             if pos not in VALID_POS:
                 continue
-            name    = str(row.get("player_name") or row.get("full_name") or "").strip()
-            team    = str(row.get("team") or "").upper().strip()
-            team    = TEAM_MAP.get(team, team)
+            name     = str(row.get("player_name") or row.get("full_name") or "").strip()
+            team     = str(row.get("team") or "").upper().strip()
+            team     = TEAM_MAP.get(team, team)
+            headshot = row.get("headshot_url")
+            headshot = str(headshot).strip() if headshot is not None and str(headshot) != "nan" else None
             if not name or not team:
                 continue
             try:
                 conn.execute(
-                    "INSERT INTO survivor_players (league_id, name, position, nfl_team) VALUES (?,?,?,?)",
-                    (league_id, name, pos, team)
+                    "INSERT INTO survivor_players (league_id, name, position, nfl_team, headshot_url) VALUES (?,?,?,?,?)",
+                    (league_id, name, pos, team, headshot)
                 )
                 added += 1
             except Exception:

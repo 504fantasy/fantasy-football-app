@@ -420,6 +420,17 @@
         {% if ts.players %}
           {% for p in ts.players | sort(attribute='final_points', reverse=true) %}
           <div class="tsb-row">
+            {# Headshot #}
+            {% if p.headshot_url %}
+            <img src="{{ p.headshot_url }}" alt="" class="player-headshot"
+                 style="width:32px;height:32px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0"
+                 onerror="this.style.display='none'">
+            {% else %}
+            <div class="player-headshot-fallback"
+                 style="width:32px;height:32px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.7rem;color:#64748b">
+              {{ (p.position or '?')[:1] }}
+            </div>
+            {% endif %}
 
             {# Position badge #}
             <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>

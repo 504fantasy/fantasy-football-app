@@ -186,6 +186,8 @@ def fetch_rosters(season: int = CURRENT_SEASON) -> list[dict]:
         team   = str(row.get("team") or row.get("recent_team") or "").strip().upper()
         pid    = str(row.get("player_id") or row.get("gsis_id") or "").strip()
         status = str(row.get("status") or "").strip().upper()
+        headshot = row.get("headshot_url")
+        headshot = str(headshot).strip() if headshot and str(headshot) != "nan" else None
 
         if not name or not pos:
             continue
@@ -206,6 +208,7 @@ def fetch_rosters(season: int = CURRENT_SEASON) -> list[dict]:
             "name":      name,
             "position":  pos,
             "nfl_team":  team,
+            "headshot_url": headshot,
         })
 
     logger.info(f"Fetched {len(players)} roster players")
@@ -378,14 +381,14 @@ def seed_players(league_id: int, season: int = CURRENT_SEASON,
                 ), (league_id, p["name"], p["position"])).fetchone()
                 if existing:
                     conn.execute(adapt_sql(
-                        "UPDATE players SET nfl_team=? WHERE id=?"
-                    ), (p["nfl_team"], existing["id"]))
+                        "UPDATE players SET nfl_team=?, headshot_url=? WHERE id=?"
+                    ), (p["nfl_team"], p.get("headshot_url"), existing["id"]))
                     skipped += 1
                     continue
 
             conn.execute(adapt_sql(
-                "INSERT INTO players (league_id, name, position, nfl_team) VALUES (?,?,?,?)"
-            ), (league_id, p["name"], p["position"], p["nfl_team"]))
+                "INSERT INTO players (league_id, name, position, nfl_team, headshot_url) VALUES (?,?,?,?,?)"
+            ), (league_id, p["name"], p["position"], p["nfl_team"], p.get("headshot_url")))
             added += 1
 
         except Exception:
