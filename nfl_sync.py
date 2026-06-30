@@ -84,7 +84,7 @@ VALID_POSITIONS = {"QB", "RB", "WR", "TE", "K", "DST"}
 # NFL team abbreviation normalisation — nfl_data_py uses some non-standard ones
 TEAM_MAP = {
     "LA":  "LAR",
-    "LV":  "LAS",  # Las Vegas Raiders
+    "LAS": "LV",  # Las Vegas Raiders
     "JAC": "JAX",
 }
 

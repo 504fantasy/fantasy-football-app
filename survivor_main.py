@@ -66,6 +66,7 @@ from scoring import calculate_fantasy_points
 from survivor_db import (
     get_league_slots,
     NFL_REGULAR_SEASON_WEEKS,
+    get_total_weeks,
     REQUIRED_POSITIONS,
     adapt_sql,
     execute_returning,
@@ -181,7 +182,8 @@ def _auto_sync_schedules():
         try:
             conn = get_db()
             leagues = conn.execute(
-                "SELECT id, season, current_week FROM survivor_leagues"
+                "SELECT id, season, current_week FROM survivor_leagues "
+                "WHERE COALESCE(season_type, 'regular') != 'preseason'"
             ).fetchall()
             conn.close()
             for league in leagues:
@@ -729,7 +731,7 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
         season = int(_os.environ.get("NFL_SEASON", "2024"))
         roster = nfl.import_seasonal_rosters([season])
         VALID_POS = {"QB", "RB", "WR", "TE", "K"}
-        TEAM_MAP  = {"LA": "LAR", "LV": "LAS", "JAC": "JAX"}
+        TEAM_MAP  = {"LA": "LAR", "LAS": "LV", "JAC": "JAX"}
         conn = get_db()
         for _, row in roster.iterrows():
             pos = str(row.get("position", "") or "").upper().strip()
@@ -934,7 +936,7 @@ def league_home(league_id: int, request: Request):
             "league": league,
             "standings": standings,
             "current_week": current_wk,
-            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "total_weeks": get_total_weeks(league_id),
             "my_team": my_team,
             "is_commissioner": is_commissioner(league, user),
             "msg": request.query_params.get("msg", ""),
@@ -1041,7 +1043,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
             "my_team": my_team,
             "week": week,
             "current_week": current_wk,
-            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "total_weeks": get_total_weeks(league_id),
             "current_lineup": current_lineup,
             "current_picks": current_picks,
             "locked": locked,
@@ -1240,7 +1242,7 @@ def scores_page(league_id: int, request: Request, week: int = None):
             "league": league,
             "week": week,
             "current_week": current_wk,
-            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "total_weeks": get_total_weeks(league_id),
             "week_scores": week_scores,
             "standings": standings,
             "is_commissioner": is_commissioner(league, user),
@@ -1337,7 +1339,7 @@ def manage_page(league_id: int, request: Request):
             "teams": teams_with_owners,
             "players": players,
             "current_week": current_wk,
-            "total_weeks": NFL_REGULAR_SEASON_WEEKS,
+            "total_weeks": get_total_weeks(league_id),
             "week_scores": enriched_week_scores,
             "lineup_status": lineup_status,
             "team_lineups": team_lineups,
@@ -1463,7 +1465,7 @@ def advance_week(league_id: int, request: Request):
         raise HTTPException(status_code=403)
 
     current_wk = league["current_week"]
-    if current_wk >= NFL_REGULAR_SEASON_WEEKS:
+    if current_wk >= get_total_weeks(league_id):
         return RedirectResponse(
             f"/survivor/{league_id}/manage?error=season_over", status_code=303
         )

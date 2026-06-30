@@ -160,6 +160,18 @@ def get_league_slots(league_id: int) -> dict:
         "K":   row["slots_k"]   or 1,
     }
 NFL_REGULAR_SEASON_WEEKS = 18
+NFL_PRESEASON_WEEKS = 3
+
+def get_total_weeks(league_id: int) -> int:
+    """Return total weeks for a league based on its season_type."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT season_type FROM survivor_leagues WHERE id=?", (league_id,)
+    ).fetchone()
+    conn.close()
+    if row and row["season_type"] == "preseason":
+        return NFL_PRESEASON_WEEKS
+    return NFL_REGULAR_SEASON_WEEKS
 
 
 def init_db(conn=None):
