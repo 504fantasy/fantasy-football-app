@@ -42,7 +42,11 @@
       <div class="alert">An account with that email already exists.</div>
     {% endif %}
     {% if request.query_params.get('error')=='short' %}
-      <div class="alert">Password must be at least 6 characters.</div>
+      <div class="alert">Password must be at least 8 characters.</div>
+    {% elif request.query_params.get('error')=='no_upper' %}
+      <div class="alert">Password must contain at least one uppercase letter.</div>
+    {% elif request.query_params.get('error')=='no_number' %}
+      <div class="alert">Password must contain at least one number.</div>
     {% endif %}
     {% if request.query_params.get('error')=='bad_email' %}
       <div class="alert">Please enter a valid email address.</div>
@@ -63,8 +67,8 @@
       </div>
       <div class="fg">
         <label>Password</label>
-        <input name="password" type="password" autocomplete="new-password" required minlength="6"/>
-        <p class="hint">Minimum 6 characters</p>
+        <input name="password" type="password" autocomplete="new-password" required minlength="8"/>
+        <p class="hint">Min 8 characters, 1 uppercase letter, 1 number</p>
       </div>
       <button class="btn">Create Account</button>
     </form>

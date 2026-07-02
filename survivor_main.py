@@ -55,6 +55,9 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -140,6 +143,11 @@ except Exception as _e:
 # ──────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI()
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, lambda req, exc: __import__('fastapi').responses.JSONResponse(
+    status_code=429, content={"detail": "Too many requests. Please wait and try again."}
+))
 
 # ── Background schedule auto-sync (once per day) ──────────────────────────
 import threading as _threading

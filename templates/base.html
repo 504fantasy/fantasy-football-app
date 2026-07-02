@@ -486,6 +486,20 @@ document.addEventListener('click',e=>{const m=document.getElementById('player-mo
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePlayerModal();});
 </script>
 
+<script>
+function getCookie(name){const v=document.cookie.match('(^|;)\s*'+name+'\s*=\s*([^;]+)');return v?v.pop():'';}
+document.addEventListener('DOMContentLoaded',function(){
+  const token=getCookie('csrf_token');
+  if(!token)return;
+  document.querySelectorAll('form[method="post"],form[method="POST"]').forEach(function(form){
+    if(!form.querySelector('input[name="csrf_token"]')){
+      const inp=document.createElement('input');
+      inp.type='hidden';inp.name='csrf_token';inp.value=token;
+      form.appendChild(inp);
+    }
+  });
+});
+</script>
 <main>{% block content %}{% endblock %}</main>
 
 </body>

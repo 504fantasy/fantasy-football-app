@@ -10,6 +10,9 @@ import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -39,6 +42,15 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 JWT_SECRET = os.environ.get(
     "JWT_SECRET", "CHANGE_ME_in_production_use_a_long_random_string"
 )
+if JWT_SECRET == "CHANGE_ME_in_production_use_a_long_random_string":
+    raise RuntimeError(
+        "JWT_SECRET is not set! Add a strong random JWT_SECRET to your .env file. "
+        "Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+if len(JWT_SECRET) < 32:
+    raise RuntimeError(
+        f"JWT_SECRET is too short ({len(JWT_SECRET)} chars). Use at least 32 random characters."
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "72"))
 
@@ -243,6 +255,25 @@ def _auto_skip(league_id: int, expected_round: int, expected_pick: int) -> None:
     else:
         write_audit(actor="system", action="DRAFT_SKIP", league_id=league_id,
             details=f"Timer expired R{expected_round} P{expected_pick+1}")
+
+
+# ── CSRF Protection ────────────────────────────────────────────────────────────
+def generate_csrf_token() -> str:
+    return secrets.token_hex(32)
+
+def get_csrf_token(request: Request) -> str:
+    """Get or create a CSRF token stored in the session cookie."""
+    token = request.cookies.get("csrf_token")
+    if not token:
+        token = generate_csrf_token()
+    return token
+
+def validate_csrf(request: Request, csrf_token: str = Form(None)) -> bool:
+    """Validate CSRF token from form matches cookie."""
+    cookie_token = request.cookies.get("csrf_token")
+    if not cookie_token or not csrf_token:
+        return False
+    return secrets.compare_digest(cookie_token, csrf_token)
 
 # ======================================================
 # AUDIT LOG
@@ -746,6 +777,11 @@ def multipliers_locked_for(league: dict) -> bool:
 # ======================================================
 
 app = FastAPI()
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, lambda req, exc: __import__('fastapi').responses.JSONResponse(
+    status_code=429, content={"detail": "Too many requests. Please wait and try again."}
+))
 templates = Jinja2Templates(directory="templates")
 
 
@@ -797,7 +833,8 @@ def register_page(request: Request):
 
 
 @app.post("/login")
-def login(username: str = Form(...), password: str = Form(...)):
+@limiter.limit("5/minute")
+def login(request: Request, username: str = Form(...), password: str = Form(...)):
     user = get_user(username)
     if not user or not verify_password(password, user["password_hash"]):
         return RedirectResponse("/login?error=1", status_code=303)
@@ -807,6 +844,14 @@ def login(username: str = Form(...), password: str = Form(...)):
         "session",
         token,
         httponly=True,
+        samesite="lax",
+        secure=os.environ.get("SECURE_COOKIES", "0") == "1",
+        max_age=JWT_EXPIRE_HOURS * 3600,
+    )
+    resp.set_cookie(
+        "csrf_token",
+        generate_csrf_token(),
+        httponly=False,
         samesite="lax",
         secure=os.environ.get("SECURE_COOKIES", "0") == "1",
         max_age=JWT_EXPIRE_HOURS * 3600,
@@ -895,13 +940,18 @@ def get_user_by_email(email: str):
 # ======================================================
 
 @app.post("/register")
-def register(
+@limiter.limit("3/minute")
+def register(request: Request, 
     username: str = Form(...),
     password: str = Form(...),
     email:    str = Form(...),
 ):
-    if len(password) < 6:
+    if len(password) < 8:
         return RedirectResponse("/register?error=short", status_code=303)
+    if not any(ch.isupper() for ch in password):
+        return RedirectResponse("/register?error=no_upper", status_code=303)
+    if not any(ch.isdigit() for ch in password):
+        return RedirectResponse("/register?error=no_number", status_code=303)
     username = username.strip()
     email    = email.strip().lower()
     if not username:
