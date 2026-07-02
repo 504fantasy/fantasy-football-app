@@ -4,6 +4,7 @@ load_dotenv()  # load .env before anything else reads os.environ
 
 import json
 import os
+import secrets
 import sqlite3  # still needed for IntegrityError
 import threading
 import time
@@ -1364,6 +1365,76 @@ def queue_get(league_id: int, user=Depends(get_current_user)):
     ).fetchall()
     conn.close()
     return {"queue": [dict(r) for r in rows]}
+
+
+
+@app.get("/api/nfl-schedule/{week}")
+def api_nfl_schedule(week: int, season: int = None, user=Depends(get_current_user)):
+    """Return all games for a given week from survivor schedule data."""
+    from datetime import datetime, timezone
+    import sqlite3 as _sq
+    if not season:
+        season = int(os.environ.get("NFL_SEASON", "2026"))
+    try:
+        sconn = _sq.connect(os.environ.get("SURVIVOR_DB_PATH", "data/survivor.db"))
+        sconn.row_factory = _sq.Row
+        # Pick the league with the latest week 1 kickoff = regular season (Sept vs Aug)
+        best_league = sconn.execute("""
+            SELECT league_id FROM survivor_game_schedule
+            WHERE week=1 AND season=?
+            GROUP BY league_id
+            ORDER BY MAX(kickoff_utc) DESC
+            LIMIT 1
+        """, (season,)).fetchone()
+        best_lid = best_league[0] if best_league else 1
+        rows = sconn.execute("""
+            SELECT kickoff_utc, team
+            FROM survivor_game_schedule
+            WHERE week=? AND season=? AND league_id=?
+            ORDER BY kickoff_utc ASC, team ASC
+        """, (week, season, best_lid)).fetchall()
+        sconn.close()
+        # Group teams by kickoff time - show timeslots not matchups
+        # since we don't store away/home distinction
+        from collections import defaultdict
+        timeslots = defaultdict(list)
+        for r in rows:
+            timeslots[r["kickoff_utc"]].append(r["team"])
+
+        games = []
+        for kickoff, teams in sorted(timeslots.items()):
+            games.append({
+                "kickoff_utc": kickoff,
+                "teams": teams,
+            })
+        return {"week": week, "season": season, "games": games}
+    except Exception as e:
+        return {"week": week, "season": season, "games": [], "error": str(e)}
+
+@app.get("/api/team-schedule/{nfl_team}")
+def api_team_schedule(nfl_team: str, user=Depends(get_current_user)):
+    """Return upcoming schedule entries for an NFL team from any active league."""
+    from datetime import datetime, timezone
+    conn = get_db()
+    # Get schedule from survivor DB
+    try:
+        import sqlite3 as _sq
+        sconn = _sq.connect(os.environ.get("SURVIVOR_DB_PATH", "data/survivor.db"))
+        sconn.row_factory = _sq.Row
+        now_utc = datetime.now(timezone.utc).isoformat()
+        rows = sconn.execute("""
+            SELECT week, team, kickoff_utc, season
+            FROM survivor_game_schedule
+            WHERE team=? AND kickoff_utc >= ?
+            ORDER BY kickoff_utc ASC
+            LIMIT 5
+        """, (nfl_team.upper(), now_utc)).fetchall()
+        sconn.close()
+        return {"games": [dict(r) for r in rows]}
+    except Exception as e:
+        return {"games": [], "error": str(e)}
+    finally:
+        conn.close()
 
 @app.post("/league/{league_id}/draft/autopick")
 def draft_autopick(league_id: int, user=Depends(get_current_user)):

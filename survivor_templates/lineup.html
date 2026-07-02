@@ -178,7 +178,7 @@
         {% for up in used_players %}
         <tr>
           <td style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b"
-              onclick="showPlayerNews('{{ up.name }}','{{ up.nfl_team }}','{{ up.position }}')">
+              onclick="showPlayerNews('{{ up.name }}','{{ up.nfl_team }}','{{ up.position }}','{{ up.headshot_url or "" }}')">
             {% if up.headshot_url %}
             <img src="{{ up.headshot_url }}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;background:#1a1f2e;vertical-align:middle;margin-right:.35rem" onerror="this.style.display='none'">
             {% endif %}
@@ -195,4 +195,210 @@
   </div>
 </details>
 {% endif %}
+
+<!-- Research Panel (sidebar on desktop, bottom sheet on mobile) -->
+<style>
+#research-sidebar {
+  position: fixed;
+  background: #111418;
+  border-color: #252a34;
+  border-style: solid;
+  z-index: 900;
+  overflow-y: auto;
+  transition: transform .3s ease;
+}
+/* Desktop: right panel */
+@media (min-width: 640px) {
+  #research-sidebar {
+    top: 0; right: 0; width: 320px; height: 100vh;
+    border-left-width: 1px; border-top: none; border-bottom: none; border-right: none;
+    transform: translateX(100%);
+    padding: 1rem;
+  }
+  #research-sidebar.open { transform: translateX(0); }
+  #research-btn {
+    position: fixed; right: 0; top: 50%;
+    transform: translateY(-50%);
+    writing-mode: vertical-rl; text-orientation: mixed;
+    border-radius: 6px 0 0 6px;
+    border-right: none;
+    padding: .6rem .4rem;
+    transition: right .3s ease;
+  }
+  #research-sidebar.open ~ #research-btn { right: 320px; }
+}
+/* Mobile: bottom sheet */
+@media (max-width: 639px) {
+  #research-sidebar {
+    bottom: 0; left: 0; right: 0; height: 70vh;
+    border-top-width: 1px; border-left: none; border-right: none; border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    transform: translateY(100%);
+    padding: 1rem;
+  }
+  #research-sidebar.open { transform: translateY(0); }
+  #research-btn {
+    position: fixed; bottom: 1rem; right: 1rem;
+    writing-mode: horizontal-tb;
+    border-radius: 24px;
+    padding: .5rem 1rem;
+    border-width: 1px;
+  }
+}
+#research-btn {
+  background: #1a1f2e;
+  border-color: #252a34;
+  cursor: pointer;
+  z-index: 899;
+  color: #e8b84b;
+  font-size: .8rem;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+</style>
+
+<div id="research-sidebar">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:1px solid #252a34">
+    <span style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.1rem;font-weight:800;text-transform:uppercase;color:#e8b84b">&#128269; Research</span>
+    <button onclick="toggleResearch()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:1.1rem">&#x2715;</button>
+  </div>
+
+  <!-- Player Search -->
+  <div style="margin-bottom:1rem">
+    <div style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:.4rem">Player Lookup</div>
+    <div style="display:flex;gap:.4rem">
+      <input id="research-search" type="text" placeholder="Search player..."
+             style="flex:1;background:#181c23;border:1px solid #252a34;border-radius:6px;padding:.4rem .6rem;color:#e8eaf0;font-size:.85rem;outline:none"
+             onkeydown="if(event.key===\'Enter\')researchSearch()">
+      <button onclick="researchSearch()" style="background:var(--gold);color:#000;border:none;border-radius:6px;padding:.4rem .7rem;cursor:pointer;font-weight:700;font-size:.85rem">Go</button>
+    </div>
+    <div id="research-search-results" style="margin-top:.4rem"></div>
+  </div>
+
+  <!-- Schedule -->
+  <div style="margin-bottom:1rem">
+    <div style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:.4rem">
+      NFL Schedule
+    </div>
+    <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
+      <button onclick="changeResearchWeek(-1)" style="background:#181c23;border:1px solid #252a34;border-radius:4px;color:#e8eaf0;cursor:pointer;padding:.2rem .5rem;font-size:.9rem">&#8592;</button>
+      <span style="flex:1;text-align:center;font-size:.8rem;font-weight:700;color:#e8eaf0">Week <span id="research-week-label">1</span></span>
+      <button onclick="changeResearchWeek(1)" style="background:#181c23;border:1px solid #252a34;border-radius:4px;color:#e8eaf0;cursor:pointer;padding:.2rem .5rem;font-size:.9rem">&#8594;</button>
+    </div>
+    <div id="research-schedule" style="font-size:.78rem">
+      <div style="color:#64748b;font-style:italic">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Bye Teams -->
+  <div>
+    <div style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:.4rem">Bye Week Teams</div>
+    <div id="research-byes" style="font-size:.78rem">
+      <div style="color:#64748b;font-style:italic">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<button onclick="toggleResearch()" id="research-btn">&#128269; Research</button>
+
+<script>
+let researchOpen=false, researchLoaded=false;
+const ALL_NFL_TEAMS=['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SF','SEA','TB','TEN','WAS'];
+
+function toggleResearch(){
+  researchOpen=!researchOpen;
+  document.getElementById('research-sidebar').classList.toggle('open',researchOpen);
+  if(researchOpen&&!researchLoaded){loadResearchData();researchLoaded=true;}
+}
+
+let currentResearchWeek = null;
+
+function changeResearchWeek(delta){
+  currentResearchWeek = (currentResearchWeek||1) + delta;
+  if(currentResearchWeek < 1) currentResearchWeek = 1;
+  if(currentResearchWeek > 18) currentResearchWeek = 18;
+  document.getElementById('research-week-label').textContent = currentResearchWeek;
+  loadResearchData(currentResearchWeek);
+}
+
+async function loadResearchData(overrideWeek){
+  const weekEl=document.querySelector('[data-current-week]');
+  const defaultWeek=weekEl?parseInt(weekEl.dataset.currentWeek):1;
+  const week=overrideWeek||currentResearchWeek||defaultWeek;
+  currentResearchWeek=week;
+  document.getElementById('research-week-label').textContent=week;
+  try{
+    const r=await fetch(`/api/nfl-schedule/${week}`,{credentials:'same-origin'});
+    const d=await r.json();
+    const schedEl=document.getElementById('research-schedule');
+    const byeEl=document.getElementById('research-byes');
+    if(!d.games||!d.games.length){
+      schedEl.innerHTML='<div style="color:#64748b;font-style:italic">No schedule data.</div>';
+      byeEl.innerHTML='<div style="color:#64748b;font-style:italic">No bye data.</div>';
+      return;
+    }
+    const scheduledTeams=new Set();
+    let html='';
+    for(const g of d.games){
+      (g.teams||[]).forEach(t=>{ scheduledTeams.add(t); if(t==='LA')scheduledTeams.add('LAR'); if(t==='LAR')scheduledTeams.add('LA'); });
+      const ko=new Date(g.kickoff_utc+'Z');
+      const locked=ko<=new Date();
+      const t=ko.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+      const TMAP={'LA':'LAR','JAC':'JAX','LV':'LAS'};
+      const teams=g.teams||[];
+      // Pair teams into matchups (every 2 teams = 1 game)
+      let matchups='';
+      for(let mi=0;mi<teams.length;mi+=2){
+        const t1=TMAP[teams[mi]]||teams[mi];
+        const t2=teams[mi+1]?TMAP[teams[mi+1]]||teams[mi+1]:'TBD';
+        matchups+=`<div style="font-size:.78rem;font-weight:600;color:#e8eaf0;padding:.1rem 0">
+          <span style="color:#8898b0">${t1}</span>
+          <span style="color:#64748b;margin:0 .3rem">@</span>
+          <span style="color:#e8eaf0">${t2}</span>
+        </div>`;
+      }
+      html+=`<div style="padding:.35rem 0;border-bottom:1px solid rgba(37,42,52,.6);${locked?'opacity:.5':''}">
+        <div style="color:#64748b;font-size:.68rem;margin-bottom:.2rem">${locked?'&#128274; Locked':t}</div>
+        ${matchups}
+      </div>`;
+    }
+    schedEl.innerHTML=html||'<div style="color:#64748b">No games this week.</div>';
+    const byes=ALL_NFL_TEAMS.filter(t=>!scheduledTeams.has(t));
+    // Only show bye teams if most teams are playing (regular season)
+    // In preseason not all 32 teams play so "byes" are misleading
+    if(scheduledTeams.size >= 28){
+      byeEl.innerHTML=byes.length
+        ?'<div style="display:flex;flex-wrap:wrap;gap:.3rem">'+byes.map(t=>`<span style="background:#1a1f2e;border:1px solid #252a34;border-radius:4px;padding:.15rem .4rem;font-size:.75rem;color:#8898b0">${t}</span>`).join('')+'</div>'
+        :'<div style="color:#64748b;font-style:italic">No bye teams this week.</div>';
+    } else {
+      byeEl.innerHTML='<div style="color:#64748b;font-style:italic">Bye week data only available during regular season.</div>';
+    }
+  }catch(e){document.getElementById('research-schedule').innerHTML='<div style="color:#ef4444">Error loading.</div>';}
+}
+
+async function researchSearch(){
+  const q=document.getElementById('research-search').value.trim().toLowerCase();
+  const el=document.getElementById('research-search-results');
+  if(!q)return;
+  el.innerHTML='<div style="color:#64748b;font-size:.78rem">Searching...</div>';
+  const players=await loadSP();
+  if(!players){el.innerHTML='<div style="color:#ef4444;font-size:.78rem">Error.</div>';return;}
+  const matches=Object.values(players).filter(p=>p.full_name&&p.full_name.toLowerCase().includes(q)&&['QB','RB','WR','TE','K','DEF'].includes(p.position)).slice(0,6);
+  if(!matches.length){el.innerHTML='<div style="color:#64748b;font-size:.78rem">No players found.</div>';return;}
+  el.innerHTML=matches.map(p=>`
+    <div onclick="showPlayerNews('${(p.full_name||'').replace(/'/g,"\\'")}','${p.team||''}','${p.position||''}','')"
+         style="display:flex;align-items:center;gap:.5rem;padding:.35rem .4rem;cursor:pointer;border-radius:6px;margin-bottom:.2rem;background:#181c23;border:1px solid #252a34"
+         onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='#252a34'">
+      ${p.headshot_url?`<img src="${p.headshot_url.replace('/upload/f_auto,q_auto/','/upload/f_auto,q_auto,c_thumb,g_face,w_60,h_60/')}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;background:#1a1f2e" onerror="this.style.display='none'">`:
+      `<div style="width:28px;height:28px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:#64748b">${(p.position||'?')[0]}</div>`}
+      <div>
+        <div style="font-size:.82rem;font-weight:600;color:#e8eaf0">${p.full_name}</div>
+        <div style="font-size:.7rem;color:#64748b">${p.position||'?'} &middot; ${p.team||'FA'}</div>
+      </div>
+    </div>`).join('');
+}
+</script>
+
 {% endblock %}

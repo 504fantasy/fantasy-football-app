@@ -436,7 +436,7 @@
             <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
 
             {# Name #}
-            <span class="tr-name" style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}')">
+            <span class="tr-name" style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">
               {{ p.name }}
               {% if p.is_pony %}<span class="badge b-ember" style="font-size:.65rem;margin-left:.3rem">🐴</span>{% endif %}
               {% if p.multiplier %}<span class="badge b-gold" style="font-size:.65rem;margin-left:.2rem">×{{ p.multiplier }}</span>{% endif %}

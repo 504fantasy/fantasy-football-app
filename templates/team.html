@@ -448,7 +448,7 @@
 
         {# Name + tags #}
         <span class="tr-name player-name">
-          <span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}')">{{ p.name }}</span>
+          <span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span>
           {% if p.is_pony %}
             <span class="badge b-ember" style="font-size:.65rem;margin-left:.3rem">🐴</span>
             {% if is_owner and not p.pony_revealed %}<span style="font-size:.62rem;color:var(--ember);opacity:.7">🔒</span>{% endif %}
@@ -529,7 +529,7 @@
         {% if is_owner and not multipliers_locked %}
         <form method="post" action="/league/{{ league.id }}/{% if p.is_pony %}pony/{% endif %}multiplier" class="mult-form">
           <input type="hidden" name="roster_id" value="{{ p.get('roster_id') or '' }}"/>
-          <input type="hidden" name="player_name" value="<span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}')">{{ p.name }}</span>"/>
+          <input type="hidden" name="player_name" value="<span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span>"/>
           <input type="hidden" name="team" value="{{ team.name }}"/>
           <select class="mult-input" name="value">
             <option value="">—</option>
@@ -611,7 +611,7 @@
       </div>
       {% endif %}
       <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
-      <span style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}')">{{ p.name }}</span></span>
+      <span style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span></span>
       <span style="font-size:.78rem;color:var(--muted)">{{ p.nfl_team or '' }}</span>
       {% if p.pony_revealed %}
         <span style="font-size:.68rem;color:var(--green);margin-left:auto">✓ Revealed</span>
