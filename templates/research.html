@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}Research — 504 Fantasy{% endblock %}
+{% block content %}
+<style>
+.research-tabs { display:flex; gap:.5rem; margin-bottom:1.5rem; border-bottom:1px solid var(--border); padding-bottom:.75rem; flex-wrap:wrap; }
+.rtab { background:none; border:none; color:var(--muted); cursor:pointer; font-family:'Barlow Condensed',sans-serif; font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:.4rem .8rem; border-radius:6px; transition:all .15s; }
+.rtab.active { background:var(--s2); color:var(--gold); }
+.rtab:hover:not(.active) { color:var(--text); }
+.rpanel { display:none; }
+.rpanel.active { display:block; }
+.player-card { background:var(--s1); border:1px solid var(--border); border-radius:8px; padding:.75rem 1rem; display:flex; align-items:center; gap:.75rem; cursor:pointer; transition:border-color .15s; margin-bottom:.5rem; }
+.player-card:hover { border-color:var(--gold); }
+.sched-slot { background:var(--s1); border:1px solid var(--border); border-radius:8px; padding:.75rem 1rem; margin-bottom:.5rem; }
+.sched-time { font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+.matchup { font-size:.9rem; font-weight:600; padding:.2rem 0; }
+.bye-badge { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:.2rem .5rem; font-size:.8rem; font-weight:700; color:var(--muted2); display:inline-block; margin:.2rem; }
+.week-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:.75rem; }
+.week-card { background:var(--s1); border:1px solid var(--border); border-radius:8px; padding:.75rem; }
+.week-card-title { font-family:'Barlow Condensed',sans-serif; font-size:.9rem; font-weight:800; text-transform:uppercase; color:var(--gold); margin-bottom:.4rem; }
+.pos-filter { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
+.pos-btn { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:.2rem .6rem; font-size:.78rem; font-weight:700; cursor:pointer; color:var(--muted2); transition:all .15s; }
+.pos-btn.active { background:var(--gold); color:#000; border-color:var(--gold); }
+</style>
+
+<div class="page-header">
+  <h1>&#128269; Research Center</h1>
+  <p style="color:var(--muted)">Player stats, injury reports, schedules and bye weeks</p>
+</div>
+
+<!-- Tabs -->
+<div class="research-tabs">
+  <button class="rtab active" onclick="switchTab('players')">&#127944; Players</button>
+  <button class="rtab" onclick="switchTab('schedule')">&#128197; Schedule</button>
+  <button class="rtab" onclick="switchTab('byes')">&#128564; Bye Weeks</button>
+  <button class="rtab" onclick="switchTab('injuries')">&#129658; Injuries</button>
+</div>
+
+<!-- PLAYERS TAB -->
+<div id="tab-players" class="rpanel active">
+  <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
+    <input id="player-search-input" type="text" placeholder="Search player name..."
+           style="flex:1;min-width:200px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem;outline:none"
+           oninput="searchPlayers()">
+    <select id="pos-filter" onchange="searchPlayers()"
+            style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem;outline:none">
+      <option value="">All Positions</option>
+      <option value="QB">QB</option>
+      <option value="RB">RB</option>
+      <option value="WR">WR</option>
+      <option value="TE">TE</option>
+      <option value="K">K</option>
+      <option value="DEF">DEF</option>
+    </select>
+    <select id="team-filter" onchange="searchPlayers()"
+            style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem;outline:none">
+      <option value="">All Teams</option>
+      {% for team in ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SF','SEA','TB','TEN','WAS'] %}
+      <option value="{{ team }}">{{ team }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div id="player-results" style="color:var(--muted);font-style:italic">Type a name or select a position to search players...</div>
+</div>
+
+<!-- SCHEDULE TAB -->
+<div id="tab-schedule" class="rpanel">
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+    <button onclick="changeSchedWeek(-1)" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.4rem .75rem;color:var(--text);cursor:pointer;font-size:1rem">&#8592;</button>
+    <span id="sched-week-label" style="font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:800;color:var(--gold)">Week 1</span>
+    <button onclick="changeSchedWeek(1)" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.4rem .75rem;color:var(--text);cursor:pointer;font-size:1rem">&#8594;</button>
+    <span id="sched-week-dates" style="color:var(--muted);font-size:.85rem"></span>
+  </div>
+  <div id="schedule-content" style="color:var(--muted);font-style:italic">Loading schedule...</div>
+</div>
+
+<!-- BYE WEEKS TAB -->
+<div id="tab-byes" class="rpanel">
+  <p style="color:var(--muted);margin-bottom:1rem;font-size:.9rem">Teams on bye each week of the regular season.</p>
+  <div id="byes-content" style="color:var(--muted);font-style:italic">Loading bye weeks...</div>
+</div>
+
+<!-- INJURIES TAB -->
+<div id="tab-injuries" class="rpanel">
+  <div class="pos-filter" id="injury-pos-filter">
+    <button class="pos-btn active" onclick="filterInjuries('')">All</button>
+    <button class="pos-btn" onclick="filterInjuries('QB')">QB</button>
+    <button class="pos-btn" onclick="filterInjuries('RB')">RB</button>
+    <button class="pos-btn" onclick="filterInjuries('WR')">WR</button>
+    <button class="pos-btn" onclick="filterInjuries('TE')">TE</button>
+    <button class="pos-btn" onclick="filterInjuries('K')">K</button>
+  </div>
+  <div id="injury-content" style="color:var(--muted);font-style:italic">Loading injury report...</div>
+</div>
+
+<script>
+const NFL_SEASON = {{ nfl_season }};
+const TMAP = {'LA':'LAR','JAC':'JAX'};
+const ALL_TEAMS = ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SF','SEA','TB','TEN','WAS'];
+let schedWeek = 1;
+let sleeperData = null;
+let injuryPosFilter = '';
+let hsCache = null;
+async function getHeadshots() {
+  if(hsCache) return hsCache;
+  try { const r=await fetch('/api/headshots',{credentials:'same-origin'}); hsCache=await r.json(); }
+  catch(e){ hsCache={}; }
+  return hsCache;
+}
+function getHS(name){ return (hsCache&&hsCache[name.toLowerCase()])||''; }
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.rpanel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.rtab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+  if(name==='schedule' && !document.getElementById('schedule-content').dataset.loaded) loadSchedule();
+  if(name==='byes' && !document.getElementById('byes-content').dataset.loaded) loadByeWeeks();
+  if(name==='injuries' && !document.getElementById('injury-content').dataset.loaded) loadInjuries();
+}
+
+// ── Sleeper data ───────────────────────────────────────────────────────────
+async function getSleeperData() {
+  if(sleeperData) return sleeperData;
+  document.getElementById('player-results').innerHTML = '<div style="color:var(--muted)">Loading player database...</div>';
+  const r = await fetch('https://api.sleeper.app/v1/players/nfl');
+  sleeperData = await r.json();
+  return sleeperData;
+}
+
+// ── Players tab ────────────────────────────────────────────────────────────
+let searchTimer = null;
+async function searchPlayers() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    const q = document.getElementById('player-search-input').value.trim().toLowerCase();
+    const pos = document.getElementById('pos-filter').value;
+    const team = document.getElementById('team-filter').value;
+    const el = document.getElementById('player-results');
+    if(!q && !pos && !team) {
+      el.innerHTML = '<div style="color:var(--muted);font-style:italic">Type a name or select a position to search players...</div>';
+      return;
+    }
+    el.innerHTML = '<div style="color:var(--muted)">Searching...</div>';
+    const [players] = await Promise.all([getSleeperData(), getHeadshots()]);
+    const matches = Object.values(players).filter(p => {
+      if(!p.full_name || !p.position) return false;
+      if(!['QB','RB','WR','TE','K','DEF'].includes(p.position)) return false;
+      if(q && !p.full_name.toLowerCase().includes(q)) return false;
+      if(pos && p.position !== pos) return false;
+      if(team && p.team !== team) return false;
+      return true;
+    }).slice(0, 40);
+    if(!matches.length) { el.innerHTML = '<div style="color:var(--muted);font-style:italic">No players found.</div>'; return; }
+    el.innerHTML = matches.map(p => {
+      const inj = p.injury_status || p.status || 'Active';
+      const injColor = {'Questionable':'#e8b84b','Doubtful':'#fb923c','Out':'#ef4444','IR':'#ef4444','PUP':'#ef4444','Active':'#22c55e'}[inj] || '#22c55e';
+      const hs = getHS(p.full_name||'') || (p.player_id ? `https://sleepercdn.com/content/nfl/players/thumb/${p.player_id}.jpg` : '');
+      return `<div class="player-card" onclick="showPlayerNews('${(p.full_name||'').replace(/'/g,"\\'")}','${p.team||''}','${p.position||''}','${hs}')">
+        ${hs ? `<img src="${hs}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;object-position:center top;background:#1a1f2e;flex-shrink:0;transform:scale(1.2);transform-origin:center top" onerror="this.style.display='none'">` :
+        `<div style="width:40px;height:40px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:.8rem;color:var(--muted);flex-shrink:0">${(p.position||'?')[0]}</div>`}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:var(--text)">${p.full_name}</div>
+          <div style="font-size:.78rem;color:var(--muted2)">${p.position} &middot; ${p.team||'FA'} ${p.number?'#'+p.number:''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:.72rem;font-weight:700;color:${injColor}">${inj}</div>
+          ${p.injury_body_part?`<div style="font-size:.68rem;color:var(--muted2)">${p.injury_body_part}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }, 300);
+}
+
+// ── Schedule tab ───────────────────────────────────────────────────────────
+async function loadSchedule(week) {
+  week = week || schedWeek;
+  schedWeek = week;
+  const el = document.getElementById('schedule-content');
+  const label = document.getElementById('sched-week-label');
+  label.textContent = `Week ${week}`;
+  el.innerHTML = '<div style="color:var(--muted)">Loading...</div>';
+  try {
+    const r = await fetch(`/api/nfl-schedule/${week}`, {credentials:'same-origin'});
+    const d = await r.json();
+    el.dataset.loaded = '1';
+    if(!d.games||!d.games.length) { el.innerHTML='<div style="color:var(--muted);font-style:italic">No schedule data for this week.</div>'; return; }
+    let html = '';
+    for(const g of d.games) {
+      const ko = new Date(g.kickoff_utc+'Z');
+      const locked = ko <= new Date();
+      const timeStr = ko.toLocaleString('en-US',{weekday:'long',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+      const teams = g.teams||[];
+      let matchupsHtml = '';
+      for(let i=0;i<teams.length;i+=2){
+        const t1=TMAP[teams[i]]||teams[i];
+        const t2=teams[i+1]?TMAP[teams[i+1]]||teams[i+1]:'TBD';
+        matchupsHtml+=`<div class="matchup"><span style="color:var(--muted2)">${t1}</span> <span style="color:var(--muted)">@</span> <span style="color:var(--text)">${t2}</span></div>`;
+      }
+      html+=`<div class="sched-slot" style="${locked?'opacity:.6':''}">
+        <div class="sched-time">${locked?'🔒 ':''} ${timeStr}</div>
+        ${matchupsHtml}
+      </div>`;
+    }
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML='<div style="color:var(--red)">Error loading schedule.</div>'; }
+}
+function changeSchedWeek(d) {
+  schedWeek = Math.max(1, Math.min(18, schedWeek+d));
+  loadSchedule(schedWeek);
+}
+
+// ── Bye weeks tab ──────────────────────────────────────────────────────────
+async function loadByeWeeks() {
+  const el = document.getElementById('byes-content');
+  el.dataset.loaded = '1';
+  el.innerHTML = '<div style="color:var(--muted)">Loading all weeks...</div>';
+  let html = '<div class="week-grid">';
+  for(let w=1;w<=18;w++) {
+    try {
+      const r = await fetch(`/api/nfl-schedule/${w}`, {credentials:'same-origin'});
+      const d = await r.json();
+      const scheduled = new Set();
+      (d.games||[]).forEach(g=>(g.teams||[]).forEach(t=>{scheduled.add(t);if(t==='LA')scheduled.add('LAR');}));
+      const byes = ALL_TEAMS.filter(t=>!scheduled.has(t));
+      if(scheduled.size >= 28) {
+        html+=`<div class="week-card">
+          <div class="week-card-title">Week ${w}</div>
+          ${byes.length ? byes.map(t=>`<span class="bye-badge">${t}</span>`).join('') : '<span style="color:var(--muted);font-size:.8rem">No byes</span>'}
+        </div>`;
+      }
+    } catch(e) {}
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// ── Injuries tab ───────────────────────────────────────────────────────────
+async function loadInjuries() {
+  const el = document.getElementById('injury-content');
+  el.dataset.loaded = '1';
+  el.innerHTML = '<div style="color:var(--muted)">Loading injury report...</div>';
+  const [players] = await Promise.all([getSleeperData(), getHeadshots()]);
+  renderInjuries(players);
+}
+function filterInjuries(pos) {
+  injuryPosFilter = pos;
+  document.querySelectorAll('#injury-pos-filter .pos-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === (pos||'All'));
+  });
+  if(sleeperData) renderInjuries(sleeperData);
+}
+function renderInjuries(players) {
+  const el = document.getElementById('injury-content');
+  const STATUS_ORDER = ['Out','IR','PUP','Doubtful','Questionable'];
+  const injured = Object.values(players).filter(p => {
+    if(!p.full_name||!p.position) return false;
+    if(!['QB','RB','WR','TE','K'].includes(p.position)) return false;
+    if(injuryPosFilter && p.position !== injuryPosFilter) return false;
+    return p.injury_status && STATUS_ORDER.includes(p.injury_status);
+  }).sort((a,b) => STATUS_ORDER.indexOf(a.injury_status) - STATUS_ORDER.indexOf(b.injury_status));
+  if(!injured.length) { el.innerHTML='<div style="color:var(--muted);font-style:italic">No injury reports found.</div>'; return; }
+  const COLOR = {'Out':'#ef4444','IR':'#ef4444','PUP':'#ef4444','Doubtful':'#fb923c','Questionable':'#e8b84b'};
+  el.innerHTML = injured.map(p => {
+      const hs = getHS(p.full_name||'') || (p.player_id ? `https://sleepercdn.com/content/nfl/players/thumb/${p.player_id}.jpg` : '');
+    return `<div class="player-card" onclick="showPlayerNews('${(p.full_name||'').replace(/'/g,"\\'")}','${p.team||''}','${p.position||''}','${hs}')">
+      ${hs?`<img src="${hs}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;object-position:center top;background:#1a1f2e;flex-shrink:0" onerror="this.style.display='none'">`:
+      `<div style="width:40px;height:40px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:.8rem;color:var(--muted);flex-shrink:0">${(p.position||'?')[0]}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:var(--text)">${p.full_name}</div>
+        <div style="font-size:.78rem;color:var(--muted2)">${p.position} &middot; ${p.team||'FA'}</div>
+        ${p.injury_body_part?`<div style="font-size:.75rem;color:var(--muted2)">${p.injury_body_part}${p.injury_notes?' — '+p.injury_notes:''}</div>`:''}
+      </div>
+      <div style="font-size:.8rem;font-weight:700;color:${COLOR[p.injury_status]||'#64748b'};flex-shrink:0">${p.injury_status}</div>
+    </div>`;
+  }).join('');
+}
+</script>
+{% endblock %}

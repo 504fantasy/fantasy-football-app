@@ -135,6 +135,7 @@
     {% endif %}
     <div class="nav-end">
       <strong>{{ user.username }}</strong>
+      <a href="/research" class="nav-btn">🔍 Research</a>
       <a href="/dashboard" class="nav-btn main">⚡ Main Site</a>
       <a href="/survivor/logout" class="nav-btn">Logout</a>
       <button class="hamburger" id="hamburger" onclick="toggleNav()" aria-label="Menu">
@@ -280,8 +281,7 @@ async function showPlayerNews(name,team,pos,dbHeadshot){
   const ic=IC[inj]||'#64748b';
   const season=new Date().getFullYear();
   const [stats]=await Promise.all([fetchSleeperStats(p.player_id||p.sleeper_id,season)]);
-  const headshot=dbHeadshot||p.headshot_url||(
-    p.fantasy_data_id?`https://static.www.nfl.com/image/upload/f_auto,q_auto,c_thumb,g_face,w_150,h_150/league/${p.fantasy_data_id}`:"");
+  const headshot=dbHeadshot||(p.player_id?`https://sleepercdn.com/content/nfl/players/${p.player_id}.jpg`:'');
   content.innerHTML=`
     <div style="display:flex;gap:1rem;align-items:flex-start;margin-bottom:1rem">
       ${headshot?`<img src="${headshot}" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0" onerror="this.style.display='none'">`:''}

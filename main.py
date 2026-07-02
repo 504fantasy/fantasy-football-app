@@ -1067,6 +1067,17 @@ def logout(request: Request):
 # ======================================================
 
 
+
+@app.get("/research", response_class=HTMLResponse)
+def research_page(request: Request, user=Depends(get_current_user)):
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse("research.html", {
+        "request": request,
+        "user": user,
+        "nfl_season": int(os.environ.get("NFL_SEASON", "2026")),
+    })
+
 @app.get("/dashboard")
 def dashboard(request: Request, user=Depends(get_current_user)):
     if not user:
@@ -4082,3 +4093,41 @@ def admin_delete_survivor_league(league_id: int = Form(...), user=Depends(get_cu
     write_audit(actor=user["username"], action="ADMIN_SURVIVOR_LEAGUE_DELETE",
                 details=f"Deleted survivor league '{league_name}' (id={league_id})")
     return RedirectResponse("/admin?msg=league_deleted", status_code=303)
+
+
+@app.get("/research", response_class=HTMLResponse)
+def research_page(request: Request, user=Depends(get_current_user)):
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    season = int(os.environ.get("NFL_SEASON", "2026"))
+    return templates.TemplateResponse("research.html", {
+        "request": request,
+        "user": user,
+        "season": season,
+    })
+
+@app.get("/api/player-headshot")
+def api_player_headshot(name: str, user=Depends(get_current_user)):
+    """Return headshot URL from our DB for a player by name."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT headshot_url FROM players WHERE LOWER(name)=LOWER(?) AND headshot_url IS NOT NULL LIMIT 1",
+        (name,)
+    ).fetchone()
+    conn.close()
+    if row:
+        return {"headshot_url": row["headshot_url"]}
+    return {"headshot_url": None}
+
+@app.get("/api/player-headshot")
+def api_player_headshot(name: str, user=Depends(get_current_user)):
+    """Return headshot URL from our DB for a player by name."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT headshot_url FROM players WHERE LOWER(name)=LOWER(?) AND headshot_url IS NOT NULL LIMIT 1",
+        (name,)
+    ).fetchone()
+    conn.close()
+    if row:
+        return {"headshot_url": row["headshot_url"]}
+    return {"headshot_url": None}
