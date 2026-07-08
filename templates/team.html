@@ -529,7 +529,7 @@
         {% if is_owner and not multipliers_locked %}
         <form method="post" action="/league/{{ league.id }}/{% if p.is_pony %}pony/{% endif %}multiplier" class="mult-form">
           <input type="hidden" name="roster_id" value="{{ p.get('roster_id') or '' }}"/>
-          <input type="hidden" name="player_name" value="<span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span>"/>
+          <input type="hidden" name="player_name" value="{{ p.name }}"/>
           <input type="hidden" name="team" value="{{ team.name }}"/>
           <select class="mult-input" name="value">
             <option value="">—</option>
@@ -613,14 +613,16 @@
       <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
       <span style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span></span>
       <span style="font-size:.78rem;color:var(--muted)">{{ p.nfl_team or '' }}</span>
-      {% if p.pony_revealed %}
+      {% if p.pony_revealed or pony_locked %}
         <span style="font-size:.68rem;color:var(--green);margin-left:auto">✓ Revealed</span>
       {% else %}
         <span class="pony-private-label">🔒 Hidden</span>
+        {% if not pony_locked %}
         <form method="post" action="/league/{{ league.id }}/team/{{ team.id }}/pony/reveal" style="margin:0">
           <input type="hidden" name="roster_id" value="{{ p.roster_id }}"/>
           <button class="btn btn-ghost btn-xs" style="font-size:.7rem;padding:.2rem .5rem">Reveal now</button>
         </form>
+        {% endif %}
       {% endif %}
     </div>
     {% endfor %}

@@ -352,16 +352,21 @@ def get_team_week_score(
     conn.close()
 
     # Load snapshot multipliers if available — these override live values
+    pony_locked = False
     snap: dict = {}
     if league_id:
         snap = get_snapshot_multipliers(league_id, week)
+        lconn = get_db()
+        lr = lconn.execute("SELECT pony_locked FROM leagues WHERE id=?", (league_id,)).fetchone()
+        lconn.close()
+        if lr: pony_locked = bool(lr["pony_locked"])
 
     players_out = []
     total = 0.0
     for r in roster:
         r = dict(r)
         # Hide unrevealed pony picks from public view
-        if r.get("is_pony") and not r.get("pony_revealed") and not show_hidden_ponies:
+        if r.get("is_pony") and not r.get("pony_revealed") and not show_hidden_ponies and not pony_locked:
             continue
         pos = (r.get("position") or "").upper()
         # Use snapshotted multiplier if present, else fall back to live value
