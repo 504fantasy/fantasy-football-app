@@ -56,8 +56,8 @@
   {% elif msg=='pony_lock_updated' %}✅ Pony lock updated.
   {% elif msg=='score_saved'       %}✅ Score saved.
   {% elif msg=='settings_saved'    %}✅ Settings saved.
-  {% elif msg.startswith('sync_ok_') %}✅ Roster synced — {{ msg.split('_')[-1] }} players added.
-  {% elif msg.startswith('scores_synced_') %}✅ Scores synced — {{ msg.split('_')[-1] }} players updated.
+  {% elif msg.startswith('sync_ok_') %}✅ Roster synced — {{ msg.split('_')[-1] | e }} players added.
+  {% elif msg.startswith('scores_synced_') %}✅ Scores synced — {{ msg.split('_')[-1] | e }} players updated.
   {% elif msg=='sync_error'         %}❌ Sync failed — check server logs.
   {% else %}✅ Done.{% endif %}
 </div>

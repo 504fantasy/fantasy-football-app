@@ -95,7 +95,7 @@
 <div class="alert alert-success">✅ League created! Share the invite code with your players.</div>
 {% endif %}
 {% if error %}
-<div class="alert alert-danger">⚠ {{ error }}</div>
+<div class="alert alert-danger">⚠ {{ error | e }}</div>
 {% endif %}
 
 <div class="dash-layout">

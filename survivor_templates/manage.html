@@ -7,8 +7,8 @@
      Invite: <strong style="color:var(--gold)">{{ league.invite_code }}</strong></p>
 </div>
 
-{% if msg %}<div class="alert alert-success">✓ {{ msg | replace('_', ' ') | title }}</div>{% endif %}
-{% if error %}<div class="alert alert-error">⚠ {{ error | replace('_', ' ') | title }}</div>{% endif %}
+{% if msg %}<div class="alert alert-success">✓ {{ msg | replace('_', ' ') | title | e }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">⚠ {{ error | replace('_', ' ') | title | e }}</div>{% endif %}
 
 <!-- SECTION TABS -->
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">

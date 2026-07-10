@@ -26,7 +26,7 @@
   {% elif error == 'wrong_week' %}
     <div class="alert alert-error">⚠ You can only edit the current week's lineup.</div>
   {% else %}
-    <div class="alert alert-error">⚠ Error: {{ error }}</div>
+    <div class="alert alert-error">⚠ Error: {{ error | e }}</div>
   {% endif %}
 {% endif %}
 
