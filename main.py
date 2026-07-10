@@ -4131,7 +4131,7 @@ def admin_delete_survivor_league(league_id: int = Form(...), user=Depends(get_cu
             sconn.execute("DELETE FROM survivor_teams WHERE league_id=?", (league_id,))
             sconn.execute("DELETE FROM survivor_league_members WHERE league_id=?", (league_id,))
             sconn.execute("DELETE FROM survivor_players WHERE league_id=?", (league_id,))
-            sconn.execute("DELETE FROM survivor_player_scores WHERE league_id=?", (league_id,))
+            sconn.execute("DELETE FROM survivor_player_scores WHERE player_id IN (SELECT id FROM survivor_players WHERE league_id=?)", (league_id,))
             sconn.execute("DELETE FROM survivor_game_schedule WHERE league_id=?", (league_id,))
             sconn.execute("DELETE FROM survivor_leagues WHERE id=?", (league_id,))
             sconn.commit()
