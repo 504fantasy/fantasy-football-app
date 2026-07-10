@@ -78,10 +78,11 @@ def adapt_sql(sql: str) -> str:
 
 def _sqlite_connection():
     os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")   # better concurrent reads
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 

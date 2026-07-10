@@ -3988,15 +3988,45 @@ def admin_delete_user(user_id: int = Form(...), user=Depends(get_current_user)):
 def admin_delete_league(league_id: int = Form(...), user=Depends(get_current_user)):
     if not user or not user["is_superadmin"]:
         raise HTTPException(status_code=403)
-    conn = get_db()
-    league = conn.execute(adapt_sql("SELECT * FROM leagues WHERE id=?"), (league_id,)).fetchone()
+    import sqlite3 as _sq, time as _time
+    # Pause the sync scheduler during delete to avoid DB lock conflicts
+    db_path = os.environ.get("DB_PATH", "data/fantasy.db")
+    # Get league name first with a quick read connection
+    rconn = _sq.connect(db_path, timeout=30)
+    rconn.row_factory = _sq.Row
+    league = rconn.execute("SELECT * FROM leagues WHERE id=?", (league_id,)).fetchone()
+    rconn.close()
     if not league:
-        conn.close()
         return RedirectResponse("/admin?error=league_not_found", status_code=303)
     league_name = league["name"]
-    conn.execute(adapt_sql("DELETE FROM leagues WHERE id=?"), (league_id,))
-    conn.commit()
-    conn.close()
+    # Retry delete up to 5 times if DB is locked
+    last_err = None
+    for attempt in range(15):
+        try:
+            conn = _sq.connect(db_path, timeout=60)
+            conn.execute("PRAGMA busy_timeout=60000")
+            conn.row_factory = _sq.Row
+            conn.isolation_level = None
+            conn.execute("BEGIN EXCLUSIVE")
+            conn.execute("DELETE FROM team_roster WHERE team_id IN (SELECT id FROM teams WHERE league_id=?)", (league_id,))
+            conn.execute("DELETE FROM teams WHERE league_id=?", (league_id,))
+            conn.execute("DELETE FROM league_members WHERE league_id=?", (league_id,))
+            conn.execute("DELETE FROM players WHERE league_id=?", (league_id,))
+            conn.execute("DELETE FROM draft_state WHERE league_id=?", (league_id,))
+            conn.execute("DELETE FROM draft_chat WHERE league_id=?", (league_id,))
+            conn.execute("DELETE FROM player_scores WHERE player_id IN (SELECT id FROM players WHERE league_id=?)", (league_id,))
+            conn.execute("DELETE FROM leagues WHERE id=?", (league_id,))
+            conn.execute("COMMIT")
+            conn.close()
+            last_err = None
+            break
+        except _sq.OperationalError as e:
+            last_err = e
+            try: conn.execute("ROLLBACK"); conn.close()
+            except: pass
+            _time.sleep(2)
+    if last_err:
+        return RedirectResponse("/admin?error=delete_failed", status_code=303)
     write_audit(actor=user["username"], action="ADMIN_LEAGUE_DELETE",
                 details=f"Deleted league '{league_name}' (id={league_id})")
     return RedirectResponse("/admin?msg=league_deleted", status_code=303)
@@ -4080,21 +4110,41 @@ def rename_team(
 def admin_delete_survivor_league(league_id: int = Form(...), user=Depends(get_current_user)):
     if not user or not user["is_superadmin"]:
         raise HTTPException(status_code=403)
-    try:
-        from survivor_db import get_connection as _surv_conn
-        sconn = _surv_conn()
-        league = sconn.execute(
-            "SELECT * FROM survivor_leagues WHERE id=?", (league_id,)
-        ).fetchone()
-        if not league:
+    import sqlite3 as _sq2, time as _time2
+    surv_db_path = os.environ.get("SURVIVOR_DB_PATH", "data/survivor.db")
+    # Read league name first
+    rconn2 = _sq2.connect(surv_db_path, timeout=30)
+    rconn2.row_factory = _sq2.Row
+    league = rconn2.execute("SELECT * FROM survivor_leagues WHERE id=?", (league_id,)).fetchone()
+    rconn2.close()
+    if not league:
+        return RedirectResponse("/admin?error=league_not_found", status_code=303)
+    league_name = league["name"]
+    last_err2 = None
+    for attempt in range(15):
+        try:
+            sconn = _sq2.connect(surv_db_path, timeout=60)
+            sconn.execute("PRAGMA journal_mode=WAL")
+            sconn.execute("PRAGMA busy_timeout=60000")
+            sconn.row_factory = _sq2.Row
+            sconn.execute("DELETE FROM survivor_lineups WHERE league_id=?", (league_id,))
+            sconn.execute("DELETE FROM survivor_teams WHERE league_id=?", (league_id,))
+            sconn.execute("DELETE FROM survivor_league_members WHERE league_id=?", (league_id,))
+            sconn.execute("DELETE FROM survivor_players WHERE league_id=?", (league_id,))
+            sconn.execute("DELETE FROM survivor_player_scores WHERE league_id=?", (league_id,))
+            sconn.execute("DELETE FROM survivor_game_schedule WHERE league_id=?", (league_id,))
+            sconn.execute("DELETE FROM survivor_leagues WHERE id=?", (league_id,))
+            sconn.commit()
             sconn.close()
-            return RedirectResponse("/admin?error=league_not_found", status_code=303)
-        league_name = league["name"]
-        sconn.execute("DELETE FROM survivor_leagues WHERE id=?", (league_id,))
-        sconn.commit()
-        sconn.close()
-    except Exception as e:
-        return RedirectResponse(f"/admin?error=delete_failed", status_code=303)
+            last_err2 = None
+            break
+        except _sq2.OperationalError as e:
+            last_err2 = e
+            try: sconn.close()
+            except: pass
+            _time2.sleep(2)
+    if last_err2:
+        return RedirectResponse(f"/admin?error=delete_failed_{last_err2}", status_code=303)
     write_audit(actor=user["username"], action="ADMIN_SURVIVOR_LEAGUE_DELETE",
                 details=f"Deleted survivor league '{league_name}' (id={league_id})")
     return RedirectResponse("/admin?msg=league_deleted", status_code=303)
