@@ -1451,8 +1451,7 @@ def manage_settings(
     request: Request,
     league_name: str = Form(...),
     season: int = Form(2025),
-    deadline_day: int = Form(0),
-    deadline_hour: int = Form(13),
+
     slots_qb: int = Form(1),
     slots_rb: int = Form(1),
     slots_wr: int = Form(1),
@@ -1487,8 +1486,8 @@ def manage_settings(
         """),
         (
             league_name.strip(), season,
-            max(0, min(6, deadline_day)),
-            max(0, min(23, deadline_hour)),
+            0,
+            13,
             slots_qb, slots_rb, slots_wr, slots_te, slots_dst, slots_k,
             entry_fee,
             payment_deadline.strip() or None,
