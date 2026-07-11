@@ -1234,21 +1234,40 @@ def scores_page(league_id: int, request: Request, week: int = None):
     teams = get_league_teams(league_id)
 
     # Per-week scores for display
+    from datetime import datetime, timezone
+    now_utc = datetime.now(timezone.utc)
+    # Check if first game of the week has kicked off
+    conn = get_db()
+    sched = conn.execute(
+        "SELECT kickoff_utc FROM survivor_game_schedule "
+        "WHERE league_id=? AND week=? ORDER BY kickoff_utc ASC LIMIT 1",
+        (league_id, week)
+    ).fetchone()
+    conn.close()
+    week_locked = False
+    if sched:
+        first_ko = datetime.fromisoformat(sched["kickoff_utc"]).replace(tzinfo=timezone.utc)
+        week_locked = now_utc >= first_ko
+    is_comm = is_commissioner(league, user)
     week_scores = []
     for team in teams:
         result = get_team_week_score(team["id"], week)
         owner = get_user_by_id(team["owner_id"])
         lineup = get_team_lineup(team["id"], week)
+        # Show lineup only to own team, commissioner, or after first kickoff
+        is_own_team = team["owner_id"] == user["id"]
+        show_players = is_own_team or week_locked or is_comm
         week_scores.append(
             {
                 "team": team,
                 "owner": owner,
-                "players": result["players"],
-                "total": result["total"],
+                "players": result["players"] if show_players else [],
+                "total": result["total"] if show_players else None,
                 "complete": lineup_is_complete(lineup),
+                "hidden": not show_players,
             }
         )
-    week_scores.sort(key=lambda x: x["total"], reverse=True)
+    week_scores.sort(key=lambda x: x["total"] or 0, reverse=True)
 
     # Season standings
     standings = []

@@ -6,6 +6,41 @@
   <p>{{ league.name }} &nbsp;·&nbsp; Season {{ league.season }}</p>
 </div>
 
+{% set my_rank = namespace(pos=0, pts=0, week_pts=0, found=false) %}
+{% for row in standings %}
+  {% if row.team.owner_id == user.id %}
+    {% set my_rank.pos = loop.index %}
+    {% set my_rank.pts = row.season_pts %}
+    {% set my_rank.found = true %}
+  {% endif %}
+{% endfor %}
+{% for ts in week_scores %}
+  {% if ts.team.owner_id == user.id %}
+    {% set my_rank.week_pts = ts.total or 0 %}
+  {% endif %}
+{% endfor %}
+{% if my_rank.found %}
+<div style="display:flex;align-items:center;gap:1.5rem;background:var(--surface2);border:1px solid rgba(232,184,75,.25);border-radius:10px;padding:.85rem 1.25rem;margin-bottom:1rem;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:.5rem">
+    <span style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:900;color:var(--gold);line-height:1">#{{ my_rank.pos }}</span>
+    <div>
+      <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Your Position</div>
+      <div style="font-size:.75rem;color:var(--muted2)">of {{ standings|length }} teams</div>
+    </div>
+  </div>
+  <div style="width:1px;height:36px;background:var(--border)"></div>
+  <div>
+    <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Season Total</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:900;color:var(--gold);line-height:1">{{ my_rank.pts }}</div>
+  </div>
+  <div style="width:1px;height:36px;background:var(--border)"></div>
+  <div>
+    <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Week {{ week }}</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:900;color:var(--muted2);line-height:1">{{ my_rank.week_pts }}</div>
+  </div>
+</div>
+{% endif %}
+
 <!-- WEEK NAV -->
 <div class="week-nav">
   {% if week > 1 %}
@@ -37,7 +72,11 @@
         {{ ts.total }}
       </div>
     </div>
-    {% if ts.players %}
+    {% if ts.hidden %}
+    <div style="padding:1rem;text-align:center;color:var(--muted2);font-size:.85rem;font-style:italic;background:var(--s2);border-radius:8px;border:1px dashed var(--border)">
+      🔒 Lineup hidden until first game kicks off
+    </div>
+    {% elif ts.players %}
     <style>
     .stat-chips{display:flex;flex-wrap:wrap;gap:.25rem;align-items:center}
     .sc{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;background:var(--s3);color:var(--muted2);border:1px solid var(--border)}
