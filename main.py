@@ -1548,6 +1548,29 @@ def draft_pick(
         return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
     is_comm = is_commissioner(league, user)
+    # Block unpaid teams from drafting after payment deadline
+    if not is_comm and league.get("entry_fee") and league["entry_fee"] > 0:
+        my_team = conn2 = None
+        try:
+            conn2 = get_db()
+            my_team = conn2.execute(
+                "SELECT paid FROM teams WHERE league_id=? AND owner_id=?",
+                (league_id, user["id"])
+            ).fetchone()
+        finally:
+            if conn2: conn2.close()
+        if my_team and not my_team["paid"]:
+            deadline = league.get("payment_deadline")
+            if deadline:
+                from datetime import date as _date
+                try:
+                    if _date.today() > _date.fromisoformat(deadline):
+                        return RedirectResponse(
+                            f"/league/{league_id}/team?error=payment_required",
+                            status_code=303
+                        )
+                except Exception:
+                    pass
     base = f"/league/{league_id}"
 
     conn = get_db()
@@ -4036,6 +4059,54 @@ def admin_delete_league(league_id: int = Form(...), user=Depends(get_current_use
 # TEAM: RENAME (owner self-service)
 # ======================================================
 
+
+@app.post("/league/{league_id}/manage/team/payment")
+def manage_team_payment(
+    league_id: int,
+    team_id: int = Form(...),
+    paid: int = Form(...),
+    payment_note: str = Form(""),
+    user=Depends(get_current_user),
+):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    from datetime import date
+    payment_date = date.today().isoformat() if paid else None
+    conn.execute(adapt_sql(
+        "UPDATE teams SET paid=?, payment_date=?, payment_note=? WHERE id=? AND league_id=?"
+    ), (paid, payment_date, payment_note.strip(), team_id, league_id))
+    conn.commit()
+    conn.close()
+    write_audit(actor=user["username"], action="PAYMENT_UPDATE", league_id=league_id,
+                details=f"Team {team_id} marked {'paid' if paid else 'unpaid'}")
+    return RedirectResponse(f"/league/{league_id}/manage?msg=payment_updated", status_code=303)
+
+
+@app.post("/league/{league_id}/manage/settings/payment")
+def update_payment_settings(
+    league_id: int,
+    entry_fee: float = Form(0),
+    payment_deadline: str = Form(""),
+    venmo_handle: str = Form(""),
+    user=Depends(get_current_user),
+):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    conn.execute(adapt_sql(
+        "UPDATE leagues SET entry_fee=?, payment_deadline=?, venmo_handle=? WHERE id=?"
+    ), (max(0, entry_fee), payment_deadline.strip() or None, venmo_handle.strip() or None, league_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=settings_updated", status_code=303)
+
 @app.post("/league/{league_id}/team/{team_id}/rename")
 def team_rename(
     league_id: int,
@@ -4069,6 +4140,54 @@ def team_rename(
 # ======================================================
 # TEAM RENAME
 # ======================================================
+
+
+@app.post("/league/{league_id}/manage/team/payment")
+def manage_team_payment(
+    league_id: int,
+    team_id: int = Form(...),
+    paid: int = Form(...),
+    payment_note: str = Form(""),
+    user=Depends(get_current_user),
+):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    from datetime import date
+    payment_date = date.today().isoformat() if paid else None
+    conn.execute(adapt_sql(
+        "UPDATE teams SET paid=?, payment_date=?, payment_note=? WHERE id=? AND league_id=?"
+    ), (paid, payment_date, payment_note.strip(), team_id, league_id))
+    conn.commit()
+    conn.close()
+    write_audit(actor=user["username"], action="PAYMENT_UPDATE", league_id=league_id,
+                details=f"Team {team_id} marked {'paid' if paid else 'unpaid'}")
+    return RedirectResponse(f"/league/{league_id}/manage?msg=payment_updated", status_code=303)
+
+
+@app.post("/league/{league_id}/manage/settings/payment")
+def update_payment_settings(
+    league_id: int,
+    entry_fee: float = Form(0),
+    payment_deadline: str = Form(""),
+    venmo_handle: str = Form(""),
+    user=Depends(get_current_user),
+):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    conn.execute(adapt_sql(
+        "UPDATE leagues SET entry_fee=?, payment_deadline=?, venmo_handle=? WHERE id=?"
+    ), (max(0, entry_fee), payment_deadline.strip() or None, venmo_handle.strip() or None, league_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=settings_updated", status_code=303)
 
 @app.post("/league/{league_id}/team/{team_id}/rename")
 def rename_team(

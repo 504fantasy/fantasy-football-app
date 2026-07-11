@@ -347,6 +347,24 @@
 {% endblock %}
 
 {% block content %}
+{% if league.entry_fee and league.entry_fee > 0 and not team.paid and is_owner %}
+<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.85rem 1.25rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <div style="font-weight:700;color:#fca5a5;margin-bottom:.2rem">⚠ Entry Fee Unpaid</div>
+    <div style="font-size:.85rem;color:var(--muted2)">
+      Entry fee: <strong style="color:var(--text)">${{ league.entry_fee }}</strong>
+      {% if league.payment_deadline %} · Due by <strong style="color:var(--text)">{{ league.payment_deadline }}</strong>{% endif %}
+      {% if league.venmo_handle %} · Send to <strong style="color:var(--text)">{{ league.venmo_handle }}</strong> on Venmo{% endif %}
+    </div>
+  </div>
+  {% if league.venmo_handle %}
+  <a href="https://venmo.com/{{ league.venmo_handle | replace('@','') }}" target="_blank" rel="noopener"
+     style="background:#3d95ce;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;padding:.5rem 1.25rem;border-radius:6px;text-decoration:none">
+    Pay on Venmo →
+  </a>
+  {% endif %}
+</div>
+{% endif %}
 
 {% if msg == 'mult_saved' %}
 <div class="flash-saved">✅ Multiplier saved.</div>
