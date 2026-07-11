@@ -4,7 +4,7 @@
 <div class="page-header">
   <h1>{{ league.name }}</h1>
   <p>Season {{ league.season }} &nbsp;·&nbsp; Week {{ current_week }} of {{ total_weeks }}
-     &nbsp;·&nbsp; Invite code: <strong style="color:var(--gold)">{{ league.invite_code }}</strong></p>
+     {% if is_commissioner or user.is_superadmin %}&nbsp;·&nbsp; Invite code: <strong style="color:var(--gold)">{{ league.invite_code }}</strong>{% endif %}</p>
 </div>
 
 {% if msg == 'league_created' %}

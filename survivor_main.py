@@ -895,6 +895,23 @@ def league_create(
     return RedirectResponse(f"/survivor/{lid}?msg=league_created", status_code=303)
 
 
+
+@app.get("/survivor/join")
+@app.post("/survivor/join")
+def survivor_auto_join(request: Request, user=Depends(get_current_user)):
+    """Auto-join the main survivor league using the master invite code."""
+    if not user:
+        return RedirectResponse("/survivor/login?next=/survivor/join", status_code=303)
+    invite_code = os.environ.get("SURVIVOR_INVITE_CODE", "")
+    if not invite_code:
+        return RedirectResponse("/survivor/dashboard?error=no_league", status_code=303)
+    lid, err = join_league_by_code(user["id"], invite_code)
+    if err == "already_member":
+        return RedirectResponse(f"/survivor/{os.environ.get('SURVIVOR_LEAGUE_ID', '')}/lineup", status_code=303)
+    if err:
+        return RedirectResponse(f"/survivor/dashboard?error={err}", status_code=303)
+    return RedirectResponse(f"/survivor/{lid}/lineup", status_code=303)
+
 @app.post("/survivor/league/join")
 def league_join(request: Request, invite_code: str = Form(...)):
     user = get_current_user(request)

@@ -11,12 +11,13 @@
 
 <div style="margin-bottom:24px;">
   <!-- Join League -->
-  <div class="card" style="max-width:480px;">
-    <h2>Join a League</h2>
-    <form method="post" action="/survivor/league/join">
-      <div class="form-group"><label>Invite Code</label><input type="text" name="invite_code" placeholder="ABCD1234" required maxlength="8" style="text-transform:uppercase"></div>
-      <button type="submit" class="btn btn-success">Join</button>
-    </form>
+  <div class="card" style="max-width:480px;text-align:center;padding:2rem;">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">🎯</div>
+    <h2 style="margin-bottom:.5rem">NFL Survivor League</h2>
+    <p style="color:var(--muted2);font-size:.9rem;line-height:1.6;margin-bottom:1.5rem">
+      One league — everyone competes together all season. Submit a weekly lineup, but once you use a player, they're gone for the rest of the year.
+    </p>
+    <a href="/survivor/join" class="btn btn-success" style="display:inline-block;padding:.75rem 2rem;font-size:1rem">🏈 Join the League</a>
   </div>
   {% if user.is_superadmin %}
   <!-- Create League (admin only) -->

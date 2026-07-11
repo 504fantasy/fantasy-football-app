@@ -194,7 +194,7 @@
       <div class="empty-dash">
         <div class="ed-icon">🎯</div>
         <p class="fw7 mb-1">No Survivor leagues yet.</p>
-        <p class="text-sm text-muted">Create one or enter a Survivor invite code to join.</p>
+        <p class="text-sm text-muted">Click "Join the Survivor League" to get started.</p>
       </div>
       {% endif %}
     </div>
@@ -223,17 +223,11 @@
       </form>
     </div>
 
-    <!-- Survivor: Create / Join league -->
+    <!-- Survivor: Join league -->
     <div class="card mb-2" id="sidebar-survivor" style="display:none;border-color:rgba(201,69,26,.3)">
       <div class="card-title" style="color:var(--ember)">🎯 Survivor Challenge</div>
-      <form method="post" action="/survivor/league/join">
-        <div class="fg">
-          <label>Join with Invite Code</label>
-          <input name="invite_code" required placeholder="8-character code"
-                 style="text-transform:uppercase;letter-spacing:.12em;font-family:'Barlow Condensed',sans-serif;font-size:1rem"/>
-        </div>
-        <button class="btn btn-ghost" style="width:100%">Join Survivor League</button>
-      </form>
+      <p style="font-size:.85rem;color:var(--muted2);margin-bottom:1rem;line-height:1.5">One league — everyone competes together all season long.</p>
+      <a href="/survivor/join" class="btn btn-ghost" style="width:100%;display:block;text-align:center">🏈 Join the Survivor League</a>
     </div>
   </div>
 

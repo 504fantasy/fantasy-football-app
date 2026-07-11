@@ -1307,6 +1307,7 @@ body {
 ════════════════════════════════════════════════════ -->
 <div class="page active" id="page-home">
 
+
   <!-- HERO -->
   <section class="hero">
     <div class="hero-glow"></div>
@@ -1322,16 +1323,20 @@ body {
           <span class="line-stroke">Sports</span>
         </h1>
         <p class="hero-body">
-          New Orleans–born fantasy sports for people who take their league seriously. Playoff drafts, secret pony picks, multipliers, and live scoring — all in one place.
+          New Orleans–born fantasy sports. Two games, one platform — the NFL Playoff Challenge and the Survivor League. Play the way your league wants to play.
         </p>
         <div class="hero-cta">
-          <button class="btn btn-gold btn-xl" onclick="window.location.href='/register'">Join the League</button>
-          <button class="btn btn-ghost btn-lg" onclick="showPage('how')">See How It Works →</button>
+          <button class="btn btn-gold btn-xl" onclick="window.location.href='/register'">Join Free</button>
+          <button class="btn btn-ghost btn-lg" onclick="document.getElementById('games-section').scrollIntoView({behavior:'smooth'})">See the Games ↓</button>
         </div>
         <div class="hero-trust">
-<div class="trust-stat">
-            <div class="trust-num">🏈</div>
-            <div class="trust-label">NFL Playoffs</div>
+          <div class="trust-stat">
+            <div class="trust-num">🏆</div>
+            <div class="trust-label">Playoff Challenge</div>
+          </div>
+          <div class="trust-stat">
+            <div class="trust-num">🎯</div>
+            <div class="trust-label">Survivor League</div>
           </div>
           <div class="trust-stat">
             <div class="trust-num">100%</div>
@@ -1340,27 +1345,28 @@ body {
         </div>
       </div>
 
-      <!-- Mockup card -->
+      <!-- Dual mockup cards -->
       <div class="hero-mockup">
-        <div class="mockup-card">
+        <!-- Playoff Challenge card -->
+        <div class="mockup-card" style="margin-bottom:1rem">
           <div class="mockup-header">
             <div class="mock-dot mock-d1"></div>
             <div class="mock-dot mock-d2"></div>
             <div class="mock-dot mock-d3"></div>
-            <span class="mockup-title">Draft Room — Playoff Challenge</span>
+            <span class="mockup-title">🏆 Playoff Challenge</span>
           </div>
-          <div class="mockup-body">
-            <div class="mock-clock">
-              <div class="mock-clock-label">🕒 On the Clock</div>
-              <div class="mock-clock-name">Thunderbirds</div>
+          <div class="mockup-body" style="padding:.9rem">
+            <div class="mock-clock" style="padding:.7rem 1rem;margin-bottom:.75rem">
+              <div class="mock-clock-label">🕒 On the Clock — Round 4</div>
+              <div class="mock-clock-name" style="font-size:1.3rem">Thunderbirds</div>
             </div>
-            <div class="mock-pick-row highlight">
+            <div class="mock-pick-row highlight" style="margin-bottom:.3rem">
               <span class="mock-pos pos-wr">WR</span>
               <span class="mock-pick-name">Tyreek Hill</span>
               <span class="mock-badge">🐴 Pony</span>
               <span class="mock-pick-pts">×2.0</span>
             </div>
-            <div class="mock-pick-row">
+            <div class="mock-pick-row" style="margin-bottom:.3rem">
               <span class="mock-pos pos-qb">QB</span>
               <span class="mock-pick-name">Josh Allen</span>
               <span class="mock-pick-pts">32.3</span>
@@ -1370,16 +1376,40 @@ body {
               <span class="mock-pick-name">James Cook</span>
               <span class="mock-pick-pts">21.0</span>
             </div>
-            <div class="mock-pick-row">
-              <span class="mock-pos pos-te">TE</span>
-              <span class="mock-pick-name">Travis Kelce</span>
-              <span class="mock-pick-pts">18.4</span>
+          </div>
+        </div>
+        <!-- Survivor card -->
+        <div class="mockup-card" style="border-color:rgba(201,69,26,.4)">
+          <div class="mockup-header" style="border-color:rgba(201,69,26,.2)">
+            <div class="mock-dot mock-d1"></div>
+            <div class="mock-dot mock-d2"></div>
+            <div class="mock-dot mock-d3"></div>
+            <span class="mockup-title">🎯 Survivor — Week 8</span>
+          </div>
+          <div class="mockup-body" style="padding:.9rem">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.3rem">
+              <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+                <span class="mock-pos pos-qb">QB</span>
+                <span style="font-size:.78rem;font-weight:600">L. Jackson</span>
+                <span style="font-size:.65rem;color:var(--green)">✓ Locked</span>
+              </div>
+              <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+                <span class="mock-pos pos-rb">RB</span>
+                <span style="font-size:.78rem;font-weight:600">D. Henry</span>
+                <span style="font-size:.65rem;color:var(--green)">✓ Locked</span>
+              </div>
+              <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+                <span class="mock-pos pos-wr">WR</span>
+                <span style="font-size:.78rem;font-weight:600">S. Diggs</span>
+                <span style="font-size:.65rem;color:var(--muted)">⏱ Open</span>
+              </div>
+              <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+                <span class="mock-pos pos-te">TE</span>
+                <span style="font-size:.78rem;font-weight:600">T. Kelce</span>
+                <span style="font-size:.65rem;color:var(--muted)">⏱ Open</span>
+              </div>
             </div>
-            <div class="mock-pick-row">
-              <span class="mock-pos pos-k">K</span>
-              <span class="mock-pick-name">Tyler Bass</span>
-              <span class="mock-pick-pts">13.8</span>
-            </div>
+            <div style="font-size:.68rem;color:var(--ember);margin-top:.6rem;text-align:center">Used players are locked out for the rest of the season</div>
           </div>
         </div>
         <div class="hero-float-1">
@@ -1387,12 +1417,77 @@ body {
           🐴 Pony scored
         </div>
         <div class="hero-float-2">
-          <span class="float-val">R4 P2</span>
-          Snake Draft Live
+          <span class="float-val">Week 8</span>
+          Survivor Active
         </div>
       </div>
     </div>
   </section>
+
+  <!-- GAMES SECTION -->
+  <div id="games-section" style="padding:6rem 2.5rem; max-width:1200px; margin:0 auto">
+    <div class="section-eyebrow">Choose Your Game</div>
+    <h2 class="section-title">Two Games.<br><em>One Platform.</em></h2>
+    <p class="section-sub">Both free to play, both built for leagues that care about how it works.</p>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:2rem; margin-top:3rem">
+
+      <!-- NFL Playoff Challenge -->
+      <div style="background:var(--s1);border:1px solid rgba(232,184,75,.35);border-radius:var(--rr);overflow:hidden;cursor:pointer;transition:border-color .2s,transform .2s" onmouseenter="this.style.transform='translateY(-4px)';this.style.borderColor='rgba(232,184,75,.6)'" onmouseleave="this.style.transform='';this.style.borderColor='rgba(232,184,75,.35)'" onclick="window.location.href='/register'">
+        <div style="height:4px;background:linear-gradient(90deg,var(--gold),var(--ember))"></div>
+        <div style="padding:2rem">
+          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(232,184,75,.12);border:1px solid rgba(232,184,75,.3);border-radius:100px;padding:.3rem .85rem;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:1.25rem">
+            🟢 Live Now
+          </div>
+          <div style="font-size:2.8rem;line-height:1;margin-bottom:.75rem">🏆</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.8rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.85rem;color:var(--text)">NFL Fantasy<br>Playoff Challenge</div>
+          <p style="font-size:.9rem;color:var(--muted2);line-height:1.65;margin-bottom:1.75rem">Snake-draft your playoff roster before Wild Card weekend. Set multipliers, designate secret Pony picks, and score points every time your players perform. Winner has the best roster when the Super Bowl ends.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:2rem">
+            <span style="font-size:.72rem;background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.2);color:var(--gold);padding:.25rem .6rem;border-radius:4px;font-weight:600">🐍 Snake Draft</span>
+            <span style="font-size:.72rem;background:rgba(201,69,26,.1);border:1px solid rgba(201,69,26,.2);color:#fb923c;padding:.25rem .6rem;border-radius:4px;font-weight:600">🐴 Pony Picks</span>
+            <span style="font-size:.72rem;background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.2);color:var(--gold);padding:.25rem .6rem;border-radius:4px;font-weight:600">✖ Multipliers</span>
+            <span style="font-size:.72rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.25rem .6rem;border-radius:4px;font-weight:600">Full PPR Scoring</span>
+          </div>
+          <div style="display:flex;gap:.75rem">
+            <button class="btn btn-gold" onclick="event.stopPropagation();window.location.href='/register'">Play Now</button>
+            <button class="btn btn-ghost" onclick="event.stopPropagation();showPage('how')">How It Works →</button>
+          </div>
+        </div>
+        <div style="padding:.85rem 2rem;border-top:1px solid rgba(232,184,75,.15);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">Wild Card → Super Bowl</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold)">Start →</span>
+        </div>
+      </div>
+
+      <!-- NFL Survivor League -->
+      <div style="background:var(--s1);border:1px solid rgba(201,69,26,.35);border-radius:var(--rr);overflow:hidden;cursor:pointer;transition:border-color .2s,transform .2s" onmouseenter="this.style.transform='translateY(-4px)';this.style.borderColor='rgba(201,69,26,.65)'" onmouseleave="this.style.transform='';this.style.borderColor='rgba(201,69,26,.35)'" onclick="window.location.href='/survivor/join'">
+        <div style="height:4px;background:linear-gradient(90deg,var(--ember),#f97316)"></div>
+        <div style="padding:2rem">
+          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(201,69,26,.12);border:1px solid rgba(201,69,26,.3);border-radius:100px;padding:.3rem .85rem;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ember);margin-bottom:1.25rem">
+            🟢 Live Now
+          </div>
+          <div style="font-size:2.8rem;line-height:1;margin-bottom:.75rem">🎯</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.8rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.85rem;color:var(--text)">NFL Survivor<br>Challenge</div>
+          <p style="font-size:.9rem;color:var(--muted2);line-height:1.65;margin-bottom:1.75rem">One league, everyone competes together. Submit a weekly lineup — QB, RB, WR, TE, DST, K — but once you use a player, they're gone for the rest of the season. No repeats. The pressure builds every single week as your pool shrinks.</p>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:2rem">
+            <span style="font-size:.72rem;background:rgba(201,69,26,.1);border:1px solid rgba(201,69,26,.2);color:var(--ember);padding:.25rem .6rem;border-radius:4px;font-weight:600">🚫 No Repeats</span>
+            <span style="font-size:.72rem;background:rgba(201,69,26,.1);border:1px solid rgba(201,69,26,.2);color:var(--ember);padding:.25rem .6rem;border-radius:4px;font-weight:600">⏱ Auto-Locks at Kickoff</span>
+            <span style="font-size:.72rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.25rem .6rem;border-radius:4px;font-weight:600">Weeks 1–18</span>
+            <span style="font-size:.72rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.25rem .6rem;border-radius:4px;font-weight:600">Full Roster</span>
+          </div>
+          <div style="display:flex;gap:.75rem">
+            <button class="btn btn-ember" onclick="event.stopPropagation();window.location.href='/survivor/'">Play Now</button>
+            <button class="btn btn-ghost" onclick="event.stopPropagation();showPage('how')">How It Works →</button>
+          </div>
+        </div>
+        <div style="padding:.85rem 2rem;border-top:1px solid rgba(201,69,26,.15);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">Weeks 1–18 · Regular Season</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ember)">Start →</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
   <!-- FEATURE STRIP -->
   <div class="features-strip">
@@ -1400,177 +1495,91 @@ body {
       <div class="feat-item">
         <div class="feat-icon">🐍</div>
         <div class="feat-title">Snake Draft</div>
-        <div class="feat-desc">Live snake-order drafting with real-time pick confirmation and full roster tracking.</div>
+        <div class="feat-desc">Live snake-order drafting with real-time picks, a pick timer, and server-side draft queue.</div>
       </div>
       <div class="feat-item">
         <div class="feat-icon">🐴</div>
         <div class="feat-title">Pony System</div>
-        <div class="feat-desc">Designate up to 4 pony players per team for bonus scoring in high-stakes moments.</div>
+        <div class="feat-desc">Designate secret pony players for bonus scoring. Hidden from opponents until the window closes.</div>
       </div>
       <div class="feat-item">
-        <div class="feat-icon">✖</div>
-        <div class="feat-title">Multipliers</div>
-        <div class="feat-desc">Apply 1.5× or 2× multipliers to any player. Set them before the lock and let it ride.</div>
+        <div class="feat-icon">🚫</div>
+        <div class="feat-title">No Repeats</div>
+        <div class="feat-desc">Survivor forces strategy. Once you use a player, they're out. 18 weeks, shrinking pool.</div>
       </div>
       <div class="feat-item">
         <div class="feat-icon">🏟</div>
         <div class="feat-title">Multi-League</div>
-        <div class="feat-desc">Run multiple leagues across different game types — all with invite codes, isolated rosters, and separate scoring.</div>
+        <div class="feat-desc">Run multiple leagues with invite codes. Each league has isolated rosters and separate scoring.</div>
       </div>
     </div>
   </div>
 
-
-  <!-- ════════════════════════════════════════════
-       GAMES SECTION
-  ════════════════════════════════════════════ -->
+  <!-- HOW IT WORKS (condensed, now two-game) -->
   <div style="padding:6rem 2.5rem 0; max-width:1200px; margin:0 auto">
-    <div class="section-eyebrow">Choose Your Game</div>
-    <h2 class="section-title">Every Season.<br><em>One Platform.</em></h2>
-    <p class="section-sub">Start with NFL playoffs and stay for everything else — more games are coming to 504 Fantasy throughout the year.</p>
-
-    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:3rem">
-
-      <!-- NFL Playoff Challenge — LIVE -->
-      <div style="background:var(--s1);border:1px solid rgba(232,184,75,.35);border-radius:var(--rr);overflow:hidden;transition:border-color .2s,transform .2s;cursor:pointer" onmouseenter="this.style.transform='translateY(-4px)'" onmouseleave="this.style.transform=''" onclick="window.location.href='/register'">
-        <div style="height:3px;background:linear-gradient(90deg,var(--gold),var(--ember))"></div>
-        <div style="padding:1.75rem">
-          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.25);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:1rem">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 2s infinite;display:inline-block"></span>
-            Live Now
-          </div>
-          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🏈</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">NFL Fantasy<br>Playoff Challenge</div>
-          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Snake draft your NFL postseason roster before Wild Card weekend. Set multipliers, lock in your secret pony pick, and score points as your players advance round by round to the Super Bowl.</p>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Snake Draft</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Live Scores</span>
-          </div>
-        </div>
-        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">4 Rounds · Wild Card → Super Bowl</span>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold)">Play Now →</span>
-        </div>
-      </div>
-
-      <!-- NFL Survivor Challenge — LIVE -->
-      <div style="background:var(--s1);border:1px solid rgba(201,69,26,.35);border-radius:var(--rr);overflow:hidden;transition:border-color .2s,transform .2s;cursor:pointer" onmouseenter="this.style.transform='translateY(-4px)'" onmouseleave="this.style.transform=''" onclick="window.location.href='/survivor/'">
-        <div style="height:3px;background:linear-gradient(90deg,var(--ember),var(--ember2))"></div>
-        <div style="padding:1.75rem">
-          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(201,69,26,.1);border:1px solid rgba(201,69,26,.25);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ember);margin-bottom:1rem">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--ember);animation:pulse 2s infinite;display:inline-block"></span>
-            Live Now
-          </div>
-          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🎯</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">NFL Survivor<br>Challenge</div>
-          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Pick your team lineup every week of the NFL regular season. Once you use a player, they're gone from your pool for the rest of the year. No draft — just 18 weeks of survival strategy.</p>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">18 Weeks</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">No Draft</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Once-Used Players</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Live Scores</span>
-          </div>
-        </div>
-        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">Weeks 1–18 · Regular Season</span>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ember)">Play Now →</span>
-        </div>
-      </div>
-
-      <!-- NBA Playoff Challenge — Coming Soon -->
-      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--rr);overflow:hidden;opacity:.65">
-        <div style="height:3px;background:linear-gradient(90deg,#3b82f6,#6366f1)"></div>
-        <div style="padding:1.75rem">
-          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(100,116,139,.1);border:1px solid var(--border2);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:1rem">
-            Coming Soon
-          </div>
-          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🏀</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">NBA Fantasy<br>Playoff Challenge</div>
-          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Same format, different sport. Draft your NBA postseason roster and score points as your players light it up from the first round through the Finals.</p>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Snake Draft</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
-          </div>
-        </div>
-        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">4 Rounds · First Round → Finals</span>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Notify Me</span>
-        </div>
-      </div>
-
-      <!-- MLB Postseason Challenge — Coming Soon -->
-      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--rr);overflow:hidden;opacity:.65">
-        <div style="height:3px;background:linear-gradient(90deg,#22c55e,#10b981)"></div>
-        <div style="padding:1.75rem">
-          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(100,116,139,.1);border:1px solid var(--border2);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:1rem">
-            Coming Soon
-          </div>
-          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">⚾</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">MLB Postseason<br>Challenge</div>
-          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">Wild Card through the World Series. Draft your hitters and pitchers and rack up points in October. The longest run, the deepest strategy.</p>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">Snake Draft</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
-          </div>
-        </div>
-        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">Wild Card → World Series</span>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Notify Me</span>
-        </div>
-      </div>
-
-      <!-- College Football — Coming Soon -->
-      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--rr);overflow:hidden;opacity:.65">
-        <div style="height:3px;background:linear-gradient(90deg,#f97316,#eab308)"></div>
-        <div style="padding:1.75rem">
-          <div style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(100,116,139,.1);border:1px solid var(--border2);border-radius:100px;padding:.25rem .75rem;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:1rem">
-            Coming Soon
-          </div>
-          <div style="font-size:2.2rem;line-height:1;margin-bottom:.75rem">🎓</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.03em;line-height:1.05;margin-bottom:.65rem">CFB Playoff<br>Challenge</div>
-          <p style="font-size:.85rem;color:var(--muted2);line-height:1.6;margin-bottom:1.5rem">The College Football Playoff expanded to 12 teams — and now you can draft it. More rounds, more upsets, more chaos. Built for die-hard CFB fans.</p>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.5rem">
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">12-Team Bracket</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">🐴 Pony Pick</span>
-            <span style="font-size:.7rem;background:var(--s2);border:1px solid var(--border2);color:var(--muted2);padding:.2rem .55rem;border-radius:4px">×2 Multipliers</span>
-          </div>
-        </div>
-        <div style="padding:.85rem 1.75rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2)">12 Teams · First Round → Championship</span>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Notify Me</span>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- HOW IT WORKS (condensed) -->
-  <div style="padding: 6rem 2.5rem 0; max-width:1200px; margin:0 auto">
     <div class="section-eyebrow">The Process</div>
     <h2 class="section-title">Up & Running<br><em>In Minutes</em></h2>
-    <p class="section-sub">No spreadsheets. No group chats for picks. One invite code and your whole crew is in.</p>
-    <div class="steps-grid">
+    <p class="section-sub">One account plays both games. Create your league, share your invite code, and you're ready.</p>
+
+    <!-- Game tabs -->
+    <div style="display:flex;gap:.5rem;margin:2rem 0 2.5rem;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button id="hiw-tab-playoff" onclick="switchHIWTab('playoff')" style="background:none;border:none;border-bottom:2px solid var(--gold);padding:.6rem 1.25rem .8rem;font-family:'Barlow Condensed',sans-serif;font-size:.9rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);cursor:pointer;margin-bottom:-1px">🏆 Playoff Challenge</button>
+      <button id="hiw-tab-survivor" onclick="switchHIWTab('survivor')" style="background:none;border:none;border-bottom:2px solid transparent;padding:.6rem 1.25rem .8rem;font-family:'Barlow Condensed',sans-serif;font-size:.9rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);cursor:pointer;margin-bottom:-1px;transition:all .15s">🎯 Survivor League</button>
+    </div>
+
+    <!-- Playoff steps -->
+    <div id="hiw-playoff" class="steps-grid">
       <div class="step-card">
         <span class="step-num">01</span>
         <div class="step-icon">🏗</div>
         <div class="step-title">Create Your League</div>
-        <div class="step-desc">Sign up free, name your league, and get a unique 8-character invite code in seconds.</div>
+        <div class="step-desc">Sign up, name your league, get an 8-character invite code. Share it and your crew joins instantly.</div>
       </div>
       <div class="step-card">
         <span class="step-num">02</span>
-        <div class="step-icon">🤝</div>
-        <div class="step-title">Invite Your Squad</div>
-        <div class="step-desc">Share your invite code — friends join instantly, create their team, and you're draft-ready.</div>
+        <div class="step-icon">🐍</div>
+        <div class="step-title">Snake Draft</div>
+        <div class="step-desc">Commissioner kicks off the live draft before Wild Card. Teams take turns in snake order. Queue your targets in advance.</div>
       </div>
       <div class="step-card">
         <span class="step-num">03</span>
+        <div class="step-icon">🐴</div>
+        <div class="step-title">Set Ponies & Multipliers</div>
+        <div class="step-desc">Designate up to 4 pony players and assign 1.5× or 2× multipliers before the lock. Hidden from opponents until revealed.</div>
+      </div>
+      <div class="step-card">
+        <span class="step-num">04</span>
         <div class="step-icon">⚡</div>
-        <div class="step-title">Draft, Score, Win</div>
-        <div class="step-desc">Run your snake draft, lock multipliers, add ponies, and watch the live leaderboard every week.</div>
+        <div class="step-title">Score & Win</div>
+        <div class="step-desc">Commissioner enters weekly stats. Scoring runs automatically. Watch the live leaderboard through the Super Bowl.</div>
+      </div>
+    </div>
+
+    <!-- Survivor steps -->
+    <div id="hiw-survivor" class="steps-grid" style="display:none">
+      <div class="step-card" style="border-color:rgba(201,69,26,.2)">
+        <span class="step-num" style="color:rgba(201,69,26,.15)">01</span>
+        <div class="step-icon">🏗</div>
+        <div class="step-title">Join a League</div>
+        <div class="step-desc">Sign up and join the Survivor league — one league where everyone competes against each other all season long.</div>
+      </div>
+      <div class="step-card" style="border-color:rgba(201,69,26,.2)">
+        <span class="step-num" style="color:rgba(201,69,26,.15)">02</span>
+        <div class="step-icon">📋</div>
+        <div class="step-title">Submit Your Week 1 Lineup</div>
+        <div class="step-desc">Pick a QB, RB, WR, TE, DST, and K for the week. Players lock at their individual kickoff time — no late swaps.</div>
+      </div>
+      <div class="step-card" style="border-color:rgba(201,69,26,.2)">
+        <span class="step-num" style="color:rgba(201,69,26,.15)">03</span>
+        <div class="step-icon">🚫</div>
+        <div class="step-title">No Repeats — Ever</div>
+        <div class="step-desc">Any player you start this week is locked out for the rest of the season. 18 weeks, 32 teams, shrinking choices.</div>
+      </div>
+      <div class="step-card" style="border-color:rgba(201,69,26,.2)">
+        <span class="step-num" style="color:rgba(201,69,26,.15)">04</span>
+        <div class="step-icon">🏆</div>
+        <div class="step-title">Most Points Wins</div>
+        <div class="step-desc">Scores accumulate all season. The team with the most total points after Week 18 takes the title.</div>
       </div>
     </div>
   </div>
@@ -1583,13 +1592,14 @@ body {
         <h2 class="section-title">Real Scoring.<br><em>Real Stakes.</em></h2>
         <p style="font-size:.95rem; color:var(--muted2); line-height:1.7; margin-bottom: 1.5rem">
           Full PPR with yardage-based scoring, distance kickers, and defensive return scoring.
-          Plus our signature pony and multiplier mechanics that make every draft pick matter more.
+          The same engine powers both the Playoff Challenge and Survivor League.
         </p>
         <div style="display:flex; flex-direction:column; gap:.65rem">
           <div class="hiw-point">PPR — every reception counts for 1.0 pt</div>
           <div class="hiw-point">Yardage — 0.1 pts per yard (rush/rec/return), 0.04 per pass yard</div>
           <div class="hiw-point">Kickers — scored by distance: 55-yd FG = 5.5 pts</div>
-          <div class="hiw-point">Ponies — any of your 4 pony slots can receive a 2× multiplier</div>
+          <div class="hiw-point">Playoffs: Ponies can receive a 1.5× or 2× multiplier</div>
+          <div class="hiw-point">Survivor: Player locks at kickoff — no changes after game starts</div>
         </div>
         <button class="btn btn-outline-gold" style="margin-top:2rem" onclick="showPage('how')">Full Scoring Details →</button>
       </div>
@@ -1635,18 +1645,18 @@ body {
       </div>
       <div class="testi-card">
         <div class="testi-stars">★★★★★</div>
-        <p class="testi-text">"Distance-based kicker scoring sounds niche until your team wins by 0.3 points because Tyler Bass drilled a 63-yarder. Absolutely unhinged."</p>
+        <p class="testi-text">"Survivor is brutal in the best way. By Week 10 you're staring at your player pool like a chess endgame. Nothing like it."</p>
         <div class="testi-author">
-          <div class="testi-avatar" style="background:rgba(59,130,246,.15); color:#93c5fd">SR</div>
+          <div class="testi-avatar" style="background:rgba(201,69,26,.15); color:var(--ember)">SR</div>
           <div>
             <div class="testi-name">Sofia R.</div>
-            <div class="testi-league">Manager — Sunday Destruction Co.</div>
+            <div class="testi-league">Survivor Finalist — Sunday Destruction Co.</div>
           </div>
         </div>
       </div>
       <div class="testi-card">
         <div class="testi-stars">★★★★★</div>
-        <p class="testi-text">"We run 3 separate leagues for different friend groups. One invite code per league, isolated scores, no bleed-through. It just works exactly right."</p>
+        <p class="testi-text">"We run both games in the same group. Playoff Challenge in January, Survivor all season long. One account, two completely different competitions."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:rgba(34,197,94,.15); color:var(--green)">TK</div>
           <div>
@@ -1663,7 +1673,7 @@ body {
     <div class="cta-banner">
       <div>
         <div class="cta-banner-title">Ready to<br><em>Ball Out?</em></div>
-        <div class="cta-banner-sub">Free to join. Your league. Your rules. New Orleans' home for fantasy sports.</div>
+        <div class="cta-banner-sub">Free to join. Two games. Your league. Your rules. New Orleans' home for fantasy sports.</div>
       </div>
       <div class="cta-banner-btns">
         <button class="btn btn-gold btn-xl" onclick="window.location.href='/register'">Create Your League</button>
@@ -1687,21 +1697,19 @@ body {
           </div>
         </div>
         <div>
-          <div class="footer-col-title">Product</div>
+          <div class="footer-col-title">Games</div>
           <div class="footer-links">
+            <a class="footer-link" onclick="window.location.href='/register'">Playoff Challenge</a>
+            <a class="footer-link" onclick="window.location.href='/survivor/dashboard'">Survivor League</a>
             <a class="footer-link" onclick="showPage('how')">How It Works</a>
             <a class="footer-link" onclick="openPricingModal()">Pricing</a>
-            <a class="footer-link" onclick="showPage('home')">Scoring Rules</a>
-            <a class="footer-link">Changelog</a>
           </div>
         </div>
         <div>
           <div class="footer-col-title">Support</div>
           <div class="footer-links">
             <a class="footer-link" onclick="openContactModal()">Contact Us</a>
-            <a class="footer-link">Documentation</a>
             <a class="footer-link">Commissioner Guide</a>
-            <a class="footer-link">Status</a>
           </div>
         </div>
         <div>
@@ -1721,6 +1729,50 @@ body {
 
 </div><!-- /page-home -->
 
+<script>
+function switchHIWFullTab(tab) {
+  const playoff  = document.getElementById('hiw-full-playoff');
+  const survivor = document.getElementById('hiw-full-survivor');
+  const tabP = document.getElementById('hiw-full-tab-playoff');
+  const tabS = document.getElementById('hiw-full-tab-survivor');
+  if(tab === 'playoff') {
+    playoff.style.display = '';
+    survivor.style.display = 'none';
+    tabP.style.borderBottomColor = 'var(--gold)';
+    tabP.style.color = 'var(--gold)';
+    tabS.style.borderBottomColor = 'transparent';
+    tabS.style.color = 'var(--muted2)';
+  } else {
+    playoff.style.display = 'none';
+    survivor.style.display = '';
+    tabS.style.borderBottomColor = 'var(--ember)';
+    tabS.style.color = 'var(--ember)';
+    tabP.style.borderBottomColor = 'transparent';
+    tabP.style.color = 'var(--muted2)';
+  }
+}
+function switchHIWTab(tab) {
+  const playoff  = document.getElementById('hiw-playoff');
+  const survivor = document.getElementById('hiw-survivor');
+  const tabP = document.getElementById('hiw-tab-playoff');
+  const tabS = document.getElementById('hiw-tab-survivor');
+  if(tab === 'playoff') {
+    playoff.style.display = '';
+    survivor.style.display = 'none';
+    tabP.style.borderBottomColor = 'var(--gold)';
+    tabP.style.color = 'var(--gold)';
+    tabS.style.borderBottomColor = 'transparent';
+    tabS.style.color = 'var(--muted2)';
+  } else {
+    playoff.style.display = 'none';
+    survivor.style.display = '';
+    tabS.style.borderBottomColor = 'var(--ember)';
+    tabS.style.color = 'var(--ember)';
+    tabP.style.borderBottomColor = 'transparent';
+    tabP.style.color = 'var(--muted2)';
+  }
+}
+</script>
 
 
 
@@ -1738,11 +1790,17 @@ body {
       How 504 Fantasy<br><em>Works</em>
     </h1>
     <p style="font-size:1rem; color:var(--muted2); line-height:1.7; margin-top:1rem">
-      From creating your first league to watching Week 17 scores roll in —
-      here's everything you need to know.
+      Two games, one platform. Select a game below to see how it works.
     </p>
+    <!-- Game tabs -->
+    <div style="display:flex;gap:.5rem;margin-top:2rem;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button id="hiw-full-tab-playoff" onclick="switchHIWFullTab('playoff')" style="background:none;border:none;border-bottom:2px solid var(--gold);padding:.6rem 1.5rem .8rem;font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);cursor:pointer;margin-bottom:-1px">🏆 Playoff Challenge</button>
+      <button id="hiw-full-tab-survivor" onclick="switchHIWFullTab('survivor')" style="background:none;border:none;border-bottom:2px solid transparent;padding:.6rem 1.5rem .8rem;font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);cursor:pointer;margin-bottom:-1px;transition:all .15s">🎯 Survivor League</button>
+    </div>
   </div>
 
+  <!-- PLAYOFF CHALLENGE STEPS -->
+  <div id="hiw-full-playoff">
   <div class="hiw-full-steps">
 
     <div class="hiw-step-big">
@@ -1843,14 +1901,13 @@ body {
         <div class="hiw-step-number">Step 04</div>
         <h3 class="hiw-step-title">Set Your Multipliers</h3>
         <p class="hiw-step-desc">
-          Before the multiplier lock time set by your commissioner, each team can assign
-          multipliers to players. You get limited 1.5× slots and limited 2× slots —
+          Each team assigns multipliers before kickoff — they lock automatically when the first game of the week starts. You get limited 1.5× slots and limited 2× slots —
           use them wisely. Multipliers apply to both regular players and ponies.
         </p>
         <div class="hiw-step-points">
           <div class="hiw-point">2 × the 1.5× multiplier available per team</div>
           <div class="hiw-point">1 × the 2× multiplier available per team</div>
-          <div class="hiw-point">Lock time set per-league by commissioner</div>
+          <div class="hiw-point">Multipliers auto-lock at kickoff of the first game</div>
           <div class="hiw-point">Cannot change after the lock — plan ahead</div>
         </div>
       </div>
@@ -1876,9 +1933,7 @@ body {
         <div class="hiw-step-number">Step 05</div>
         <h3 class="hiw-step-title">Score Each Week</h3>
         <p class="hiw-step-desc">
-          After each NFL game, the commissioner enters player stats. The scoring
-          engine automatically calculates base points, applies multipliers, and
-          updates the weekly and season-long leaderboards.
+          After each NFL game, the scoring engine automatically calculates base points, applies multipliers, and updates the weekly and season-long leaderboards.
         </p>
         <div class="hiw-step-points">
           <div class="hiw-point">Full PPR with per-yard yardage scoring</div>
@@ -1912,6 +1967,150 @@ body {
     </div>
 
   </div>
+
+  </div><!-- /hiw-full-playoff -->
+
+  <!-- SURVIVOR LEAGUE STEPS -->
+  <div id="hiw-full-survivor" style="display:none">
+  <div class="hiw-full-steps">
+
+    <div class="hiw-step-big">
+      <div>
+        <div class="hiw-step-number" style="color:var(--ember)">Step 01</div>
+        <h3 class="hiw-step-title">Join the League</h3>
+        <p class="hiw-step-desc">
+          The Survivor league is one shared league — everyone who signs up competes against each other. There's no separate league to create. Sign up, join, create your team, and you're in.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">One league — all players compete against each other</div>
+          <div class="hiw-point">Sign up and join with your invite code from the commissioner</div>
+          <div class="hiw-point">Roster slots: QB, RB, WR, TE, DST, K each week</div>
+          <div class="hiw-point">Runs Weeks 1–18 of the regular season</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div style="background:linear-gradient(135deg,rgba(201,69,26,.12),rgba(201,69,26,.04));border:1px solid rgba(201,69,26,.25);border-radius:12px;padding:1.5rem;text-align:center">
+          <div style="font-size:2.5rem;margin-bottom:.75rem">🎯</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:var(--ember);margin-bottom:.5rem">One League</div>
+          <div style="font-size:.85rem;color:var(--muted2);line-height:1.6">Everyone competes together.<br>No sub-leagues, no brackets.<br>Best score after 18 weeks wins.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hiw-step-big flip">
+      <div>
+        <div class="hiw-step-number" style="color:var(--ember)">Step 02</div>
+        <h3 class="hiw-step-title">Submit Your Weekly Lineup</h3>
+        <p class="hiw-step-desc">
+          Each week, pick one player per slot — QB, RB, WR, TE, DST, and K. Players lock automatically at their individual game kickoff times. No late swaps, no exceptions.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">Submit your lineup anytime before the first kickoff</div>
+          <div class="hiw-point">Players lock individually at their own game time</div>
+          <div class="hiw-point">Lineup is read-only once your first player kicks off</div>
+          <div class="hiw-point">Commissioner can view all lineups at any time</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem">
+          <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+            <span class="mock-pos pos-qb">QB</span>
+            <span style="font-size:.8rem;font-weight:600">L. Jackson</span>
+            <span style="font-size:.65rem;color:var(--green)">✓ Locked</span>
+          </div>
+          <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+            <span class="mock-pos pos-rb">RB</span>
+            <span style="font-size:.8rem;font-weight:600">D. Henry</span>
+            <span style="font-size:.65rem;color:var(--green)">✓ Locked</span>
+          </div>
+          <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+            <span class="mock-pos pos-wr">WR</span>
+            <span style="font-size:.8rem;font-weight:600">S. Diggs</span>
+            <span style="font-size:.65rem;color:var(--muted)">⏱ Open</span>
+          </div>
+          <div class="mock-pick-row" style="flex-direction:column;align-items:flex-start;gap:.15rem">
+            <span class="mock-pos pos-te">TE</span>
+            <span style="font-size:.8rem;font-weight:600">T. Kelce</span>
+            <span style="font-size:.65rem;color:var(--muted)">⏱ Open</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hiw-step-big">
+      <div>
+        <div class="hiw-step-number" style="color:var(--ember)">Step 03</div>
+        <h3 class="hiw-step-title">No Repeats — Ever</h3>
+        <p class="hiw-step-desc">
+          Here's the catch: any player you start this week is permanently removed from your available pool for the rest of the season. 18 weeks, 32 teams per position, and your choices shrink every single week.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">Used players are shown in your history but unavailable to pick</div>
+          <div class="hiw-point">Bye week teams are automatically filtered out each week</div>
+          <div class="hiw-point">Games that have already kicked off are locked out</div>
+          <div class="hiw-point">Strategy matters more as the season goes on</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div style="font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--ember); margin-bottom:.65rem">🚫 Your Used QBs — Week 8</div>
+        <div class="mock-pick-row" style="margin-bottom:.35rem; opacity:.5">
+          <span class="mock-pos pos-qb">QB</span>
+          <span class="mock-pick-name">Josh Allen</span>
+          <span style="font-size:.7rem;color:var(--red)">Used Wk 1</span>
+        </div>
+        <div class="mock-pick-row" style="margin-bottom:.35rem; opacity:.5">
+          <span class="mock-pos pos-qb">QB</span>
+          <span class="mock-pick-name">P. Mahomes</span>
+          <span style="font-size:.7rem;color:var(--red)">Used Wk 3</span>
+        </div>
+        <div class="mock-pick-row highlight" style="margin-bottom:.35rem">
+          <span class="mock-pos pos-qb">QB</span>
+          <span class="mock-pick-name">L. Jackson</span>
+          <span style="font-size:.7rem;color:var(--green)">Available</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="hiw-step-big flip">
+      <div>
+        <div class="hiw-step-number" style="color:var(--ember)">Step 04</div>
+        <h3 class="hiw-step-title">Scores Update Automatically</h3>
+        <p class="hiw-step-desc">
+          After each week's games, the scoring engine pulls stats and calculates your weekly total. Scores accumulate all season. The leaderboard shows weekly and season-long rankings for everyone in your league.
+        </p>
+        <div class="hiw-step-points">
+          <div class="hiw-point">Full PPR scoring — same engine as the Playoff Challenge</div>
+          <div class="hiw-point">Kickers scored by FG distance</div>
+          <div class="hiw-point">Weekly totals and season totals both tracked</div>
+          <div class="hiw-point">Most total points after Week 18 wins</div>
+        </div>
+      </div>
+      <div class="hiw-visual">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.85rem">
+          <span style="font-family:'Barlow Condensed',sans-serif; font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em">Week 8 Leaderboard</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.3rem">
+          <div style="display:flex;align-items:center;gap:.65rem;padding:.45rem .65rem;background:rgba(201,69,26,.07);border:1px solid rgba(201,69,26,.18);border-radius:7px;font-size:.82rem">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;color:var(--ember)">#1</span>
+            <span>Team Bayou</span>
+            <span style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:var(--ember)">1,248</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:.65rem;padding:.45rem .65rem;background:var(--s2);border:1px solid var(--border);border-radius:7px;font-size:.82rem">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;color:var(--muted)">#2</span>
+            <span>Sunday Chaos</span>
+            <span style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800">1,201</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:.65rem;padding:.45rem .65rem;background:var(--s2);border:1px solid var(--border);border-radius:7px;font-size:.82rem">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1.1rem;color:var(--muted)">#3</span>
+            <span>Thunderbirds</span>
+            <span style="margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800">1,187</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /hiw-full-steps survivor -->
+  </div><!-- /hiw-full-survivor -->
 
   <div style="padding:0 2.5rem; max-width:1200px; margin: 0 auto 6rem">
     <div class="cta-banner">
