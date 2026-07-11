@@ -853,6 +853,15 @@ def dashboard(request: Request):
     if not user:
         return RedirectResponse("/login", status_code=303)
     leagues = get_user_leagues(user["id"])
+    # If user is already a member of the active league, redirect them there
+    active_league_id = os.environ.get("SURVIVOR_LEAGUE_ID", "")
+    if active_league_id and not request.query_params.get("msg") and not request.query_params.get("error"):
+        try:
+            active_lid = int(active_league_id)
+            if is_league_member(active_lid, user["id"]):
+                return RedirectResponse(f"/survivor/{active_lid}", status_code=303)
+        except Exception:
+            pass
     return templates.TemplateResponse(
         "dashboard.html",
         {
