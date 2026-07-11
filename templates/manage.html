@@ -469,6 +469,87 @@
 
 <!-- ══ SETTINGS ══ -->
 <div id="tab-settings" class="tab-panel">
+  <!-- Draft Schedule -->
+  <div class="card mb-2" style="border-color:rgba(232,184,75,.25)">
+    <div class="card-title">📅 Draft Schedule</div>
+    <form method="post" action="/league/{{ league.id }}/manage/settings/draft-time">
+      <div class="form-row">
+        <div class="fg">
+          <label>Draft Start Date & Time (your local time)</label>
+          <input type="datetime-local" name="draft_start_time"
+                 value="{{ league.draft_start_time[:16] if league.draft_start_time else '' }}"/>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">
+            Leave blank to allow drafting immediately. Once set, no picks can be made until this time.
+          </div>
+        </div>
+        <div class="fg" style="align-self:flex-end">
+          <button class="btn btn-gold" style="width:100%">Save</button>
+        </div>
+      </div>
+    </form>
+    {% if league.draft_start_time %}
+    <div style="margin-top:.75rem;font-size:.85rem;color:var(--muted2)">
+      Draft scheduled: <strong style="color:var(--gold)">{{ league.draft_start_time }}</strong>
+      <form method="post" action="/league/{{ league.id }}/manage/settings/draft-time" style="display:inline;margin-left:.75rem">
+        <input type="hidden" name="draft_start_time" value="">
+        <button type="submit" class="btn btn-ghost btn-xs">Clear</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Draft Order -->
+  <div class="card mb-2" style="border-color:rgba(124,58,237,.25)">
+    <div class="card-title">🐍 Draft Order</div>
+    {% if teams %}
+    <p style="font-size:.82rem;color:var(--muted2);margin-bottom:.75rem">Set the Round 1 pick order. The snake draft reverses this order each round.</p>
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
+      <form method="post" action="/league/{{ league.id }}/manage/draft-order/randomize">
+        <button class="btn btn-gold btn-sm">🎲 Randomize Order</button>
+      </form>
+      <form method="post" action="/league/{{ league.id }}/manage/draft-order/clear">
+        <button class="btn btn-ghost btn-sm">Clear (use join order)</button>
+      </form>
+    </div>
+    {% if league.draft_order %}
+    <div style="font-size:.78rem;color:var(--muted2);margin-bottom:.75rem">
+      Current order:
+      {% set order_ids = league.draft_order.split(',') %}
+      {% for oid in order_ids %}
+        {% for t in teams %}{% if t.id|string == oid %}<strong style="color:var(--text)">{{ loop.index0 + 1 }}. {{ t.name }}</strong>{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}
+      {% endfor %}
+    </div>
+    {% endif %}
+    <form method="post" action="/league/{{ league.id }}/manage/draft-order/set">
+      <div style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:.75rem" id="draft-order-list">
+        {% if league.draft_order %}
+          {% set order_ids = league.draft_order.split(',') %}
+          {% for oid in order_ids %}
+            {% for t in teams %}{% if t.id|string == oid %}
+            <div style="display:flex;align-items:center;gap:.5rem;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.4rem .75rem">
+              <span style="color:var(--muted);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;width:1.5rem">{{ loop.index0 + 1 }}.</span>
+              <select name="team_order" style="flex:1;background:var(--s2);border:none;color:var(--text);font-size:.85rem">
+                {% for t2 in teams %}<option value="{{ t2.id }}" {% if t2.id|string == oid %}selected{% endif %}>{{ t2.name }}</option>{% endfor %}
+              </select>
+            </div>
+            {% endif %}{% endfor %}
+          {% endfor %}
+        {% else %}
+          {% for t in teams %}
+          <div style="display:flex;align-items:center;gap:.5rem;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.4rem .75rem">
+            <span style="color:var(--muted);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;width:1.5rem">{{ loop.index }}.</span>
+            <select name="team_order" style="flex:1;background:var(--s2);border:none;color:var(--text);font-size:.85rem">
+              {% for t2 in teams %}<option value="{{ t2.id }}" {% if t2.id == t.id %}selected{% endif %}>{{ t2.name }}</option>{% endfor %}
+            </select>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+      <button class="btn btn-ghost btn-sm">Save Order</button>
+    </form>
+    {% else %}
+    <p style="font-size:.85rem;color:var(--muted2)">No teams yet. Add teams first to set draft order.</p>
+    {% endif %}
+  </div>
   <!-- Payment Settings -->
   <div class="card mb-2" style="border-color:rgba(34,197,94,.25)">
     <div class="card-title">💰 Payment Settings</div>

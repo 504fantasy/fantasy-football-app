@@ -185,6 +185,7 @@ def _auto_skip(league_id: int, expected_round: int, expected_pick: int) -> None:
         ).fetchone()
         if not teams or not league:
             conn.execute("ROLLBACK"); return
+        teams = sort_teams_by_draft_order(list(teams), dict(league))
         ordered = get_snake_order(teams, state["current_round"])
         team_on_clock = ordered[state["current_pick"] % len(ordered)]
         team_name = team_on_clock["name"]
@@ -404,6 +405,20 @@ def get_team_week_score(
 
 def get_snake_order(teams: list, round_num: int) -> list:
     return list(reversed(teams)) if round_num % 2 == 0 else list(teams)
+
+def sort_teams_by_draft_order(teams: list, league: dict) -> list:
+    """Sort teams according to the commissioner-set draft order if one exists."""
+    draft_order = league.get("draft_order") if league else None
+    if not draft_order:
+        return teams
+    order_ids = [int(x) for x in draft_order.split(",") if x.strip().isdigit()]
+    if not order_ids:
+        return teams
+    id_to_team = {t["id"]: t for t in teams}
+    ordered = [id_to_team[oid] for oid in order_ids if oid in id_to_team]
+    # Add any teams not in the order list at the end
+    ordered += [t for t in teams if t["id"] not in {oid for oid in order_ids}]
+    return ordered
 
 
 def get_draft_state(league_id: int) -> dict:
@@ -1241,7 +1256,7 @@ def draft_page(league_id: int, request: Request, user=Depends(get_current_user))
         return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
 
-    teams = get_league_teams(league_id)
+    teams = sort_teams_by_draft_order(get_league_teams(league_id), league)
     rosters = {t["name"]: get_team_roster(t["id"]) for t in teams}
     draft_state = get_draft_state(league_id)
     team_on_clock = get_team_on_clock(league_id)
@@ -1548,6 +1563,20 @@ def draft_pick(
         return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
     is_comm = is_commissioner(league, user)
+    # Block picks until draft start time (superadmin can always override for testing)
+    if not user.get("is_superadmin"):
+        draft_start = league.get("draft_start_time")
+        if draft_start:
+            from datetime import datetime, timezone as _tz
+            try:
+                start_dt = datetime.fromisoformat(draft_start).replace(tzinfo=_tz.utc)
+                if datetime.now(_tz.utc) < start_dt:
+                    return RedirectResponse(
+                        f"/league/{league_id}/draft?error=draft_not_started",
+                        status_code=303
+                    )
+            except Exception:
+                pass
     # Block unpaid teams from drafting after payment deadline
     if not is_comm and league.get("entry_fee") and league["entry_fee"] > 0:
         my_team = conn2 = None
@@ -1586,6 +1615,7 @@ def draft_pick(
         teams = conn.execute(
             "SELECT * FROM teams WHERE league_id=? ORDER BY id", (league_id,)
         ).fetchall()
+        teams = sort_teams_by_draft_order([dict(t) for t in teams], league)
 
         if not teams:
             conn.execute("ROLLBACK")
@@ -3658,7 +3688,7 @@ def build_draft_state_payload(league_id: int, league: dict) -> dict:
     team_on_clock = get_team_on_clock(league_id)
     timer_secs = league.get("pick_timer_seconds") or 0
     remaining = get_timer_remaining(league_id, timer_secs, state.get("pick_started_at"))
-    teams = get_league_teams(league_id)
+    teams = sort_teams_by_draft_order(get_league_teams(league_id), league)
     rosters = {t["name"]: get_team_roster(t["id"]) for t in teams}
     return {
         "state": state,
@@ -4086,6 +4116,53 @@ def manage_team_payment(
     return RedirectResponse(f"/league/{league_id}/manage?msg=payment_updated", status_code=303)
 
 
+
+
+@app.post("/league/{league_id}/manage/draft-order/randomize")
+def draft_order_randomize(league_id: int, user=Depends(get_current_user)):
+    if not user: raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user): raise HTTPException(status_code=403)
+    import random
+    teams = get_league_teams(league_id)
+    random.shuffle(teams)
+    order = ",".join(str(t["id"]) for t in teams)
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE leagues SET draft_order=? WHERE id=?"), (order, league_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=draft_order_randomized#tab-settings", status_code=303)
+
+@app.post("/league/{league_id}/manage/draft-order/clear")
+def draft_order_clear(league_id: int, user=Depends(get_current_user)):
+    if not user: raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user): raise HTTPException(status_code=403)
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE leagues SET draft_order=NULL WHERE id=?"), (league_id,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=draft_order_cleared#tab-settings", status_code=303)
+
+def update_draft_time(
+    league_id: int,
+    draft_start_time: str = Form(""),
+    user=Depends(get_current_user),
+):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    # Store as UTC — the datetime-local input sends local time, store as-is
+    conn.execute(adapt_sql(
+        "UPDATE leagues SET draft_start_time=? WHERE id=?"
+    ), (draft_start_time.strip() or None, league_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=draft_time_updated", status_code=303)
+
 @app.post("/league/{league_id}/manage/settings/payment")
 def update_payment_settings(
     league_id: int,
@@ -4167,6 +4244,70 @@ def manage_team_payment(
                 details=f"Team {team_id} marked {'paid' if paid else 'unpaid'}")
     return RedirectResponse(f"/league/{league_id}/manage?msg=payment_updated", status_code=303)
 
+
+
+
+@app.post("/league/{league_id}/manage/draft-order/randomize")
+def draft_order_randomize(league_id: int, user=Depends(get_current_user)):
+    if not user: raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user): raise HTTPException(status_code=403)
+    import random
+    teams = get_league_teams(league_id)
+    random.shuffle(teams)
+    order = ",".join(str(t["id"]) for t in teams)
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE leagues SET draft_order=? WHERE id=?"), (order, league_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=draft_order_randomized#tab-settings", status_code=303)
+
+@app.post("/league/{league_id}/manage/draft-order/clear")
+def draft_order_clear(league_id: int, user=Depends(get_current_user)):
+    if not user: raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user): raise HTTPException(status_code=403)
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE leagues SET draft_order=NULL WHERE id=?"), (league_id,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=draft_order_cleared#tab-settings", status_code=303)
+
+
+@app.post("/league/{league_id}/manage/draft-order/set")
+async def draft_order_set(league_id: int, request: Request, user=Depends(get_current_user)):
+    if not user: raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user): raise HTTPException(status_code=403)
+    form = await request.form()
+    team_ids = form.getlist("team_order")
+    if team_ids:
+        order = ",".join(team_ids)
+        conn = get_db()
+        conn.execute(adapt_sql("UPDATE leagues SET draft_order=? WHERE id=?"), (order, league_id))
+        conn.commit()
+        conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=draft_order_saved", status_code=303)
+
+@app.post("/league/{league_id}/manage/settings/draft-time")
+def update_draft_time(
+    league_id: int,
+    draft_start_time: str = Form(""),
+    user=Depends(get_current_user),
+):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_admin_or_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    # Store as UTC — the datetime-local input sends local time, store as-is
+    conn.execute(adapt_sql(
+        "UPDATE leagues SET draft_start_time=? WHERE id=?"
+    ), (draft_start_time.strip() or None, league_id))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(f"/league/{league_id}/manage?msg=draft_time_updated", status_code=303)
 
 @app.post("/league/{league_id}/manage/settings/payment")
 def update_payment_settings(

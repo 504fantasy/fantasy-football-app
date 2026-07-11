@@ -350,6 +350,56 @@
 {% endblock %}
 
 {% block content %}
+{% if league.draft_start_time %}
+<div id="draft-countdown-banner" style="background:linear-gradient(135deg,rgba(232,184,75,.1),rgba(201,69,26,.08));border:1px solid rgba(232,184,75,.25);border-radius:10px;padding:1.5rem 1.5rem;margin-bottom:1.5rem;text-align:center">
+  <div style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:.75rem">Draft Starts In</div>
+  <div style="display:flex;justify-content:center;gap:1.5rem;margin-bottom:.75rem">
+    <div><div id="cd-days" style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--gold);line-height:1">--</div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:.2rem">Days</div></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--muted);line-height:1;padding-top:.1rem">:</div>
+    <div><div id="cd-hours" style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--gold);line-height:1">--</div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:.2rem">Hours</div></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--muted);line-height:1;padding-top:.1rem">:</div>
+    <div><div id="cd-mins" style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--gold);line-height:1">--</div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:.2rem">Mins</div></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--muted);line-height:1;padding-top:.1rem">:</div>
+    <div><div id="cd-secs" style="font-family:'Barlow Condensed',sans-serif;font-size:2.8rem;font-weight:900;color:var(--gold);line-height:1">--</div><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-top:.2rem">Secs</div></div>
+  </div>
+  <div id="cd-date" style="font-size:.82rem;color:var(--muted2)"></div>
+</div>
+<script>
+(function() {
+  const startTime = new Date('{{ league.draft_start_time }}');
+  const dateEl = document.getElementById('cd-date');
+  if (dateEl) {
+    dateEl.textContent = startTime.toLocaleString('en-US', {
+      timeZone: 'America/Chicago', weekday: 'long', month: 'long',
+      day: 'numeric', year: 'numeric', hour: 'numeric',
+      minute: '2-digit', timeZoneName: 'short'
+    });
+  }
+  function updateCountdown() {
+    const now = new Date();
+    const diff = startTime - now;
+    const banner = document.getElementById('draft-countdown-banner');
+    if (!banner) return;
+    if (diff <= 0) {
+      banner.style.background = 'rgba(34,197,94,.1)';
+      banner.style.borderColor = 'rgba(34,197,94,.3)';
+      banner.innerHTML = '<div style="font-family:Barlow Condensed,sans-serif;font-size:2rem;font-weight:900;color:var(--green)">🏈 Draft is Live!</div><div style="font-size:.85rem;color:var(--muted2);margin-top:.5rem">Good luck!</div>';
+      return;
+    }
+    const days  = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const mins  = Math.floor((diff % 3600000) / 60000);
+    const secs  = Math.floor((diff % 60000) / 1000);
+    document.getElementById('cd-days').textContent  = String(days).padStart(2,'0');
+    document.getElementById('cd-hours').textContent = String(hours).padStart(2,'0');
+    document.getElementById('cd-mins').textContent  = String(mins).padStart(2,'0');
+    document.getElementById('cd-secs').textContent  = String(secs).padStart(2,'0');
+  }
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+})();
+</script>
+{% endif %}
 
 {% if request.query_params.get('error')=='taken' %}
 <div class="alert alert-warning">That player has already been drafted.</div>
