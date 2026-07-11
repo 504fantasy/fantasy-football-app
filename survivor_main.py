@@ -1256,7 +1256,7 @@ def scores_page(league_id: int, request: Request, week: int = None):
         lineup = get_team_lineup(team["id"], week)
         # Show lineup only to own team, commissioner, or after first kickoff
         is_own_team = team["owner_id"] == user["id"]
-        show_players = is_own_team or week_locked or is_comm
+        show_players = is_own_team or week_locked
         week_scores.append(
             {
                 "team": team,
