@@ -1158,6 +1158,19 @@ def league_join(invite_code: str = Form(...), user=Depends(get_current_user)):
     lid, err = join_league_by_code(user["id"], invite_code)
     if err:
         return RedirectResponse(f"/dashboard?error={err}", status_code=303)
+    # Auto-create a team for the user if they don't have one yet
+    conn = get_db()
+    existing = conn.execute(
+        adapt_sql("SELECT id FROM teams WHERE league_id=? AND owner_id=?"),
+        (lid, user["id"])
+    ).fetchone()
+    if not existing:
+        conn.execute(
+            adapt_sql("INSERT INTO teams (league_id, name, owner_id) VALUES (?,?,?)"),
+            (lid, user["username"], user["id"])
+        )
+        conn.commit()
+    conn.close()
     write_audit(actor=user["username"], action="LEAGUE_JOIN", league_id=lid)
     return RedirectResponse(f"/league/{lid}/draft", status_code=303)
 
@@ -2650,6 +2663,7 @@ def manage_reset_draft(league_id: int, user=Depends(get_current_user)):
         ),
         (league_id,),
     )
+    conn.execute(adapt_sql("DELETE FROM draft_chat WHERE league_id=?"), (league_id,))
     conn.commit()
     conn.close()
     write_audit(

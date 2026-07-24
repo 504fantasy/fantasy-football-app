@@ -732,33 +732,6 @@
       {% endfor %}
     </div>
 
-    {# Create team only if user doesn't have one yet #}
-    {% set has_team = false %}
-    {% for t in teams %}{% if t.owner_id == user.id %}{% set has_team = true %}{% endif %}{% endfor %}
-    {% if not has_team %}
-    <div class="card mt-2" style="max-width:380px">
-      <div class="card-title">➕ Create Your Team</div>
-      <form method="post" action="/league/{{ league.id }}/create-team">
-        <div class="form-inline">
-          <input name="team_name" placeholder="Team name" required/>
-          <button class="btn btn-gold">Create</button>
-        </div>
-      </form>
-    </div>
-    {% endif %}
-
-    {% else %}
-    <div class="card" style="max-width:400px;padding:2rem">
-      <div class="card-title">➕ Create Your Team</div>
-      <p style="font-size:.84rem;color:var(--muted);margin-bottom:.75rem">Create a team to join this draft.</p>
-      <form method="post" action="/league/{{ league.id }}/create-team">
-        <div class="form-inline">
-          <input name="team_name" placeholder="Team name" required/>
-          <button class="btn btn-gold">Create</button>
-        </div>
-      </form>
-    </div>
-    {% endif %}
   </div>
 
 </div>
@@ -1270,6 +1243,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="color:#64748b;font-style:italic">Loading...</div>
     </div>
   </div>
+    {% endif %}
 </div>
 
 <button onclick="toggleResearch()" id="research-btn">&#128269; Research</button>
