@@ -1033,7 +1033,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
 
     # Only allow editing the current week (commissioners can edit any week)
     is_comm = is_commissioner(league, user)
-    editable = (week == current_wk) or is_comm
+    editable = (week >= current_wk) or is_comm  # allow future weeks for advance lineup submission
 
     current_lineup = get_team_lineup(my_team["id"], week)
     locked = lineup_is_locked(current_lineup)
@@ -1143,15 +1143,6 @@ async def lineup_submit(
             val = form.get(key)
             if val and str(val) != "0":
                 picks[(pos, slot)] = int(val)
-    # Non-commissioners can only submit the current week
-    if week != current_wk and not is_comm:
-        return RedirectResponse(
-            f"/survivor/{league_id}/lineup?error=wrong_week", status_code=303
-        )
-        return RedirectResponse(
-            f"/survivor/{league_id}/lineup?error=wrong_week", status_code=303
-        )
-
     base = f"/survivor/{league_id}/lineup?week={week}"
     from datetime import datetime, timezone as _tz
     now_utc = datetime.now(_tz.utc)

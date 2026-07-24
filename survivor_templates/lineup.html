@@ -38,7 +38,7 @@
     <button class="week-btn" disabled>←</button>
   {% endif %}
   <span>Week {{ week }} of {{ total_weeks }}</span>
-  {% if week < current_week or (week < total_weeks and is_commissioner) %}
+  {% if week < total_weeks %}
     <a href="/survivor/{{ league.id }}/lineup?week={{ week + 1 }}" class="week-btn">Wk {{ week + 1 }} →</a>
   {% else %}
     <button class="week-btn" disabled>→</button>
