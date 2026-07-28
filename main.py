@@ -242,7 +242,7 @@ def _auto_skip(league_id: int, expected_round: int, expected_pick: int) -> None:
             "pick_started_at=? WHERE league_id=?",
             (new_round, new_pick, int(draft_now_complete), now_iso, league_id),
         )
-        conn.execute("COMMIT")
+        conn.commit()
         if not draft_now_complete and league["pick_timer_seconds"]:
             arm_pick_timer(league_id, league["pick_timer_seconds"], new_round, new_pick)
     except Exception as e:
@@ -475,7 +475,6 @@ def create_user(username: str, password: str, is_superadmin: bool = False) -> bo
         err = str(e).lower()
         if "unique" in err or "duplicate" in err:
             return False  # genuine duplicate username
-        import traceback
 
         print(f"[main] create_user FAILED for '{username}': {e}")
         traceback.print_exc()
@@ -1490,9 +1489,8 @@ def draft_autopick(league_id: int, user=Depends(get_current_user)):
     if not is_admin_or_commissioner(league, user):
         raise HTTPException(status_code=403)
     conn = get_db()
-    conn.isolation_level = None
+    conn.execute("PRAGMA busy_timeout=10000")
     try:
-        conn.execute("BEGIN IMMEDIATE")
         state = conn.execute(
             "SELECT current_round, current_pick, is_complete, pick_started_at FROM draft_state WHERE league_id=?",
             (league_id,),
@@ -1563,7 +1561,7 @@ def draft_autopick(league_id: int, user=Depends(get_current_user)):
         )
         return {"status": "ok", "player": auto_player["name"], "team": team_on_clock["name"]}
     except Exception as e:
-        conn.execute("ROLLBACK")
+        conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
@@ -1580,10 +1578,9 @@ def draft_pick(
     if not user.get("is_superadmin"):
         draft_start = league.get("draft_start_time")
         if draft_start:
-            from datetime import datetime, timezone as _tz
             try:
-                start_dt = datetime.fromisoformat(draft_start).replace(tzinfo=_tz.utc)
-                if datetime.now(_tz.utc) < start_dt:
+                start_dt = datetime.fromisoformat(draft_start).replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) < start_dt:
                     return RedirectResponse(
                         f"/league/{league_id}/draft?error=draft_not_started",
                         status_code=303
@@ -1604,9 +1601,8 @@ def draft_pick(
         if my_team and not my_team["paid"]:
             deadline = league.get("payment_deadline")
             if deadline:
-                from datetime import date as _date
                 try:
-                    if _date.today() > _date.fromisoformat(deadline):
+                    if datetime.now(timezone.utc).date() > datetime.fromisoformat(deadline).date():
                         return RedirectResponse(
                             f"/league/{league_id}/team?error=payment_required",
                             status_code=303
@@ -1616,27 +1612,28 @@ def draft_pick(
     base = f"/league/{league_id}"
 
     conn = get_db()
-    conn.isolation_level = None
+    conn.execute("PRAGMA busy_timeout=10000")
     try:
-        conn.execute("BEGIN IMMEDIATE")
 
         # Re-read state inside the transaction for consistency
         state = conn.execute(
             "SELECT current_round, current_pick, is_complete FROM draft_state WHERE league_id=?",
             (league_id,),
         ).fetchone()
-        teams = conn.execute(
+        teams = [dict(t) for t in conn.execute(
             "SELECT * FROM teams WHERE league_id=? ORDER BY id", (league_id,)
-        ).fetchall()
-        teams = sort_teams_by_draft_order([dict(t) for t in teams], league)
+        ).fetchall()]
 
         if not teams:
-            conn.execute("ROLLBACK")
+            conn.rollback()
             return RedirectResponse(f"{base}/draft", status_code=303)
 
         # Fix 4: Block picks once draft is marked complete
+        if not state:
+            conn.rollback()
+            return RedirectResponse(f"{base}/draft?error=no_draft_state", status_code=303)
         if state["is_complete"]:
-            conn.execute("ROLLBACK")
+            conn.rollback()
             return RedirectResponse(
                 f"{base}/draft?error=draft_complete", status_code=303
             )
@@ -1645,7 +1642,7 @@ def draft_pick(
         team_on_clock = ordered[state["current_pick"] % len(ordered)]
 
         if user["id"] != team_on_clock["owner_id"]:
-            conn.execute("ROLLBACK")
+            conn.rollback()
             raise HTTPException(status_code=403, detail="Not your pick")
 
         # Fix 3: Enforce picks_per_team cap — count existing non-pony roster entries
@@ -1655,7 +1652,7 @@ def draft_pick(
         ).fetchone()[0]
         picks_per_team = league["picks_per_team"] or 15
         if roster_count >= picks_per_team:
-            conn.execute("ROLLBACK")
+            conn.rollback()
             return RedirectResponse(f"{base}/draft?error=roster_full", status_code=303)
 
         player = conn.execute(
@@ -1663,7 +1660,7 @@ def draft_pick(
             (league_id, player_name),
         ).fetchone()
         if not player:
-            conn.execute("ROLLBACK")
+            conn.rollback()
             return RedirectResponse(f"{base}/draft", status_code=303)
 
         # Block if already drafted as a regular pick in this league
@@ -1675,7 +1672,7 @@ def draft_pick(
             (league_id, player["id"]),
         ).fetchone()
         if already:
-            conn.execute("ROLLBACK")
+            conn.rollback()
             return RedirectResponse(f"{base}/draft?error=taken", status_code=303)
 
         conn.execute(
@@ -1698,13 +1695,13 @@ def draft_pick(
         total_picks_needed = picks_per_team * len(teams)
         draft_now_complete = picks_made >= total_picks_needed
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        import datetime as _dt; now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat()
         conn.execute(
             "UPDATE draft_state SET current_round=?, current_pick=?, is_complete=?, "
             "pick_started_at=? WHERE league_id=?",
             (new_round, new_pick, int(draft_now_complete), now_iso, league_id),
         )
-        conn.execute("COMMIT")
+        conn.commit()
 
         # Cancel the previous pick's timer and arm a fresh one
         cancel_pick_timer(league_id)
@@ -1743,12 +1740,9 @@ def draft_pick(
     except Exception:
         try:
             conn.execute("ROLLBACK")
-        except:
-            pass
+        except: pass
         conn.close()
         return RedirectResponse(f"{base}/draft", status_code=303)
-
-    conn.close()
     return RedirectResponse(f"{base}/draft", status_code=303)
 
 

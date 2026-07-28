@@ -792,10 +792,18 @@ function selectPlayer(name) {
   if (searchInput) searchInput.value = name;
   if (hiddenInput) hiddenInput.value = name;
   if (sugBox) sugBox.style.display = 'none';
+  console.log('[selectPlayer] set to:', name, '| hidden value now:', hiddenInput?.value);
 }
 if (pickForm) {
-  pickForm.addEventListener('submit', () => {
-    if (!hiddenInput.value) hiddenInput.value = (searchInput?.value || '').trim();
+  pickForm.addEventListener('submit', e => {
+    const val = hiddenInput?.value || (searchInput?.value || '').trim();
+    if (hiddenInput) hiddenInput.value = val;
+    console.log('[draft] Submit fired, player_name=', JSON.stringify(val));
+    if (!val) {
+      e.preventDefault();
+      alert('Please select a player first.');
+      return;
+    }
   });
 }
 
@@ -984,17 +992,65 @@ async function renderQueue() {
   }
   list.innerHTML = cleaned.map((item, i) => `
     <div class="queue-item" draggable="true" data-idx="${i}" data-name="${item.name}" data-pid="${item.player_id||''}">
-      <span class="qi-rank">${i + 1}</span>
+      <span class="qi-rank" style="cursor:grab;color:var(--muted)">&#9776; ${i + 1}</span>
       <span class="qi-pos"><span class="badge b-${item.pos||'UNK'}">${item.pos||'?'}</span></span>
       <span class="qi-name">${item.name}</span>
+      <button class="qi-draft" data-name="${item.name}" title="Draft this player"
+        style="background:var(--gold);color:#000;border:none;border-radius:4px;padding:.15rem .45rem;font-size:.65rem;font-weight:800;cursor:pointer;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.04em;margin-right:.2rem;flex-shrink:0">Draft</button>
       <span class="qi-del" data-name="${item.name}" data-pid="${item.player_id||''}" title="Remove">&#x2715;</span>
     </div>`).join('');
+
+  // Remove buttons
   list.querySelectorAll('.qi-del').forEach(btn => {
     btn.addEventListener('click', async () => {
       await queueRemove(btn.dataset.name, btn.dataset.pid);
       _queueCache = null;
       renderQueue();
       updateStars();
+    });
+  });
+
+  // Draft buttons
+  list.querySelectorAll('.qi-draft').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      selectPlayer(btn.dataset.name);
+      if (hiddenInput && hiddenInput.value && pickForm) pickForm.submit();
+    });
+  });
+
+  // Drag and drop reordering
+  let dragSrc = null;
+  list.querySelectorAll('.queue-item').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      dragSrc = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      list.querySelectorAll('.queue-item').forEach(i => i.classList.remove('drag-over'));
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (item !== dragSrc) {
+        list.querySelectorAll('.queue-item').forEach(i => i.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      }
+    });
+    item.addEventListener('drop', async e => {
+      e.preventDefault();
+      if (dragSrc && dragSrc !== item) {
+        const items = [...list.querySelectorAll('.queue-item')];
+        const srcIdx = items.indexOf(dragSrc);
+        const tgtIdx = items.indexOf(item);
+        if (srcIdx < tgtIdx) list.insertBefore(dragSrc, item.nextSibling);
+        else list.insertBefore(dragSrc, item);
+        const newOrder = [...list.querySelectorAll('.queue-item')].map(el => el.dataset.pid).filter(Boolean);
+        await queueReorder(newOrder);
+        _queueCache = null;
+        renderQueue();
+      }
     });
   });
 
