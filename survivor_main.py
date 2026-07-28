@@ -1096,6 +1096,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
             "is_commissioner": is_comm,
             "msg": request.query_params.get("msg", ""),
             "error": request.query_params.get("error", ""),
+            "nfl_season": int(os.environ.get("NFL_SEASON", "2026")),
         },
     )
 

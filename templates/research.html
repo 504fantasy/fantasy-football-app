@@ -33,6 +33,7 @@
   <button class="rtab" onclick="switchTab('schedule')">&#128197; Schedule</button>
   <button class="rtab" onclick="switchTab('byes')">&#128564; Bye Weeks</button>
   <button class="rtab" onclick="switchTab('injuries')">&#129658; Injuries</button>
+  <button class="rtab" onclick="switchTab('stats')">&#128202; Stats</button>
 </div>
 
 <!-- PLAYERS TAB -->
@@ -79,6 +80,40 @@
   <div id="byes-content" style="color:var(--muted);font-style:italic">Loading bye weeks...</div>
 </div>
 
+
+<!-- STATS TAB -->
+<div id="tab-stats" class="rpanel">
+  <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+    <input id="stats-player-search" type="text" placeholder="Search player name..."
+           style="flex:1;min-width:200px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem;outline:none"
+           oninput="statsSearch()">
+    <select id="stats-pos-filter" onchange="statsSearch()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem">
+      <option value="">All Positions</option>
+      <option value="QB">QB</option>
+      <option value="RB">RB</option>
+      <option value="WR">WR</option>
+      <option value="TE">TE</option>
+      <option value="K">K</option>
+    </select>
+    <select id="stats-team-filter" onchange="statsSearch()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem">
+      <option value="">All Teams</option>
+      {% for team in ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SF','SEA','TB','TEN','WAS'] %}
+      <option value="{{ team }}">{{ team }}</option>
+      {% endfor %}
+    </select>
+    <select id="stats-season-select" onchange="statsSearch()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem">
+      <option value="{{ nfl_season }}">{{ nfl_season }}</option>
+      <option value="{{ nfl_season - 1 }}">{{ nfl_season - 1 }}</option>
+      <option value="{{ nfl_season - 2 }}">{{ nfl_season - 2 }}</option>
+    </select>
+    <select id="stats-week-select" onchange="statsSearch()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.9rem">
+      <option value="">Full Season</option>
+      {% for w in range(1,19) %}<option value="{{ w }}">Week {{ w }}</option>{% endfor %}
+    </select>
+  </div>
+  <div id="stats-content" style="color:var(--muted);font-style:italic">Search a player or select a position to view stats...</div>
+</div>
+
 <!-- INJURIES TAB -->
 <div id="tab-injuries" class="rpanel">
   <div class="pos-filter" id="injury-pos-filter">
@@ -99,6 +134,33 @@ const ALL_TEAMS = ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','
 let schedWeek = 1;
 let sleeperData = null;
 let injuryPosFilter = '';
+let projCache = null;
+const NFL_SEASON_YEAR = {{ nfl_season }};
+
+async function getProjections(week) {
+  week = week || 1;
+  const key = `sleeper_proj_${week}`;
+  if (projCache && projCache._week === week) return projCache;
+  try {
+    const cached = sessionStorage.getItem(key);
+    if (cached) { projCache = JSON.parse(cached); projCache._week = week; return projCache; }
+    const r = await fetch(`https://api.sleeper.com/projections/nfl/${NFL_SEASON_YEAR}/${week}?season_type=regular`);
+    const data = await r.json();
+    const result = {_week: week};
+    for (const entry of data) {
+      if (!entry.player_id || !entry.stats) continue;
+      const pts = entry.stats.pts_ppr || 0;
+      if (pts > 0) result[entry.player_id] = {
+        pts: Math.round(pts * 10) / 10,
+        posRank: Math.round(entry.stats.pos_adp_dd_ppr || 999),
+        overallRank: Math.round(entry.stats.adp_dd_ppr || 999)
+      };
+    }
+    sessionStorage.setItem(key, JSON.stringify(result));
+    projCache = result;
+    return projCache;
+  } catch(e) { return {}; }
+}
 let hsCache = null;
 async function getHeadshots() {
   if(hsCache) return hsCache;
@@ -117,6 +179,7 @@ function switchTab(name) {
   if(name==='schedule' && !document.getElementById('schedule-content').dataset.loaded) loadSchedule();
   if(name==='byes' && !document.getElementById('byes-content').dataset.loaded) loadByeWeeks();
   if(name==='injuries' && !document.getElementById('injury-content').dataset.loaded) loadInjuries();
+  if(name==='stats' && !document.getElementById('stats-content').dataset.loaded) statsSearch();
 }
 
 // ── Sleeper data ───────────────────────────────────────────────────────────
@@ -142,7 +205,7 @@ async function searchPlayers() {
       return;
     }
     el.innerHTML = '<div style="color:var(--muted)">Searching...</div>';
-    const [players] = await Promise.all([getSleeperData(), getHeadshots()]);
+    const [players, , projs] = await Promise.all([getSleeperData(), getHeadshots(), getProjections(1)]);
     const matches = Object.values(players).filter(p => {
       if(!p.full_name || !p.position) return false;
       if(!['QB','RB','WR','TE','K','DEF'].includes(p.position)) return false;
@@ -150,6 +213,10 @@ async function searchPlayers() {
       if(pos && p.position !== pos) return false;
       if(team && p.team !== team) return false;
       return true;
+    }).sort((a,b) => {
+      const ar = projs&&projs[a.player_id]?.posRank || 999;
+      const br = projs&&projs[b.player_id]?.posRank || 999;
+      return ar - br;
     }).slice(0, 40);
     if(!matches.length) { el.innerHTML = '<div style="color:var(--muted);font-style:italic">No players found.</div>'; return; }
     el.innerHTML = matches.map(p => {
@@ -163,9 +230,20 @@ async function searchPlayers() {
           <div style="font-weight:700;color:var(--text)">${p.full_name}</div>
           <div style="font-size:.78rem;color:var(--muted2)">${p.position} &middot; ${p.team||'FA'} ${p.number?'#'+p.number:''}</div>
         </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:.72rem;font-weight:700;color:${injColor}">${inj}</div>
-          ${p.injury_body_part?`<div style="font-size:.68rem;color:var(--muted2)">${p.injury_body_part}</div>`:''}
+        <div style="display:flex;gap:1rem;align-items:center;flex-shrink:0">
+          ${(()=>{const pr=projs&&projs[p.player_id];return pr?`
+          <div style="text-align:center">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.15rem">Rank</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:900;color:var(--gold)">#${pr.posRank} <span style="font-size:.7rem;font-weight:600">${p.position}</span></div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.15rem">Proj. Pts</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:900;color:var(--gold)">${pr.pts}</div>
+          </div>`:''})()}
+          <div style="text-align:right">
+            <div style="font-size:.72rem;font-weight:700;color:${injColor}">${inj}</div>
+            ${p.injury_body_part?`<div style="font-size:.68rem;color:var(--muted2)">${p.injury_body_part}</div>`:''}
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -275,5 +353,82 @@ function renderInjuries(players) {
     </div>`;
   }).join('');
 }
+
+// ── Stats tab ──────────────────────────────────────────────────────────────
+let statsTimer = null;
+async function statsSearch() {
+  clearTimeout(statsTimer);
+  statsTimer = setTimeout(async () => {
+    const q = document.getElementById('stats-player-search').value.trim().toLowerCase();
+    const pos = document.getElementById('stats-pos-filter').value;
+    const week = document.getElementById('stats-week-select').value;
+    const teamF = document.getElementById('stats-team-filter').value;
+    const statSeason = document.getElementById('stats-season-select').value;
+    const el = document.getElementById('stats-content');
+    el.dataset.loaded = '1';
+    if (!q && !pos) {
+      el.innerHTML = '<div style="color:var(--muted);font-style:italic">Search a player or select a position to view stats...</div>';
+      return;
+    }
+    el.innerHTML = '<div style="color:var(--muted)">Loading...</div>';
+    const players = await getSleeperData();
+    const matches = Object.values(players).filter(p => {
+      if (!p.full_name || !p.position) return false;
+      if (!['QB','RB','WR','TE','K'].includes(p.position)) return false;
+      if (q && !p.full_name.toLowerCase().includes(q)) return false;
+      if (pos && p.position !== pos) return false;
+      if (teamF && p.team !== teamF) return false;
+      return true;
+    }).slice(0, 150);
+    if (!matches.length) { el.innerHTML = '<div style="color:var(--muted);font-style:italic">No players found.</div>'; return; }
+    // Fetch stats for each player
+    const season = NFL_SEASON_YEAR;
+    const statsPromises = matches.map(async p => {
+      try {
+        const url = week
+          ? `https://api.sleeper.com/stats/nfl/player/${p.player_id}?season_type=regular&season=${statSeason}&week=${week}`
+          : `https://api.sleeper.com/stats/nfl/player/${p.player_id}?season_type=regular&season=${statSeason}&grouping=season`;
+        const r = await fetch(url);
+        const d = await r.json();
+        const stats = Array.isArray(d) ? (d[0]?.stats || {}) : (d?.stats || {});
+        return {...p, fetchedStats: stats};
+      } catch(e) { return {...p, fetchedStats: {}}; }
+    });
+    const withStats = (await Promise.all(statsPromises))
+      .filter(p => (p.fetchedStats?.pts_ppr || 0) > 0 || (!pos && !q));
+    // Sort by PPR points descending
+    withStats.sort((a, b) => (b.fetchedStats?.pts_ppr || 0) - (a.fetchedStats?.pts_ppr || 0));
+    const hs = await getHeadshots();
+    el.innerHTML = withStats.map(p => {
+      const s = p.fetchedStats || {};
+      const pts = s.pts_ppr || 0;
+      const dbHs = hs[p.full_name?.toLowerCase()] || '';
+      const imgSrc = dbHs || (p.player_id ? `https://sleepercdn.com/content/nfl/players/thumb/${p.player_id}.jpg` : '');
+      const pos2 = p.position;
+      let statCols = '';
+      if (pos2 === 'QB') {
+        statCols = `<span class="sc">${(s.pass_yd||0).toFixed(0)} pass yd</span><span class="sc">${(s.pass_td||0).toFixed(0)} TD</span><span class="sc">${(s.pass_int||0).toFixed(0)} INT</span><span class="sc">${(s.rush_yd||0).toFixed(0)} rush yd</span>`;
+      } else if (['RB','WR','TE'].includes(pos2)) {
+        statCols = `<span class="sc">${(s.rec||0).toFixed(0)} rec</span><span class="sc">${(s.rec_yd||0).toFixed(0)} rec yd</span><span class="sc">${(s.rush_yd||0).toFixed(0)} rush yd</span><span class="sc">${(s.rec_td||0)+(s.rush_td||0)} TD</span>`;
+      } else if (pos2 === 'K') {
+        statCols = `<span class="sc">${(s.fgm||0).toFixed(0)} FG</span><span class="sc">${(s.fgm_yds||0).toFixed(0)} FG yds</span><span class="sc">${(s.xpm||0).toFixed(0)} XP</span>`;
+      }
+      return `<div class="player-card" onclick="showPlayerNews('${(p.full_name||'').replace(/'/g,"\'")}','${p.team||''}','${p.position||''}','${dbHs}')">
+        ${imgSrc?`<img src="${imgSrc}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0" onerror="this.style.display='none'">`:
+        `<div style="width:40px;height:40px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:.8rem;color:var(--muted);flex-shrink:0">${(p.position||'?')[0]}</div>`}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;color:var(--text)">${p.full_name}</div>
+          <div style="font-size:.78rem;color:var(--muted2);margin-bottom:.3rem">${p.position} &middot; ${p.team||'FA'}</div>
+          <div class="stat-chips" style="display:flex;flex-wrap:wrap;gap:.25rem">${statCols}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:900;color:${pts>0?'var(--gold)':'var(--muted)'}">${pts.toFixed(1)}</div>
+          <div style="font-size:.65rem;color:var(--muted)">PPR pts</div>
+        </div>
+      </div>`;
+    }).join('');
+  }, 400);
+}
+
 </script>
 {% endblock %}
