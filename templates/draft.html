@@ -350,6 +350,18 @@
 {% endblock %}
 
 {% block content %}
+{% if league.draft_paused %}
+<div style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:10px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;text-align:center">
+  <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.8rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#ef4444">⏸ DRAFT PAUSED</div>
+  <div style="font-size:.85rem;color:var(--muted2);margin-top:.35rem">The commissioner has paused the draft. Picks are temporarily disabled.</div>
+  {% if is_commissioner %}
+  <form method="post" action="/league/{{ league.id }}/draft/resume" style="margin-top:1rem">
+    <button class="btn btn-gold">▶️ Resume Draft</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if league.draft_start_time %}
 <div id="draft-countdown-banner" style="background:linear-gradient(135deg,rgba(232,184,75,.1),rgba(201,69,26,.08));border:1px solid rgba(232,184,75,.25);border-radius:10px;padding:1.5rem 1.5rem;margin-bottom:1.5rem;text-align:center">
   <div style="font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:.75rem">Draft Starts In</div>
@@ -462,6 +474,20 @@
     </div>
     {% endif %}
 
+    {# Commissioner pause button #}
+    {% if is_commissioner and not draft_state.is_complete %}
+    <div style="margin-bottom:.75rem">
+      {% if league.draft_paused %}
+      <form method="post" action="/league/{{ league.id }}/draft/resume">
+        <button class="btn btn-gold btn-sm" style="width:100%">▶️ Resume Draft</button>
+      </form>
+      {% else %}
+      <form method="post" action="/league/{{ league.id }}/draft/pause">
+        <button class="btn btn-ghost btn-sm" style="width:100%">⏸ Pause Draft</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
     {# Pick form #}
     {% if team_on_clock and (is_commissioner or user.id == team_on_clock.owner_id) %}
     <div class="card mb-2">

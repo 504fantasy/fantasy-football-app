@@ -1299,6 +1299,7 @@ def draft_page(league_id: int, request: Request, user=Depends(get_current_user))
             "available_players": available,
             "by_position": by_position,
             "snake_order": [dict(t) for t in snake_order],
+            "is_commissioner": is_commissioner(league, user),
             "multipliers_locked": multipliers_locked_for(league),
             "is_commissioner": is_commissioner(league, user),
             "msg": request.query_params.get("msg", ""),
@@ -1566,6 +1567,37 @@ def draft_autopick(league_id: int, user=Depends(get_current_user)):
     finally:
         conn.close()
 
+
+@app.post("/league/{league_id}/draft/pause")
+def draft_pause(league_id: int, user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE leagues SET draft_paused=1 WHERE id=?"), (league_id,))
+    conn.commit()
+    conn.close()
+    write_chat(league_id, "system", "⏸ Draft has been PAUSED by the commissioner.", "pick")
+    write_audit(actor=user["username"], action="DRAFT_PAUSED", league_id=league_id)
+    return RedirectResponse(f"/league/{league_id}/draft", status_code=303)
+
+@app.post("/league/{league_id}/draft/resume")
+def draft_resume(league_id: int, user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(status_code=401)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    conn = get_db()
+    conn.execute(adapt_sql("UPDATE leagues SET draft_paused=0 WHERE id=?"), (league_id,))
+    conn.commit()
+    conn.close()
+    write_chat(league_id, "system", "▶️ Draft has been RESUMED by the commissioner.", "pick")
+    write_audit(actor=user["username"], action="DRAFT_RESUMED", league_id=league_id)
+    return RedirectResponse(f"/league/{league_id}/draft", status_code=303)
+
 @app.post("/league/{league_id}/draft/pick")
 def draft_pick(
     league_id: int, player_name: str = Form(...), user=Depends(get_current_user)
@@ -1574,6 +1606,10 @@ def draft_pick(
         return RedirectResponse("/login", status_code=303)
     league = league_ctx(league_id, user)
     is_comm = is_commissioner(league, user)
+    # Block picks when draft is paused
+    if league.get("draft_paused"):
+        return RedirectResponse(f"/league/{league_id}/draft?error=draft_paused", status_code=303)
+
     # Block picks until draft start time (superadmin can always override for testing)
     if not user.get("is_superadmin"):
         draft_start = league.get("draft_start_time")
