@@ -1297,7 +1297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="display:flex;gap:.4rem">
       <input id="research-search" type="text" placeholder="Search player..."
              style="flex:1;background:#181c23;border:1px solid #252a34;border-radius:6px;padding:.4rem .6rem;color:#e8eaf0;font-size:.85rem;outline:none"
-             onkeydown="if(event.key===\'Enter\')researchSearch()">
+             oninput="researchSearchLive()" onkeydown="if(event.key===\'Enter\')researchSearch()">
       <button onclick="researchSearch()" style="background:var(--gold);color:#000;border:none;border-radius:6px;padding:.4rem .7rem;cursor:pointer;font-weight:700;font-size:.85rem">Go</button>
     </div>
     <div id="research-search-results" style="margin-top:.4rem"></div>
@@ -1405,6 +1405,11 @@ async function loadResearchData(overrideWeek){
   }catch(e){document.getElementById('research-schedule').innerHTML='<div style="color:#ef4444">Error loading.</div>';}
 }
 
+let _rsTimer=null;
+function researchSearchLive(){
+  clearTimeout(_rsTimer);
+  _rsTimer=setTimeout(researchSearch, 300);
+}
 async function researchSearch(){
   const q=document.getElementById('research-search').value.trim().toLowerCase();
   const el=document.getElementById('research-search-results');
