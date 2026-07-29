@@ -1076,7 +1076,7 @@ def reset_password_submit(
 def logout(request: Request):
     # JWT is stateless — logout is just clearing the cookie.
     # For immediate revocation at scale add a Redis token blocklist.
-    resp = RedirectResponse("/login", status_code=303)
+    resp = RedirectResponse("/", status_code=303)
     resp.delete_cookie("session")
     return resp
 
