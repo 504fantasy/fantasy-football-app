@@ -401,4 +401,76 @@ async function researchSearch(){
 }
 </script>
 
+
+<script>
+(async function() {
+  const week = {{ week }};
+  const season = {{ nfl_season }};
+  const cacheKey = `sleeper_proj_${season}_${week}`;
+  let projs = {};
+
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      projs = JSON.parse(cached);
+    } else {
+      const r = await fetch(`https://api.sleeper.com/projections/nfl/${season}/${week}?season_type=regular`);
+      const data = await r.json();
+      for (const entry of data) {
+        if (!entry.player_id || !entry.stats) continue;
+        const pts = entry.stats.pts_ppr || 0;
+        const posRank = entry.stats.pos_adp_dd_ppr || 999;
+        if (pts > 0) projs[entry.player_id] = {
+          pts: Math.round(pts * 10) / 10,
+          posRank: Math.round(posRank)
+        };
+      }
+      sessionStorage.setItem(cacheKey, JSON.stringify(projs));
+    }
+
+    // Update all select dropdowns
+    document.querySelectorAll('select[name]').forEach(sel => {
+      const selectedVal = sel.value;
+      
+      // Update option text with rank and projected pts
+      sel.querySelectorAll('option').forEach(opt => {
+        const pid = opt.value;
+        if (!pid || pid === '0' || opt.disabled) return;
+        const proj = projs[pid];
+        const baseName = opt.textContent.split(' | ')[0].trim();
+        if (proj) {
+          // Strip any existing projection info
+          const baseName = opt.textContent.split(' | ')[0].trim();
+          opt.textContent = `${baseName} | #${proj.posRank} | ${proj.pts} pts`;
+        } else {
+          opt.textContent = `${baseName} | N/A`;
+        }
+      });
+
+      // Re-sort available options by projected points
+      const placeholder = sel.querySelector('option[value=""]');
+      const available = [...sel.querySelectorAll('option:not([disabled])')].filter(o => o.value && o.value !== '0');
+      const disabled = [...sel.querySelectorAll('option[disabled]')];
+
+      available.sort((a, b) => {
+        const apts = projs[a.value]?.pts || 0;
+        const bpts = projs[b.value]?.pts || 0;
+        return bpts - apts;
+      });
+
+      sel.innerHTML = '';
+      if (placeholder) sel.appendChild(placeholder.cloneNode(true));
+      available.forEach(o => sel.appendChild(o));
+      disabled.forEach(o => sel.appendChild(o));
+
+      // Restore selected value
+      if (selectedVal) sel.value = selectedVal;
+    });
+
+  } catch(e) {
+    console.log('Projections unavailable:', e.message);
+  }
+})();
+</script>
+
 {% endblock %}
