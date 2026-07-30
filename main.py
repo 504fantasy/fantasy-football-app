@@ -1301,10 +1301,10 @@ def draft_page(league_id: int, request: Request, user=Depends(get_current_user))
             "snake_order": [dict(t) for t in snake_order],
             "is_commissioner": is_commissioner(league, user),
             "multipliers_locked": multipliers_locked_for(league),
-            "is_commissioner": is_commissioner(league, user),
             "msg": request.query_params.get("msg", ""),
             "now_utc": datetime.now(timezone.utc).isoformat(),
             "my_team_id": get_user_team_in_league(league_id, user["id"]),
+            "season": int(os.environ.get("NFL_SEASON", "2026")),
         },
     )
 

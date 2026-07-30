@@ -516,7 +516,6 @@
 
       <input class="filter-search" id="avail-search" placeholder="Search by name…" autocomplete="off" spellcheck="false"/>
 
-      <div class="filter-lbl">Position</div>
       <div class="avail-tabs">
         <button class="pos-tab on" data-pos="ALL">All</button>
         {% for pos in by_position.keys() | sort %}
@@ -524,24 +523,23 @@
         {% endfor %}
       </div>
 
-      <div class="filter-lbl">NFL Team</div>
-      <div class="team-tabs">
-        <button class="team-tab on" data-team="">All</button>
+      <select id="team-filter-select" onchange="filterByTeamSelect()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.35rem .5rem;color:var(--text);font-size:.78rem;cursor:pointer;margin-bottom:.35rem;width:100%">
+        <option value="">All Teams</option>
         {% set nfl_seen = namespace(v=[]) %}
         {% for p in available_players %}
           {% if p.nfl_team and p.nfl_team not in nfl_seen.v %}{% set _ = nfl_seen.v.append(p.nfl_team) %}{% endif %}
         {% endfor %}
-        {% for t in nfl_seen.v | sort %}<button class="team-tab" data-team="{{ t }}">{{ t }}</button>{% endfor %}
-      </div>
+        {% for t in nfl_seen.v | sort %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
 
       <div style="font-size:.7rem;color:var(--muted);margin-bottom:.35rem;min-height:1rem" id="avail-count-label"></div>
 
       <div class="avail-list">
         <table>
-          <thead><tr><th>Name</th><th>POS</th><th>Team</th></tr></thead>
+          <thead><tr><th>Name</th><th>POS</th><th>Team</th><th style="text-align:right;white-space:nowrap">Rank/Pts</th></tr></thead>
           <tbody id="avail-tbody">
           {% for p in available_players %}
-          <tr data-pos="{{ p.position or 'UNK' }}" data-nfl="{{ p.nfl_team or '' }}" data-name="{{ p.name | lower }}" data-player="{{ p.name }}">
+          <tr data-pos="{{ p.position or 'UNK' }}" data-nfl="{{ p.nfl_team or '' }}" data-name="{{ p.name | lower }}" data-player="{{ p.name }}" data-pid="{{ p.id }}">
             <td>
               <button class="queue-star" data-name="{{ p.name }}" data-pos="{{ p.position or 'UNK' }}" data-pid="{{ p.id }}"
                       title="Add to queue" style="background:none;border:none;cursor:pointer;padding:0 .3rem 0 0;color:var(--muted);font-size:.85rem;transition:color .15s">☆</button>
@@ -552,6 +550,7 @@
             </td>
             <td><span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span></td>
             <td class="text-muted text-sm">{{ p.nfl_team or '—' }}</td>
+            <td style="text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--gold);font-size:.78rem;line-height:1.2;white-space:nowrap" id="szn-{{ p.id }}">—</td>
           </tr>
           {% endfor %}
           </tbody>
@@ -878,7 +877,7 @@ posTabs.forEach(tab => {
     applyFilters();
   });
 });
-teamTabs.forEach(tab => {
+if(false)teamTabs.forEach(tab => {
   tab.addEventListener('click', () => {
     teamTabs.forEach(t => t.classList.remove('on'));
     tab.classList.add('on');
@@ -1431,6 +1430,50 @@ async function researchSearch(){
       </div>
     </div>`).join('');
 }
+</script>
+
+
+<script>
+function filterByTeamSelect() {
+  activeTeam = document.getElementById('team-filter-select').value;
+  applyFilters();
+}
+(async function loadSeasonStats() {
+  const season = {{ season }};
+  const cacheKey = `sleeper_season_stats_${season}`;
+  let statsMap = {};
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) { statsMap = JSON.parse(cached); }
+    else {
+      const r = await fetch(`https://api.sleeper.com/stats/nfl/${season}?season_type=regular&grouping=season`);
+      const data = await r.json();
+      const posPts = {};
+      for (const entry of data) {
+        if (!entry.player_id || !entry.stats) continue;
+        const pts = entry.stats.pts_ppr || 0;
+        const pos = entry.player?.position || '';
+        if (pts > 0 && ['QB','RB','WR','TE','K'].includes(pos)) {
+          if (!posPts[pos]) posPts[pos] = [];
+          posPts[pos].push({pid: entry.player_id, pts});
+        }
+      }
+      for (const pos in posPts) {
+        posPts[pos].sort((a,b) => b.pts - a.pts);
+        posPts[pos].forEach((p, idx) => {
+          statsMap[p.pid] = { pts: Math.round(p.pts*10)/10, posRank: idx+1, pos };
+        });
+      }
+      sessionStorage.setItem(cacheKey, JSON.stringify(statsMap));
+    }
+    document.querySelectorAll('tr[data-pid]').forEach(row => {
+      const pid = row.dataset.pid;
+      const stat = statsMap[pid];
+      const cell = document.getElementById('szn-' + pid);
+      if (cell) cell.innerHTML = stat ? `<span style="font-size:.62rem;color:var(--muted2)">#${stat.posRank} ${stat.pos}</span><br>${stat.pts}` : '—';
+    });
+  } catch(e) { console.log('Season stats:', e.message); }
+})();
 </script>
 
 {% endblock %}
