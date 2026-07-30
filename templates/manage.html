@@ -142,18 +142,18 @@
 
 <!-- Tabs -->
 <div class="admin-tabs">
-  <button class="at on" data-tab="players">Players</button>
-  <button class="at"    data-tab="teams">Teams</button>
+  <button class="at on" data-tab="teams">Teams</button>
   <button class="at"    data-tab="draft">Draft</button>
-  <button class="at"    data-tab="scores">Score Entry</button>
   <button class="at"    data-tab="members">Members</button>
   <button class="at"    data-tab="settings">Settings</button>
   <button class="at"    data-tab="sync">⚡ NFL Sync</button>
   <button class="at"    data-tab="moves">🔀 Roster Moves</button>
+  <button class="at"    data-tab="scores">Score Entry</button>
+  <button class="at"    data-tab="players">Players</button>
 </div>
 
 <!-- ══ PLAYERS ══ -->
-<div id="tab-players" class="tab-panel on">
+<div id="tab-players" class="tab-panel">
   <div class="card mb-2">
     <div class="card-title">➕ Add Player</div>
     <form method="post" action="/league/{{ league.id }}/manage/player/add">
@@ -175,7 +175,10 @@
   </div>
 
   <div class="card">
-    <div class="card-title">Player Pool <span class="ct-right">{{ players | length }} total</span></div>
+    <div class="card-title" onclick="togglePlayerPool()" style="cursor:pointer;user-select:none">
+      Player Pool <span class="ct-right">{{ players | length }} total &nbsp;<span id="pool-toggle-icon">▼</span></span>
+    </div>
+    <div id="player-pool-body">
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>Name</th><th>POS</th><th>NFL</th><th>Actions</th></tr></thead>
@@ -203,6 +206,7 @@
     </div>
   </div>
 
+    </div><!-- /player-pool-body -->
   <div id="edit-player-form" class="card mt-2" style="display:none;border-color:rgba(232,184,75,.35)">
     <div class="card-title">✏ Edit Player</div>
     <form method="post" action="/league/{{ league.id }}/manage/player/edit">
@@ -228,7 +232,7 @@
 </div>
 
 <!-- ══ TEAMS ══ -->
-<div id="tab-teams" class="tab-panel">
+<div id="tab-teams" class="tab-panel on">
   <div class="card mb-2">
     <div class="card-title">➕ Add Team</div>
     <form method="post" action="/league/{{ league.id }}/manage/team/add">
@@ -877,6 +881,13 @@ function editPlayer(id, name, pos, nfl) {
   form.scrollIntoView({behavior:'smooth', block:'center'});
 }
 
+function togglePlayerPool() {
+  const body = document.getElementById('player-pool-body');
+  const icon = document.getElementById('pool-toggle-icon');
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  icon.textContent = collapsed ? '▼' : '▶';
+}
 function editTeam(id, name, owner) {
   document.getElementById('et-id').value   = id;
   document.getElementById('et-name').value = name;
