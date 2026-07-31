@@ -60,9 +60,8 @@
 }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
-.draft-layout { display: grid; grid-template-columns: 320px 200px 1fr 280px; gap: 1rem; align-items: start }
-@media (max-width: 1300px) { .draft-layout { grid-template-columns: 320px 200px 1fr } }
-@media (max-width: 1000px) { .draft-layout { grid-template-columns: 320px 1fr } }
+.draft-layout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start }
+@media (max-width: 1000px) { .draft-layout { grid-template-columns: 280px 1fr } }
 @media (max-width: 700px)  { .draft-layout { grid-template-columns: 1fr } }
 
 /* ── Clock ───────────────────────────────────────────────────────────────── */
@@ -451,7 +450,7 @@
 
 <div class="draft-layout">
 
-  {# ── LEFT sidebar ────────────────────────────────────────────────────── #}
+  {# ── LEFT: on-the-clock + pause + queue ──────────────────────────────── #}
   <aside>
 
     {# On-the-clock card #}
@@ -488,113 +487,25 @@
       {% endif %}
     </div>
     {% endif %}
-    {# Pick form #}
-    {% if team_on_clock and (is_commissioner or user.id == team_on_clock.owner_id) %}
-    <div class="card mb-2">
-      <div class="card-title">✏ Make Pick</div>
-      <form method="post" action="/league/{{ league.id }}/draft/pick" id="pick-form">
-        <div class="fg">
-          <label>Player Name</label>
-          <div class="search-wrap">
-            <input type="text" id="player-search" placeholder="Search players…" autocomplete="off"/>
-            <input type="hidden" name="player_name" id="player-name-hidden"/>
-            <div id="suggestions"></div>
-          </div>
+
+    {# Player queue (visible only to logged-in user) #}
+    {% if not draft_state.is_complete %}
+    <div class="queue-panel" id="queue-panel">
+      <div class="queue-header">
+        <span class="queue-title">⭐ My Queue</span>
+        <span class="queue-count" id="queue-count">0</span>
+      </div>
+      <div class="queue-list" id="queue-list">
+        <div class="queue-empty" id="queue-empty">
+          Click ⭐ next to any<br>available player to queue them
         </div>
-        <button type="submit" class="btn btn-gold" style="width:100%;margin-top:.5rem">Draft Player</button>
-      </form>
+      </div>
+      <div class="queue-add-hint">Drag to reorder · ✕ to remove</div>
     </div>
     {% endif %}
 
-    {# Available players + filters #}
-    {% if available_players %}
-    <div class="card">
-      <div class="card-title">
-        Available Players
-        <span class="ct-right" id="avail-count-badge">{{ available_players | length }}</span>
-      </div>
 
-      <input class="filter-search" id="avail-search" placeholder="Search by name…" autocomplete="off" spellcheck="false"/>
-
-      <div class="avail-tabs">
-        <button class="pos-tab on" data-pos="ALL">All</button>
-        {% for pos in by_position.keys() | sort %}
-        <button class="pos-tab" data-pos="{{ pos }}">{{ pos }}</button>
-        {% endfor %}
-      </div>
-
-      <select id="team-filter-select" onchange="filterByTeamSelect()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.35rem .5rem;color:var(--text);font-size:.78rem;cursor:pointer;margin-bottom:.35rem;width:100%">
-        <option value="">All Teams</option>
-        {% set nfl_seen = namespace(v=[]) %}
-        {% for p in available_players %}
-          {% if p.nfl_team and p.nfl_team not in nfl_seen.v %}{% set _ = nfl_seen.v.append(p.nfl_team) %}{% endif %}
-        {% endfor %}
-        {% for t in nfl_seen.v | sort %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
-      </select>
-
-      <div style="font-size:.7rem;color:var(--muted);margin-bottom:.35rem;min-height:1rem" id="avail-count-label"></div>
-
-      <div class="avail-list">
-        <table>
-          <thead><tr><th>Name</th><th>POS</th><th>Team</th><th style="text-align:right;white-space:nowrap">Rank/Pts</th></tr></thead>
-          <tbody id="avail-tbody">
-          {% for p in available_players %}
-          <tr data-pos="{{ p.position or 'UNK' }}" data-nfl="{{ p.nfl_team or '' }}" data-name="{{ p.name | lower }}" data-player="{{ p.name }}" data-pid="{{ p.id }}">
-            <td>
-              <button class="queue-star" data-name="{{ p.name }}" data-pos="{{ p.position or 'UNK' }}" data-pid="{{ p.id }}"
-                      title="Add to queue" style="background:none;border:none;cursor:pointer;padding:0 .3rem 0 0;color:var(--muted);font-size:.85rem;transition:color .15s">☆</button>
-              {% if p.headshot_url %}
-              <img src="{{ p.headshot_url }}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;background:#1a1f2e;vertical-align:middle;margin-right:.35rem" onerror="this.style.display='none'">
-              {% endif %}
-              <span class="player-pick-name" style="cursor:pointer;color:var(--gold)">{{ p.name }}</span>
-            </td>
-            <td><span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span></td>
-            <td class="text-muted text-sm">{{ p.nfl_team or '—' }}</td>
-            <td style="text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--gold);font-size:.78rem;line-height:1.2;white-space:nowrap" id="szn-{{ p.id }}">—</td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <div id="avail-empty" style="display:none;text-align:center;padding:1.25rem;font-size:.82rem;color:var(--muted)">
-        No players match your filters
-      </div>
-    </div>
-    {% else %}
-    <div class="card text-c text-muted" style="padding:2rem">🏆 All players drafted!</div>
-    {% endif %}
-
-  </aside>
-
-  {# ── MIDDLE: Player queue (visible only to logged-in user) ────────────── #}
-  {% if not draft_state.is_complete %}
-  <div class="queue-panel" id="queue-panel">
-    <div class="queue-header">
-      <span class="queue-title">⭐ My Queue</span>
-      <span class="queue-count" id="queue-count">0</span>
-    </div>
-    <div class="queue-list" id="queue-list">
-      <div class="queue-empty" id="queue-empty">
-        Click ⭐ next to any<br>available player to queue them
-      </div>
-    </div>
-    <div class="queue-add-hint">Drag to reorder · ✕ to remove</div>
-  </div>
-  {% endif %}
-
-  {# ── CHAT: pick log + live chat ─────────────────────────────────────────── #}
-  <div class="chat-panel" id="chat-panel">
-    <div class="chat-header">💬 Draft Chat &amp; Picks</div>
-    <div class="chat-messages" id="chat-messages">
-      <div class="chat-empty" id="chat-empty">No messages yet.</div>
-    </div>
-    <div class="chat-input-row">
-      <input type="text" id="chat-input" placeholder="Say something…" maxlength="280" autocomplete="off"/>
-      <button class="btn btn-ghost" onclick="sendChat()">Send</button>
-    </div>
-  </div>
-
-  {# ── RIGHT: rosters ──────────────────────────────────────────────────── #}
+  {# ── Team rosters (below queue) ──────────────────────────────────────── #}
   <div>
     {% if teams %}
     <div class="rosters-grid">
@@ -758,7 +669,102 @@
     </div>
 
   </div>
+  </aside>
 
+  {# ── MIDDLE: Make Pick + Available Players (wide) ────────────────────── #}
+  <div>
+
+    {# Pick form #}
+    {% if team_on_clock and (is_commissioner or user.id == team_on_clock.owner_id) %}
+    <div class="card mb-2">
+      <div class="card-title">✏ Make Pick</div>
+      <form method="post" action="/league/{{ league.id }}/draft/pick" id="pick-form">
+        <div class="fg">
+          <label>Player Name</label>
+          <div class="search-wrap">
+            <input type="text" id="player-search" placeholder="Search players…" autocomplete="off"/>
+            <input type="hidden" name="player_name" id="player-name-hidden"/>
+            <div id="suggestions"></div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-gold" style="width:100%;margin-top:.5rem">Draft Player</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {# Available players + filters #}
+    {% if available_players %}
+    <div class="card">
+      <div class="card-title">
+        Available Players
+        <span class="ct-right" id="avail-count-badge">{{ available_players | length }}</span>
+      </div>
+
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem">
+        <input class="filter-search" id="avail-search" placeholder="Search by name…" autocomplete="off" spellcheck="false" style="flex:1;min-width:160px;margin-bottom:0"/>
+        <div class="avail-tabs" style="margin:0">
+          <button class="pos-tab on" data-pos="ALL">All</button>
+          {% for pos in by_position.keys() | sort %}
+          <button class="pos-tab" data-pos="{{ pos }}">{{ pos }}</button>
+          {% endfor %}
+        </div>
+        <select id="team-filter-select" onchange="filterByTeamSelect()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.35rem .5rem;color:var(--text);font-size:.78rem;cursor:pointer">
+          <option value="">All Teams</option>
+          {% set nfl_seen = namespace(v=[]) %}
+          {% for p in available_players %}
+            {% if p.nfl_team and p.nfl_team not in nfl_seen.v %}{% set _ = nfl_seen.v.append(p.nfl_team) %}{% endif %}
+          {% endfor %}
+          {% for t in nfl_seen.v | sort %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div style="font-size:.7rem;color:var(--muted);margin-bottom:.35rem;min-height:1rem" id="avail-count-label"></div>
+
+      <div class="avail-list">
+        <table>
+          <thead><tr><th>Name</th><th>POS</th><th>Team</th><th style="text-align:right;white-space:nowrap">Rank/Pts</th></tr></thead>
+          <tbody id="avail-tbody">
+          {% for p in available_players %}
+          <tr data-pos="{{ p.position or 'UNK' }}" data-nfl="{{ p.nfl_team or '' }}" data-name="{{ p.name | lower }}" data-player="{{ p.name }}" data-pid="{{ p.id }}">
+            <td>
+              <button class="queue-star" data-name="{{ p.name }}" data-pos="{{ p.position or 'UNK' }}" data-pid="{{ p.id }}"
+                      title="Add to queue" style="background:none;border:none;cursor:pointer;padding:0 .3rem 0 0;color:var(--muted);font-size:.85rem;transition:color .15s">☆</button>
+              {% if p.headshot_url %}
+              <img src="{{ p.headshot_url }}" alt="" style="width:22px;height:22px;border-radius:50%;object-fit:cover;background:#1a1f2e;vertical-align:middle;margin-right:.35rem" onerror="this.style.display='none'">
+              {% endif %}
+              <span class="player-pick-name" style="cursor:pointer;color:var(--gold)">{{ p.name }}</span>
+            </td>
+            <td><span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span></td>
+            <td class="text-muted text-sm">{{ p.nfl_team or '—' }}</td>
+            <td style="text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--gold);font-size:.78rem;line-height:1.2;white-space:nowrap" id="szn-{{ p.id }}">—</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div id="avail-empty" style="display:none;text-align:center;padding:1.25rem;font-size:.82rem;color:var(--muted)">
+        No players match your filters
+      </div>
+    </div>
+    {% else %}
+    <div class="card text-c text-muted" style="padding:2rem">🏆 All players drafted!</div>
+    {% endif %}
+
+  </div>
+
+
+</div>
+
+{# ── CHAT: pick log + live chat (full width, below grid) ─────────────── #}
+<div class="chat-panel" id="chat-panel" style="margin-top:1rem;position:static;max-height:400px">
+  <div class="chat-header">💬 Draft Chat &amp; Picks</div>
+  <div class="chat-messages" id="chat-messages" style="max-height:280px">
+    <div class="chat-empty" id="chat-empty">No messages yet.</div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Say something…" maxlength="280" autocomplete="off"/>
+    <button class="btn btn-ghost" onclick="sendChat()">Send</button>
+  </div>
 </div>
 
 <script>
@@ -1017,7 +1023,7 @@ async function renderQueue() {
   }
   list.innerHTML = cleaned.map((item, i) => `
     <div class="queue-item" draggable="true" data-idx="${i}" data-name="${item.name}" data-pid="${item.player_id||''}">
-      <span class="qi-rank" style="cursor:grab;color:var(--muted)">&#9776; ${i + 1}</span>
+      <span class="qi-rank" style="cursor:grab;color:var(--muted);padding:.3rem .4rem .3rem 0;touch-action:none;user-select:none">&#9776; ${i + 1}</span>
       <span class="qi-pos"><span class="badge b-${item.pos||'UNK'}">${item.pos||'?'}</span></span>
       <span class="qi-name">${item.name}</span>
       <button class="qi-draft" data-name="${item.name}" title="Draft this player"
@@ -1044,7 +1050,7 @@ async function renderQueue() {
     });
   });
 
-  // Drag and drop reordering
+  // Drag and drop reordering (desktop mouse)
   let dragSrc = null;
   list.querySelectorAll('.queue-item').forEach(item => {
     item.addEventListener('dragstart', e => {
@@ -1076,6 +1082,59 @@ async function renderQueue() {
         _queueCache = null;
         renderQueue();
       }
+    });
+  });
+
+  // Touch reordering (mobile) — drag using the ☰ handle
+  let touchSrc = null;
+  let touchStartY = 0;
+  let touchCurrentTarget = null;
+
+  list.querySelectorAll('.queue-item').forEach(item => {
+    const handle = item.querySelector('.qi-rank');
+    if (!handle) return;
+
+    handle.addEventListener('touchstart', e => {
+      touchSrc = item;
+      touchStartY = e.touches[0].clientY;
+      item.classList.add('dragging');
+      e.preventDefault();
+    }, { passive: false });
+
+    handle.addEventListener('touchmove', e => {
+      if (!touchSrc) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const elAtPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+      const overItem = elAtPoint ? elAtPoint.closest('.queue-item') : null;
+
+      list.querySelectorAll('.queue-item').forEach(i => i.classList.remove('drag-over'));
+
+      if (overItem && overItem !== touchSrc) {
+        touchCurrentTarget = overItem;
+        overItem.classList.add('drag-over');
+      } else {
+        touchCurrentTarget = null;
+      }
+    }, { passive: false });
+
+    handle.addEventListener('touchend', async e => {
+      if (!touchSrc) return;
+      list.querySelectorAll('.queue-item').forEach(i => i.classList.remove('drag-over', 'dragging'));
+
+      if (touchCurrentTarget && touchCurrentTarget !== touchSrc) {
+        const items = [...list.querySelectorAll('.queue-item')];
+        const srcIdx = items.indexOf(touchSrc);
+        const tgtIdx = items.indexOf(touchCurrentTarget);
+        if (srcIdx < tgtIdx) list.insertBefore(touchSrc, touchCurrentTarget.nextSibling);
+        else list.insertBefore(touchSrc, touchCurrentTarget);
+        const newOrder = [...list.querySelectorAll('.queue-item')].map(el => el.dataset.pid).filter(Boolean);
+        await queueReorder(newOrder);
+        _queueCache = null;
+        renderQueue();
+      }
+      touchSrc = null;
+      touchCurrentTarget = null;
     });
   });
 
