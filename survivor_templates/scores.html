@@ -104,7 +104,7 @@
         {% endif %}
       ">{{ p.position }}</span>
       <span style="font-weight:600;font-size:.9rem;cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span>
-      <span style="color:var(--muted2);font-size:.8rem">{{ p.nfl_team }}</span>
+      <span style="color:var(--muted2);font-size:.8rem">{% if p.nfl_team %}<img src="{{ p.nfl_team | espn_logo }}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;margin-right:.2rem" onerror="this.style.display='none'">{% endif %}{{ p.nfl_team }}</span>
       <div class="stat-chips">
         {% set pos = p.position or '' %}
         {% if pos == 'K' %}

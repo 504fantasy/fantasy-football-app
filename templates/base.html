@@ -425,6 +425,12 @@ document.addEventListener('click', e => {
 </div>
 <script>
 const IC={'Questionable':'#e8b84b','Doubtful':'#fb923c','Out':'#ef4444','IR':'#ef4444','PUP':'#ef4444','Active':'#22c55e','Healthy':'#22c55e'};
+const ESPN_LOGO_ABBR={'WAS':'wsh','LAS':'lv'}; // ESPN's logo CDN uses non-standard slugs for a few teams
+function teamLogoUrl(abbr){
+  if(!abbr) return '';
+  const slug=(ESPN_LOGO_ABBR[abbr]||abbr).toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/nfl/500/${slug}.png`;
+}
 let SP=null;
 async function loadSP(){
   if(SP)return SP;
@@ -523,7 +529,7 @@ async function showPlayerNews(name,team,pos,dbHeadshot){
   const p=findP(name,players);
   if(!p){
     content.innerHTML=`<h3 style="font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:800;text-transform:uppercase;color:#e8eaf0;margin-bottom:.3rem">${name}</h3>
-      <p style="color:#64748b">${pos} &middot; ${team}</p>
+      <p style="color:#64748b;display:flex;align-items:center;gap:.4rem">${team?`<img src="${teamLogoUrl(team)}" alt="" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">`:''}${pos} &middot; ${team}</p>
       <p style="color:#64748b;margin-top:1rem;font-style:italic;font-size:.85rem">Player not found in Sleeper database.</p>`;
     return;
   }
@@ -539,7 +545,7 @@ async function showPlayerNews(name,team,pos,dbHeadshot){
         <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:800;text-transform:uppercase;color:#e8eaf0;margin-bottom:.25rem;line-height:1.1">${p.full_name||name}</h3>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
           <span style="background:rgba(232,184,75,.15);color:#e8b84b;border:1px solid rgba(232,184,75,.3);border-radius:4px;padding:.1rem .45rem;font-size:.72rem;font-weight:700;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase">${p.position||pos}</span>
-          <span style="color:#8898b0;font-size:.85rem">${p.team||team}</span>
+          <span style="display:inline-flex;align-items:center;gap:.3rem;color:#8898b0;font-size:.85rem">${(p.team||team)?`<img src="${teamLogoUrl(p.team||team)}" alt="" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">`:''}${p.team||team}</span>
           ${p.number?`<span style="color:#64748b;font-size:.8rem">#${p.number}</span>`:''}
           ${p.age?`<span style="color:#64748b;font-size:.8rem">Age ${p.age}</span>`:''}
         </div>

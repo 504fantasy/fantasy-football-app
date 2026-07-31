@@ -212,6 +212,16 @@ _sync_thread = _threading.Thread(target=_auto_sync_schedules, daemon=True)
 _sync_thread.start()
 templates = Jinja2Templates(directory="survivor_templates")
 
+_ESPN_LOGO_ABBR = {"WAS": "wsh"}  # ESPN's logo CDN uses non-standard slugs for a few teams
+
+def _espn_logo_url(abbr):
+    if not abbr:
+        return ""
+    slug = _ESPN_LOGO_ABBR.get(abbr, abbr).lower()
+    return f"https://a.espncdn.com/i/teamlogos/nfl/500/{slug}.png"
+
+templates.env.filters["espn_logo"] = _espn_logo_url
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Current-user helper
 # ──────────────────────────────────────────────────────────────────────────────

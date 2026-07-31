@@ -804,6 +804,16 @@ app.add_exception_handler(RateLimitExceeded, lambda req, exc: __import__('fastap
 ))
 templates = Jinja2Templates(directory="templates")
 
+_ESPN_LOGO_ABBR = {"WAS": "wsh"}  # ESPN's logo CDN uses non-standard slugs for a few teams
+
+def _espn_logo_url(abbr):
+    if not abbr:
+        return ""
+    slug = _ESPN_LOGO_ABBR.get(abbr, abbr).lower()
+    return f"https://a.espncdn.com/i/teamlogos/nfl/500/{slug}.png"
+
+templates.env.filters["espn_logo"] = _espn_logo_url
+
 
 
 

@@ -443,7 +443,9 @@
             </span>
 
             {# NFL team #}
-            <span class="tr-nfl">{{ p.nfl_team or '—' }}</span>
+            <span class="tr-nfl">
+              {% if p.nfl_team %}<img src="{{ p.nfl_team | espn_logo }}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px;margin-right:.25rem" onerror="this.style.display='none'">{% endif %}{{ p.nfl_team or '—' }}
+            </span>
 
             {# Game score chip — filled by JS #}
             <div class="game-score-slot" data-nfl="{{ p.nfl_team or '' }}"></div>
