@@ -28,11 +28,15 @@
 /* invite highlight */
 .invite-display {
   background: var(--s2); border: 1px solid rgba(232,184,75,.3); border-radius: var(--r);
-  padding: .85rem 1.1rem; display:flex; align-items:center; gap:1rem;
+  padding: .85rem 1.1rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
 }
 .invite-code-big {
   font-family:'Barlow Condensed',sans-serif; font-size:2.2rem; font-weight:800;
-  letter-spacing:.22em; color:var(--gold); flex:1;
+  letter-spacing:.22em; color:var(--gold); flex:1; min-width:140px;
+}
+@media (max-width:600px) {
+  .invite-display { padding:.75rem .9rem }
+  .invite-code-big { font-size:1.6rem; letter-spacing:.15em }
 }
 </style>
 {% endblock %}
@@ -699,10 +703,10 @@
       Safe to run multiple times — existing players are skipped.
     </p>
     <form method="post" action="/league/{{ league.id }}/manage/sync/roster">
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer">
-          <input type="checkbox" name="overwrite" value="true"/>
-          Update existing players' team assignments
+      <div style="display:flex;flex-direction:column;gap:.75rem;align-items:flex-start;width:100%">
+        <label style="font-size:.85rem;cursor:pointer;display:block;width:100%">
+          <input type="checkbox" name="overwrite" value="true" style="vertical-align:middle;margin-right:.4rem"/>
+          <span style="vertical-align:middle">Update existing players' team assignments</span>
         </label>
         <button class="btn btn-gold">Sync Roster from NFL</button>
       </div>
