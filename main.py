@@ -3501,6 +3501,61 @@ def api_nfl_eliminated(season: int = None):
     return result
 
 
+@app.get("/api/nfl-news")
+def api_nfl_news(limit: int = 25, user=Depends(get_current_user)):
+    """
+    Returns recent NFL news headlines (player news, injuries, league news)
+    from ESPN's public news feed, trimmed down to what the Research page needs.
+    Result is cached for 10 minutes to avoid hammering ESPN.
+    """
+    import time
+
+    limit = max(1, min(limit, 50))
+
+    cache = getattr(api_nfl_news, "_cache", None)
+    if cache and cache[0] == limit and time.time() - cache[1] < 600:
+        return cache[2]
+
+    url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit={limit}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        return {"articles": [], "error": str(e)}
+
+    articles = []
+    for a in data.get("articles", []):
+        images = a.get("images", [])
+        image_url = images[0]["url"] if images else None
+
+        teams = sorted({
+            c["team"]["abbreviation"]
+            for c in a.get("categories", [])
+            if c.get("type") == "team" and c.get("team", {}).get("abbreviation")
+        })
+
+        link = (
+            a.get("links", {}).get("web", {}).get("href")
+            or a.get("links", {}).get("mobile", {}).get("href")
+        )
+
+        articles.append({
+            "id": a.get("id"),
+            "headline": a.get("headline"),
+            "description": a.get("description"),
+            "published": a.get("published"),
+            "image": image_url,
+            "link": link,
+            "byline": a.get("byline"),
+            "teams": teams,
+        })
+
+    result = {"articles": articles}
+    api_nfl_news._cache = (limit, time.time(), result)
+    return result
+
+
 @app.post("/league/{league_id}/manage/multiplier-lock")
 def manage_multiplier_lock(
     league_id: int,

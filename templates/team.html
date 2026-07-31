@@ -326,13 +326,29 @@
 .pony-private-row {
   display: flex;
   align-items: center;
-  gap: .65rem;
+  flex-wrap: wrap;
+  gap: .35rem .65rem;
   padding: .45rem .6rem;
   background: var(--s2);
   border: 1px solid rgba(201,69,26,.2);
   border-radius: var(--r);
   margin-bottom: .4rem;
   font-size: .87rem;
+}
+.pony-private-name {
+  font-weight: 600;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pony-private-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .pony-private-label {
   font-size: .65rem;
@@ -341,7 +357,6 @@
   letter-spacing: .06em;
   color: var(--ember);
   opacity: .7;
-  margin-left: auto;
 }
 </style>
 {% endblock %}
@@ -628,19 +643,23 @@
         {{ (p.position or '?')[:1] }}
       </div>
       {% endif %}
-      <span class="badge b-{{ p.position or 'UNK' }}">{{ p.position or '?' }}</span>
-      <span style="font-weight:600"><span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span></span>
-      <span style="font-size:.78rem;color:var(--muted)">{{ p.nfl_team or '' }}</span>
+      <span class="badge b-{{ p.position or 'UNK' }}" style="flex-shrink:0">{{ p.position or '?' }}</span>
+      <span class="pony-private-name">
+        <span style="cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span>
+      </span>
+      <span style="font-size:.78rem;color:var(--muted);flex-shrink:0">{{ p.nfl_team or '' }}</span>
       {% if p.pony_revealed or pony_locked %}
-        <span style="font-size:.68rem;color:var(--green);margin-left:auto">✓ Revealed</span>
+        <span class="pony-private-actions" style="font-size:.68rem;color:var(--green)">✓ Revealed</span>
       {% else %}
-        <span class="pony-private-label">🔒 Hidden</span>
-        {% if not pony_locked %}
-        <form method="post" action="/league/{{ league.id }}/team/{{ team.id }}/pony/reveal" style="margin:0">
-          <input type="hidden" name="roster_id" value="{{ p.roster_id }}"/>
-          <button class="btn btn-ghost btn-xs" style="font-size:.7rem;padding:.2rem .5rem">Reveal now</button>
-        </form>
-        {% endif %}
+        <span class="pony-private-actions">
+          <span class="pony-private-label">🔒 Hidden</span>
+          {% if not pony_locked %}
+          <form method="post" action="/league/{{ league.id }}/team/{{ team.id }}/pony/reveal" style="margin:0">
+            <input type="hidden" name="roster_id" value="{{ p.roster_id }}"/>
+            <button class="btn btn-ghost btn-xs" style="font-size:.7rem;padding:.2rem .5rem;white-space:nowrap">Reveal now</button>
+          </form>
+          {% endif %}
+        </span>
       {% endif %}
     </div>
     {% endfor %}

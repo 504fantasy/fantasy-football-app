@@ -20,6 +20,13 @@
 .pos-filter { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:1rem; }
 .pos-btn { background:var(--s2); border:1px solid var(--border); border-radius:4px; padding:.2rem .6rem; font-size:.78rem; font-weight:700; cursor:pointer; color:var(--muted2); transition:all .15s; }
 .pos-btn.active { background:var(--gold); color:#000; border-color:var(--gold); }
+.news-card { background:var(--s1); border:1px solid var(--border); border-radius:8px; padding:.85rem 1rem; margin-bottom:.65rem; display:flex; gap:.85rem; align-items:flex-start; text-decoration:none; transition:border-color .15s; }
+.news-card:hover { border-color:var(--gold); }
+.news-card img { width:96px; height:64px; object-fit:cover; border-radius:6px; background:var(--s2); flex-shrink:0; }
+.news-headline { color:var(--text); font-weight:700; font-size:.95rem; line-height:1.3; margin-bottom:.3rem; }
+.news-desc { color:var(--muted); font-size:.83rem; line-height:1.4; margin-bottom:.4rem; }
+.news-meta { color:var(--muted2); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+.news-team-badge { background:var(--s2); border:1px solid var(--border); border-radius:3px; padding:.05rem .35rem; font-weight:700; }
 </style>
 
 <div class="page-header">
@@ -34,6 +41,7 @@
   <button class="rtab" onclick="switchTab('byes')">&#128564; Bye Weeks</button>
   <button class="rtab" onclick="switchTab('injuries')">&#129658; Injuries</button>
   <button class="rtab" onclick="switchTab('stats')">&#128202; Stats</button>
+  <button class="rtab" onclick="switchTab('news')">&#128240; News</button>
 </div>
 
 <!-- PLAYERS TAB -->
@@ -127,9 +135,20 @@
   <div id="injury-content" style="color:var(--muted);font-style:italic">Loading injury report...</div>
 </div>
 
+<!-- NEWS TAB -->
+<div id="tab-news" class="rpanel">
+  <p style="color:var(--muted);margin-bottom:1rem;font-size:.9rem">Latest player news, injury updates, and league headlines.</p>
+  <div id="news-content" style="color:var(--muted);font-style:italic">Loading news...</div>
+</div>
+
 <script>
 const NFL_SEASON = {{ nfl_season }};
 const TMAP = {'LA':'LAR','JAC':'JAX'};
+const ESPN_LOGO_ABBR = {'WAS':'wsh'}; // ESPN's logo CDN uses non-standard slugs for a few teams
+function teamLogoUrl(abbr) {
+  const slug = (ESPN_LOGO_ABBR[abbr] || abbr).toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/nfl/500/${slug}.png`;
+}
 const ALL_TEAMS = ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SF','SEA','TB','TEN','WAS'];
 let schedWeek = 1;
 let sleeperData = null;
@@ -180,6 +199,7 @@ function switchTab(name) {
   if(name==='byes' && !document.getElementById('byes-content').dataset.loaded) loadByeWeeks();
   if(name==='injuries' && !document.getElementById('injury-content').dataset.loaded) loadInjuries();
   if(name==='stats' && !document.getElementById('stats-content').dataset.loaded) statsSearch();
+  if(name==='news' && !document.getElementById('news-content').dataset.loaded) loadNews();
 }
 
 // ── Sleeper data ───────────────────────────────────────────────────────────
@@ -273,7 +293,9 @@ async function loadSchedule(week) {
       for(let i=0;i<teams.length;i+=2){
         const t1=TMAP[teams[i]]||teams[i];
         const t2=teams[i+1]?TMAP[teams[i+1]]||teams[i+1]:'TBD';
-        matchupsHtml+=`<div class="matchup"><span style="color:var(--muted2)">${t1}</span> <span style="color:var(--muted)">@</span> <span style="color:var(--text)">${t2}</span></div>`;
+        const logo1=`<img src="${teamLogoUrl(t1)}" alt="" style="width:20px;height:20px;object-fit:contain;vertical-align:-4px;margin-right:.3rem" onerror="this.style.display='none'">`;
+        const logo2=t2!=='TBD'?`<img src="${teamLogoUrl(t2)}" alt="" style="width:20px;height:20px;object-fit:contain;vertical-align:-4px;margin-right:.3rem" onerror="this.style.display='none'">`:'';
+        matchupsHtml+=`<div class="matchup">${logo1}<span style="color:var(--muted2)">${t1}</span> <span style="color:var(--muted)">@</span> ${logo2}<span style="color:var(--text)">${t2}</span></div>`;
       }
       html+=`<div class="sched-slot" style="${locked?'opacity:.6':''}">
         <div class="sched-time">${locked?'🔒 ':''} ${timeStr}</div>
@@ -354,7 +376,45 @@ function renderInjuries(players) {
   }).join('');
 }
 
-// ── Stats tab ──────────────────────────────────────────────────────────────
+// ── News tab ───────────────────────────────────────────────────────────────
+function timeAgo(iso) {
+  if(!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs/60000);
+  if(mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs/24);
+  return `${days}d ago`;
+}
+async function loadNews() {
+  const el = document.getElementById('news-content');
+  el.dataset.loaded = '1';
+  el.innerHTML = '<div style="color:var(--muted)">Loading news...</div>';
+  try {
+    const r = await fetch('/api/nfl-news?limit=25', {credentials:'same-origin'});
+    const d = await r.json();
+    if(!d.articles || !d.articles.length) { el.innerHTML='<div style="color:var(--muted);font-style:italic">No news available right now.</div>'; return; }
+    el.innerHTML = d.articles.map(a => {
+      const img = a.image ? `<img src="${a.image}" alt="" onerror="this.style.display='none'">` : '';
+      const teamBadges = (a.teams||[]).map(t => `<span class="news-team-badge">${t}</span>`).join('');
+      return `<a class="news-card" href="${a.link||'#'}" target="_blank" rel="noopener">
+        ${img}
+        <div style="flex:1;min-width:0">
+          <div class="news-headline">${a.headline||''}</div>
+          ${a.description?`<div class="news-desc">${a.description}</div>`:''}
+          <div class="news-meta">
+            ${a.byline?`<span>${a.byline}</span>`:''}
+            <span>${timeAgo(a.published)}</span>
+            ${teamBadges}
+          </div>
+        </div>
+      </a>`;
+    }).join('');
+  } catch(e) { el.innerHTML='<div style="color:var(--red)">Error loading news.</div>'; }
+}
+
+
 let statsTimer = null;
 async function statsSearch() {
   clearTimeout(statsTimer);
