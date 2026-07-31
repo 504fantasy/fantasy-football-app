@@ -57,14 +57,15 @@
 <!-- STANDINGS -->
 <div class="card">
   <h2>Standings — Through Week {{ current_week }}</h2>
+  <div class="tbl-wrap">
   <table>
     <thead>
       <tr>
         <th>#</th>
         <th>Team</th>
         <th>Owner</th>
-        <th>Season Pts</th>
-        <th>Wk {{ current_week }} Pts</th>
+        <th>Season</th>
+        <th>Wk {{ current_week }}</th>
         <th>Lineup</th>
       </tr>
     </thead>
@@ -91,6 +92,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 
 <!-- HOW IT WORKS -->

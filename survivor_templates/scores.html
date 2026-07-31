@@ -161,6 +161,7 @@
 <!-- SEASON STANDINGS SIDEBAR -->
 <div class="card">
   <h2>Season Standings (Through Week {{ current_week }})</h2>
+  <div class="tbl-wrap">
   <table>
     <thead>
       <tr><th>#</th><th>Team</th><th>Owner</th><th>Total Pts</th></tr>
@@ -176,5 +177,6 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endblock %}

@@ -721,6 +721,7 @@
       <div style="font-size:.7rem;color:var(--muted);margin-bottom:.35rem;min-height:1rem" id="avail-count-label"></div>
 
       <div class="avail-list">
+        <div class="tbl-wrap">
         <table>
           <thead><tr><th>Name</th><th>POS</th><th>Team</th><th style="text-align:right;white-space:nowrap">Rank/Pts</th></tr></thead>
           <tbody id="avail-tbody">
@@ -741,6 +742,7 @@
           {% endfor %}
           </tbody>
         </table>
+        </div>
       </div>
       <div id="avail-empty" style="display:none;text-align:center;padding:1.25rem;font-size:.82rem;color:var(--muted)">
         No players match your filters

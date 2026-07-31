@@ -54,8 +54,13 @@
     input:focus,select:focus,textarea:focus{outline:none;border-color:var(--survivor)}
     select option{background:var(--s2)}
     table{width:100%;border-collapse:collapse;font-size:.855rem}
+    .tbl-wrap{overflow-x:auto}
     th{font-family:'Barlow Condensed',sans-serif;font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:left;padding:.55rem .75rem;border-bottom:1px solid var(--border)}
     td{padding:.6rem .75rem;border-bottom:1px solid var(--border);vertical-align:middle}
+    @media (max-width:600px) {
+      th,td{padding:.45rem .4rem;font-size:.78rem}
+      .badge{font-size:.62rem;padding:.1rem .35rem}
+    }
     tr:last-child td{border-bottom:none}
     tbody tr:hover td{background:rgba(255,255,255,.02)}
     .badge{display:inline-block;padding:.13rem .45rem;border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
