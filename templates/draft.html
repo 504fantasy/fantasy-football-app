@@ -60,9 +60,8 @@
 }
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
-.draft-layout { display: grid; grid-template-columns: 320px 200px 1fr 280px; gap: 1rem; align-items: start }
-@media (max-width: 1300px) { .draft-layout { grid-template-columns: 320px 200px 1fr } }
-@media (max-width: 1000px) { .draft-layout { grid-template-columns: 320px 1fr } }
+.draft-layout { display: grid; grid-template-columns: 280px 1fr 280px; gap: 1rem; align-items: start }
+@media (max-width: 1000px) { .draft-layout { grid-template-columns: 280px 1fr } }
 @media (max-width: 700px)  { .draft-layout { grid-template-columns: 1fr } }
 
 /* ── Clock ───────────────────────────────────────────────────────────────── */
@@ -451,7 +450,7 @@
 
 <div class="draft-layout">
 
-  {# ── LEFT sidebar ────────────────────────────────────────────────────── #}
+  {# ── LEFT: on-the-clock + pause + queue ──────────────────────────────── #}
   <aside>
 
     {# On-the-clock card #}
@@ -488,6 +487,28 @@
       {% endif %}
     </div>
     {% endif %}
+
+    {# Player queue (visible only to logged-in user) #}
+    {% if not draft_state.is_complete %}
+    <div class="queue-panel" id="queue-panel">
+      <div class="queue-header">
+        <span class="queue-title">⭐ My Queue</span>
+        <span class="queue-count" id="queue-count">0</span>
+      </div>
+      <div class="queue-list" id="queue-list">
+        <div class="queue-empty" id="queue-empty">
+          Click ⭐ next to any<br>available player to queue them
+        </div>
+      </div>
+      <div class="queue-add-hint">Drag to reorder · ✕ to remove</div>
+    </div>
+    {% endif %}
+
+  </aside>
+
+  {# ── MIDDLE: Make Pick + Available Players (wide) ────────────────────── #}
+  <div>
+
     {# Pick form #}
     {% if team_on_clock and (is_commissioner or user.id == team_on_clock.owner_id) %}
     <div class="card mb-2">
@@ -514,23 +535,23 @@
         <span class="ct-right" id="avail-count-badge">{{ available_players | length }}</span>
       </div>
 
-      <input class="filter-search" id="avail-search" placeholder="Search by name…" autocomplete="off" spellcheck="false"/>
-
-      <div class="avail-tabs">
-        <button class="pos-tab on" data-pos="ALL">All</button>
-        {% for pos in by_position.keys() | sort %}
-        <button class="pos-tab" data-pos="{{ pos }}">{{ pos }}</button>
-        {% endfor %}
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.5rem">
+        <input class="filter-search" id="avail-search" placeholder="Search by name…" autocomplete="off" spellcheck="false" style="flex:1;min-width:160px;margin-bottom:0"/>
+        <div class="avail-tabs" style="margin:0">
+          <button class="pos-tab on" data-pos="ALL">All</button>
+          {% for pos in by_position.keys() | sort %}
+          <button class="pos-tab" data-pos="{{ pos }}">{{ pos }}</button>
+          {% endfor %}
+        </div>
+        <select id="team-filter-select" onchange="filterByTeamSelect()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.35rem .5rem;color:var(--text);font-size:.78rem;cursor:pointer">
+          <option value="">All Teams</option>
+          {% set nfl_seen = namespace(v=[]) %}
+          {% for p in available_players %}
+            {% if p.nfl_team and p.nfl_team not in nfl_seen.v %}{% set _ = nfl_seen.v.append(p.nfl_team) %}{% endif %}
+          {% endfor %}
+          {% for t in nfl_seen.v | sort %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
       </div>
-
-      <select id="team-filter-select" onchange="filterByTeamSelect()" style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:.35rem .5rem;color:var(--text);font-size:.78rem;cursor:pointer;margin-bottom:.35rem;width:100%">
-        <option value="">All Teams</option>
-        {% set nfl_seen = namespace(v=[]) %}
-        {% for p in available_players %}
-          {% if p.nfl_team and p.nfl_team not in nfl_seen.v %}{% set _ = nfl_seen.v.append(p.nfl_team) %}{% endif %}
-        {% endfor %}
-        {% for t in nfl_seen.v | sort %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
-      </select>
 
       <div style="font-size:.7rem;color:var(--muted);margin-bottom:.35rem;min-height:1rem" id="avail-count-label"></div>
 
@@ -564,34 +585,6 @@
     <div class="card text-c text-muted" style="padding:2rem">🏆 All players drafted!</div>
     {% endif %}
 
-  </aside>
-
-  {# ── MIDDLE: Player queue (visible only to logged-in user) ────────────── #}
-  {% if not draft_state.is_complete %}
-  <div class="queue-panel" id="queue-panel">
-    <div class="queue-header">
-      <span class="queue-title">⭐ My Queue</span>
-      <span class="queue-count" id="queue-count">0</span>
-    </div>
-    <div class="queue-list" id="queue-list">
-      <div class="queue-empty" id="queue-empty">
-        Click ⭐ next to any<br>available player to queue them
-      </div>
-    </div>
-    <div class="queue-add-hint">Drag to reorder · ✕ to remove</div>
-  </div>
-  {% endif %}
-
-  {# ── CHAT: pick log + live chat ─────────────────────────────────────────── #}
-  <div class="chat-panel" id="chat-panel">
-    <div class="chat-header">💬 Draft Chat &amp; Picks</div>
-    <div class="chat-messages" id="chat-messages">
-      <div class="chat-empty" id="chat-empty">No messages yet.</div>
-    </div>
-    <div class="chat-input-row">
-      <input type="text" id="chat-input" placeholder="Say something…" maxlength="280" autocomplete="off"/>
-      <button class="btn btn-ghost" onclick="sendChat()">Send</button>
-    </div>
   </div>
 
   {# ── RIGHT: rosters ──────────────────────────────────────────────────── #}
@@ -759,6 +752,18 @@
 
   </div>
 
+</div>
+
+{# ── CHAT: pick log + live chat (full width, below grid) ─────────────── #}
+<div class="chat-panel" id="chat-panel" style="margin-top:1rem;position:static;max-height:400px">
+  <div class="chat-header">💬 Draft Chat &amp; Picks</div>
+  <div class="chat-messages" id="chat-messages" style="max-height:280px">
+    <div class="chat-empty" id="chat-empty">No messages yet.</div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Say something…" maxlength="280" autocomplete="off"/>
+    <button class="btn btn-ghost" onclick="sendChat()">Send</button>
+  </div>
 </div>
 
 <script>
