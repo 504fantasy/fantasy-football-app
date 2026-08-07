@@ -74,10 +74,10 @@ PRESEASON_GAMES = [
 def seed_preseason_schedule(league_id: int, overwrite: bool = False):
     """
     Insert/update preseason kickoff times into survivor_game_schedule.
-    ET times converted to UTC by adding 4 hours (EDT in August).
     """
     import sqlite3
-    from datetime import datetime, timedelta
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
 
     conn = sqlite3.connect('/root/fantasy-football-app/data/survivor.db')
     added = skipped = 0
@@ -85,18 +85,19 @@ def seed_preseason_schedule(league_id: int, overwrite: bool = False):
     for week, gameday, gametime_et, away, home in PRESEASON_GAMES:
         try:
             naive_et = datetime.strptime(f"{gameday} {gametime_et}", "%Y-%m-%d %H:%M")
-            kickoff_utc = (naive_et + timedelta(hours=4)).isoformat()
+            et_dt = naive_et.replace(tzinfo=ZoneInfo("America/New_York"))
+            kickoff_utc = et_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None).isoformat()
         except Exception:
             continue
 
-        for team in (away, home):
+        for team, opponent, is_home in [(away, home, 0), (home, away, 1)]:
             try:
                 conn.execute(
                     "INSERT INTO survivor_game_schedule "
-                    "(league_id, season, week, team, kickoff_utc) "
-                    "VALUES (?,?,?,?,?) ON CONFLICT(league_id, week, team) DO " +
-                    ("UPDATE SET kickoff_utc=excluded.kickoff_utc" if overwrite else "NOTHING"),
-                    (league_id, 2026, week, team, kickoff_utc)
+                    "(league_id, season, week, team, kickoff_utc, opponent, is_home) "
+                    "VALUES (?,?,?,?,?,?,?) ON CONFLICT(league_id, week, team) DO " +
+                    ("UPDATE SET kickoff_utc=excluded.kickoff_utc, opponent=excluded.opponent, is_home=excluded.is_home" if overwrite else "NOTHING"),
+                    (league_id, 2026, week, team, kickoff_utc, opponent, is_home)
                 )
                 added += 1
             except Exception:

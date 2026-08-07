@@ -667,9 +667,12 @@ def get_team_season_score(team_id: int, through_week: int) -> float:
 
 
 def seed_game_schedule(league_id: int, season: int) -> dict:
-    """Pull NFL schedule/kickoff times and store per team per week."""
+    """Pull NFL schedule/kickoff times and store per team per week, including
+    each team's real opponent and home/away flag so matchups can be
+    reconstructed exactly instead of guessed by kickoff-time grouping."""
     import nfl_data_py as nfl
-    from datetime import datetime, timezone
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
     added = skipped = 0
     try:
         sched = nfl.import_schedules([season])
@@ -678,26 +681,26 @@ def seed_game_schedule(league_id: int, season: int) -> dict:
             week     = int(row.get("week", 0))
             gameday  = str(row.get("gameday", "") or "")
             gametime = str(row.get("gametime", "") or "")
-            if not gameday or not gametime or not week:
+            away     = str(row.get("away_team", "") or "").upper().strip()
+            home     = str(row.get("home_team", "") or "").upper().strip()
+            if not gameday or not gametime or not week or not away or not home:
                 continue
-            # Parse kickoff as UTC (gametime is Eastern — add 5h for UTC)
+            # gametime is Eastern local time; convert to UTC with real DST rules
+            # instead of a fixed offset (fixed offsets are wrong for roughly
+            # half the season depending on whether ET is in EDT or EST).
             try:
                 naive = datetime.strptime(f"{gameday} {gametime}", "%Y-%m-%d %H:%M")
-                # Convert ET to UTC (approximate — doesn't handle DST perfectly)
-                from datetime import timedelta
-                utc_dt = naive + timedelta(hours=5)
-                kickoff_utc = utc_dt.isoformat()
+                et_dt = naive.replace(tzinfo=ZoneInfo("America/New_York"))
+                kickoff_utc = et_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None).isoformat()
             except Exception:
                 continue
-            for team_col in ["away_team", "home_team"]:
-                team = str(row.get(team_col, "") or "").upper().strip()
-                if not team:
-                    continue
+            for team, opponent, is_home in [(away, home, 0), (home, away, 1)]:
                 try:
                     conn.execute(
-                        "INSERT INTO survivor_game_schedule (league_id, season, week, team, kickoff_utc) "
-                        "VALUES (?,?,?,?,?) ON CONFLICT(league_id, week, team) DO UPDATE SET kickoff_utc=excluded.kickoff_utc",
-                        (league_id, season, week, team, kickoff_utc)
+                        "INSERT INTO survivor_game_schedule (league_id, season, week, team, kickoff_utc, opponent, is_home) "
+                        "VALUES (?,?,?,?,?,?,?) ON CONFLICT(league_id, week, team) "
+                        "DO UPDATE SET kickoff_utc=excluded.kickoff_utc, opponent=excluded.opponent, is_home=excluded.is_home",
+                        (league_id, season, week, team, kickoff_utc, opponent, is_home)
                     )
                     added += 1
                 except Exception:
@@ -1276,9 +1279,17 @@ def scores_page(league_id: int, request: Request, week: int = None):
                 "total": result["total"] if show_players else None,
                 "complete": lineup_is_complete(lineup),
                 "hidden": not show_players,
+                "is_own_team": is_own_team,
             }
         )
-    week_scores.sort(key=lambda x: x["total"] or 0, reverse=True)
+    # Own team always first, everyone else sorted by score descending
+    week_scores.sort(key=lambda x: (not x["is_own_team"], -(x["total"] or 0)))
+    # Mark the actual leading score (among visible totals) so the UI can
+    # highlight it correctly even though the own-team pin changes list order
+    visible_totals = [x["total"] for x in week_scores if x["total"] is not None]
+    top_total = max(visible_totals) if visible_totals else None
+    for x in week_scores:
+        x["is_top_score"] = x["total"] is not None and x["total"] == top_total
 
     # Season standings
     standings = []
@@ -1881,6 +1892,34 @@ def sync_roster(league_id: int, request: Request, overwrite: bool = Form(False))
         write_audit(
             actor=user["username"],
             action="ROSTER_SYNC_ERROR",
+            league_id=league_id,
+            details=str(e),
+        )
+    return RedirectResponse(f"/survivor/{league_id}/manage?msg={msg}", status_code=303)
+
+
+@app.post("/survivor/{league_id}/manage/sync/schedule")
+def sync_schedule_now(league_id: int, request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    try:
+        result = seed_game_schedule(league_id, league["season"])
+        msg = f"schedule_sync_ok_{result.get('added', 0)}"
+        write_audit(
+            actor=user["username"],
+            action="SCHEDULE_SYNC",
+            league_id=league_id,
+            details=f"added={result.get('added',0)} skipped={result.get('skipped',0)}",
+        )
+    except Exception as e:
+        msg = "schedule_sync_error"
+        write_audit(
+            actor=user["username"],
+            action="SCHEDULE_SYNC_ERROR",
             league_id=league_id,
             details=str(e),
         )

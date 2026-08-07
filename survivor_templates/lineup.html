@@ -342,19 +342,19 @@ async function loadResearchData(overrideWeek){
     const scheduledTeams=new Set();
     let html='';
     for(const g of d.games){
-      (g.teams||[]).forEach(t=>{ scheduledTeams.add(t); if(t==='LA')scheduledTeams.add('LAR'); if(t==='LAR')scheduledTeams.add('LA'); });
+      (g.matchups||[]).forEach(m=>{
+        [m.away,m.home].forEach(t=>{ scheduledTeams.add(t); if(t==='LA')scheduledTeams.add('LAR'); if(t==='LAR')scheduledTeams.add('LA'); });
+      });
       const ko=new Date(g.kickoff_utc+'Z');
       const locked=ko<=new Date();
       const t=ko.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
       const TMAP={'LA':'LAR','JAC':'JAX','LV':'LAS'};
-      const teams=g.teams||[];
-      // Pair teams into matchups (every 2 teams = 1 game)
       let matchups='';
-      for(let mi=0;mi<teams.length;mi+=2){
-        const t1=TMAP[teams[mi]]||teams[mi];
-        const t2=teams[mi+1]?TMAP[teams[mi+1]]||teams[mi+1]:'TBD';
+      for(const m of (g.matchups||[])){
+        const t1=TMAP[m.away]||m.away;
+        const t2=TMAP[m.home]||m.home;
         const logo1=`<img src="${teamLogoUrl(t1)}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px;margin-right:.25rem" onerror="this.style.display='none'">`;
-        const logo2=t2!=='TBD'?`<img src="${teamLogoUrl(t2)}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px;margin-right:.25rem" onerror="this.style.display='none'">`:'';
+        const logo2=`<img src="${teamLogoUrl(t2)}" alt="" style="width:16px;height:16px;object-fit:contain;vertical-align:-3px;margin-right:.25rem" onerror="this.style.display='none'">`;
         matchups+=`<div style="font-size:.78rem;font-weight:600;color:#e8eaf0;padding:.1rem 0">
           ${logo1}<span style="color:#8898b0">${t1}</span>
           <span style="color:#64748b;margin:0 .3rem">@</span>

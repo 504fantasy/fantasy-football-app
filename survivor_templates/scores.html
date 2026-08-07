@@ -68,10 +68,11 @@
         <span style="color:var(--muted);font-size:12px;margin-left:8px;">{{ ts.owner.username if ts.owner else '' }}</span>
         {% if not ts.complete %}<span class="badge badge-red" style="margin-left:8px;">Incomplete</span>{% endif %}
       </div>
-      <div style="font-size:22px;font-weight:700;color:{% if loop.first %}var(--gold){% else %}var(--text){% endif %}">
+      <div style="font-size:22px;font-weight:700;color:{% if ts.is_top_score %}var(--gold){% else %}var(--text){% endif %}">
         {{ ts.total }}
       </div>
     </div>
+    {% if ts.is_own_team %}<div style="font-size:.68rem;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:6px">Your Team</div>{% endif %}
     {% if ts.hidden %}
     <div style="padding:1rem;text-align:center;color:var(--muted2);font-size:.85rem;font-style:italic;background:var(--s2);border-radius:8px;border:1px dashed var(--border)">
       🔒 Lineup hidden until first game kicks off
@@ -86,6 +87,25 @@
     .player-row:last-child{border-bottom:none}
     .player-pts{margin-left:auto;font-family:"Barlow Condensed",sans-serif;font-size:1.2rem;font-weight:800;color:var(--gold);min-width:2.5rem;text-align:right}
     .player-pts.zero{color:var(--muted)}
+    /* game chip */
+    .game-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-size: .78rem;
+      padding: .18rem .55rem;
+      border-radius: 3px;
+      background: var(--s3);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .game-chip .gc-teams { letter-spacing: .04em }
+    .game-chip .gc-score { color: var(--text); font-weight: 800 }
+    .game-chip .gc-live  { color: var(--green); font-size: .68rem; text-transform:uppercase; letter-spacing:.06em }
     </style>
     {% for p in ts.players | sort(attribute='final_points', reverse=True) %}
     <div class="player-row">
@@ -105,6 +125,7 @@
       ">{{ p.position }}</span>
       <span style="font-weight:600;font-size:.9rem;cursor:pointer;text-decoration:underline dotted;text-decoration-color:#64748b" onclick="showPlayerNews('{{ p.name }}','{{ p.nfl_team }}','{{ p.position }}','{{ p.headshot_url or "" }}')">{{ p.name }}</span>
       <span style="color:var(--muted2);font-size:.8rem">{% if p.nfl_team %}<img src="{{ p.nfl_team | espn_logo }}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;margin-right:.2rem" onerror="this.style.display='none'">{% endif %}{{ p.nfl_team }}</span>
+      <div class="game-score-slot" data-nfl="{{ p.nfl_team or '' }}"></div>
       <div class="stat-chips">
         {% set pos = p.position or '' %}
         {% if pos == 'K' %}
@@ -179,4 +200,92 @@
   </table>
   </div>
 </div>
+
+<script>
+const ESPN_ALIAS = {
+  'WSH':'WSH', 'WAS':'WSH',
+  'LV':'LV',   'LAS':'LV',
+  'LA':'LAR',  'LAR':'LAR',
+  'JAC':'JAX', 'JAX':'JAX',
+};
+function normTeam(t) { return ESPN_ALIAS[t] || t; }
+function formatKickoff(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${weekday} ${time}`;
+}
+
+async function loadGameScores() {
+  const week = {{ week }};
+  const season = {{ league.season }};
+  try {
+    const resp = await fetch(`/api/nfl-games?week=${week}&season=${season}&season_type=2`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const games = data.games || {};
+
+    document.querySelectorAll('.game-score-slot').forEach(slot => {
+      const nfl = normTeam((slot.dataset.nfl || '').toUpperCase());
+      const game = games[nfl];
+      if (!game) return;
+
+      const isHome     = normTeam(game.home) === nfl;
+      const oppTeam    = isHome ? game.away : game.home;
+      const vsLabel    = isHome ? 'vs' : '@';
+
+      // Pre-game: show the upcoming matchup + kickoff time instead of a score,
+      // so people can see who/when a player plays before the game starts.
+      if (game.state === 'pre') {
+        slot.innerHTML = `
+          <span class="game-chip">
+            <span class="gc-teams">
+              <span style="color:var(--muted)">${vsLabel} ${oppTeam}</span>
+            </span>
+            <span style="color:var(--muted);font-size:.68rem">${formatKickoff(game.kickoff_utc)}</span>
+          </span>`;
+        return;
+      }
+
+      const myScore    = isHome ? game.home_score : game.away_score;
+      const oppScore   = isHome ? game.away_score : game.home_score;
+      const myWin      = parseInt(myScore) > parseInt(oppScore);
+      const tied       = myScore === oppScore;
+      const live       = game.live;
+
+      let statusHtml = '';
+      if (live) {
+        statusHtml = `<span class="gc-live">● ${live}</span>`;
+      } else {
+        statusHtml = `<span style="color:var(--muted);font-size:.62rem">${game.status}</span>`;
+      }
+
+      const scoreColor = myWin ? 'var(--gold)' : tied ? 'var(--text)' : 'var(--muted)';
+      const downDistHtml = (live && game.down_distance)
+        ? `<div style="font-size:.66rem;color:var(--muted);margin-top:.1rem">${game.down_distance}</div>`
+        : '';
+
+      slot.innerHTML = `
+        <div>
+          <span class="game-chip">
+            <span class="gc-teams">
+              <span style="color:${scoreColor};font-weight:800">${nfl}</span>
+              <span style="color:var(--muted)"> ${vsLabel} </span>
+              ${oppTeam}
+            </span>
+            <span class="gc-score" style="color:${scoreColor}">${myScore}–${oppScore}</span>
+            ${statusHtml}
+          </span>
+          ${downDistHtml}
+        </div>`;
+    });
+  } catch (e) {
+    console.log('Game scores unavailable:', e.message);
+  }
+}
+
+loadGameScores();
+setInterval(loadGameScores, 30000);
+</script>
 {% endblock %}

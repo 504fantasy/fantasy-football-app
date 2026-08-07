@@ -344,6 +344,8 @@ def init_db(conn=None):
     _safe_alter(conn, "ALTER TABLE survivor_leagues ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     _safe_alter(conn, "ALTER TABLE survivor_leagues ADD COLUMN submission_deadline_day  INTEGER NOT NULL DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE survivor_leagues ADD COLUMN submission_deadline_hour INTEGER NOT NULL DEFAULT 13")
+    _safe_alter(conn, "ALTER TABLE survivor_game_schedule ADD COLUMN opponent TEXT")
+    _safe_alter(conn, "ALTER TABLE survivor_game_schedule ADD COLUMN is_home INTEGER")
 
     conn.commit()
     if close_after:

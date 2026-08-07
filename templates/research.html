@@ -143,16 +143,17 @@
 
 <script>
 const NFL_SEASON = {{ nfl_season }};
+const CURRENT_WEEK = {{ current_week }};
 const TMAP = {'LA':'LAR','JAC':'JAX'};
 const ALL_TEAMS = ['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SF','SEA','TB','TEN','WAS'];
-let schedWeek = 1;
+let schedWeek = CURRENT_WEEK;
 let sleeperData = null;
 let injuryPosFilter = '';
 let projCache = null;
 const NFL_SEASON_YEAR = {{ nfl_season }};
 
 async function getProjections(week) {
-  week = week || 1;
+  week = week || CURRENT_WEEK;
   const key = `sleeper_proj_${week}`;
   if (projCache && projCache._week === week) return projCache;
   try {
@@ -220,7 +221,7 @@ async function searchPlayers() {
       return;
     }
     el.innerHTML = '<div style="color:var(--muted)">Searching...</div>';
-    const [players, , projs] = await Promise.all([getSleeperData(), getHeadshots(), getProjections(1)]);
+    const [players, , projs] = await Promise.all([getSleeperData(), getHeadshots(), getProjections(CURRENT_WEEK)]);
     const matches = Object.values(players).filter(p => {
       if(!p.full_name || !p.position) return false;
       if(!['QB','RB','WR','TE','K','DEF'].includes(p.position)) return false;
@@ -283,13 +284,13 @@ async function loadSchedule(week) {
       const ko = new Date(g.kickoff_utc+'Z');
       const locked = ko <= new Date();
       const timeStr = ko.toLocaleString('en-US',{weekday:'long',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
-      const teams = g.teams||[];
+      const matchupList = g.matchups||[];
       let matchupsHtml = '';
-      for(let i=0;i<teams.length;i+=2){
-        const t1=TMAP[teams[i]]||teams[i];
-        const t2=teams[i+1]?TMAP[teams[i+1]]||teams[i+1]:'TBD';
+      for(const m of matchupList){
+        const t1=TMAP[m.away]||m.away;
+        const t2=TMAP[m.home]||m.home;
         const logo1=`<img src="${teamLogoUrl(t1)}" alt="" style="width:20px;height:20px;object-fit:contain;vertical-align:-4px;margin-right:.3rem" onerror="this.style.display='none'">`;
-        const logo2=t2!=='TBD'?`<img src="${teamLogoUrl(t2)}" alt="" style="width:20px;height:20px;object-fit:contain;vertical-align:-4px;margin-right:.3rem" onerror="this.style.display='none'">`:'';
+        const logo2=`<img src="${teamLogoUrl(t2)}" alt="" style="width:20px;height:20px;object-fit:contain;vertical-align:-4px;margin-right:.3rem" onerror="this.style.display='none'">`;
         matchupsHtml+=`<div class="matchup">${logo1}<span style="color:var(--muted2)">${t1}</span> <span style="color:var(--muted)">@</span> ${logo2}<span style="color:var(--text)">${t2}</span></div>`;
       }
       html+=`<div class="sched-slot" style="${locked?'opacity:.6':''}">
@@ -316,7 +317,7 @@ async function loadByeWeeks() {
       const r = await fetch(`/api/nfl-schedule/${w}`, {credentials:'same-origin'});
       const d = await r.json();
       const scheduled = new Set();
-      (d.games||[]).forEach(g=>(g.teams||[]).forEach(t=>{scheduled.add(t);if(t==='LA')scheduled.add('LAR');}));
+      (d.games||[]).forEach(g=>(g.matchups||[]).forEach(m=>{[m.away,m.home].forEach(t=>{scheduled.add(t);if(t==='LA')scheduled.add('LAR');});}));
       const byes = ALL_TEAMS.filter(t=>!scheduled.has(t));
       if(scheduled.size >= 28) {
         html+=`<div class="week-card">
@@ -434,7 +435,8 @@ async function statsSearch() {
       if (pos && p.position !== pos) return false;
       if (teamF && p.team !== teamF) return false;
       return true;
-    }).slice(0, 150);
+    }).sort((a, b) => (a.search_rank || 999999) - (b.search_rank || 999999))
+      .slice(0, 150);
     if (!matches.length) { el.innerHTML = '<div style="color:var(--muted);font-style:italic">No players found.</div>'; return; }
     // Fetch stats for each player
     const season = NFL_SEASON_YEAR;

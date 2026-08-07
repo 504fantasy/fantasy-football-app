@@ -604,6 +604,13 @@ const ESPN_ALIAS = {
   'JAC':'JAX', 'JAX':'JAX',
 };
 function normTeam(t) { return ESPN_ALIAS[t] || t; }
+function formatKickoff(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${weekday} ${time}`;
+}
 
 async function loadGameScores() {
   const week = {{ week }};
@@ -620,36 +627,53 @@ async function loadGameScores() {
       if (!game) return;
 
       const isHome     = normTeam(game.home) === nfl;
+      const oppTeam    = isHome ? game.away : game.home;
+      const vsLabel    = isHome ? 'vs' : '@';
+
+      // Pre-game: show the upcoming matchup + kickoff time instead of a score,
+      // so people can see who/when a player plays before the game starts.
+      if (game.state === 'pre') {
+        slot.innerHTML = `
+          <span class="game-chip">
+            <span class="gc-teams">
+              <span style="color:var(--muted)">${vsLabel} ${oppTeam}</span>
+            </span>
+            <span style="color:var(--muted);font-size:.68rem">${formatKickoff(game.kickoff_utc)}</span>
+          </span>`;
+        return;
+      }
+
       const myScore    = isHome ? game.home_score : game.away_score;
       const oppScore   = isHome ? game.away_score : game.home_score;
-      const oppTeam    = isHome ? game.away       : game.home;
       const myWin      = parseInt(myScore) > parseInt(oppScore);
       const tied       = myScore === oppScore;
-      const completed  = game.completed;
       const live       = game.live;
 
       let statusHtml = '';
       if (live) {
         statusHtml = `<span class="gc-live">● ${live}</span>`;
-      } else if (completed) {
-        statusHtml = `<span style="color:var(--muted);font-size:.62rem">${game.status}</span>`;
       } else {
         statusHtml = `<span style="color:var(--muted);font-size:.62rem">${game.status}</span>`;
       }
 
       const scoreColor = myWin ? 'var(--gold)' : tied ? 'var(--text)' : 'var(--muted)';
-      const vsLabel    = isHome ? 'vs' : '@';
+      const downDistHtml = (live && game.down_distance)
+        ? `<div style="font-size:.66rem;color:var(--muted);margin-top:.1rem">${game.down_distance}</div>`
+        : '';
 
       slot.innerHTML = `
-        <span class="game-chip">
-          <span class="gc-teams">
-            <span style="color:${scoreColor};font-weight:800">${nfl}</span>
-            <span style="color:var(--muted)"> ${vsLabel} </span>
-            ${oppTeam}
+        <div>
+          <span class="game-chip">
+            <span class="gc-teams">
+              <span style="color:${scoreColor};font-weight:800">${nfl}</span>
+              <span style="color:var(--muted)"> ${vsLabel} </span>
+              ${oppTeam}
+            </span>
+            <span class="gc-score" style="color:${scoreColor}">${myScore}–${oppScore}</span>
+            ${statusHtml}
           </span>
-          <span class="gc-score" style="color:${scoreColor}">${myScore}–${oppScore}</span>
-          ${statusHtml}
-        </span>`;
+          ${downDistHtml}
+        </div>`;
     });
   } catch (e) {
     // ESPN unreachable — silently skip, game scores are optional
@@ -658,6 +682,7 @@ async function loadGameScores() {
 }
 
 loadGameScores();
+setInterval(loadGameScores, 30000);
 
 // ── NFL Playoff Bracket ───────────────────────────────────────────────────
 // Fetch all 4 rounds and build a bracket. Each round is fetched in parallel.

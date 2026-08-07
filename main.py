@@ -1097,14 +1097,54 @@ def logout(request: Request):
 
 
 
+def _get_research_current_week(season: int) -> int:
+    """Determine the current NFL week from real synced schedule data (the
+    week whose games have most recently started), falling back to the
+    calendar-based estimate if no schedule data has been synced yet."""
+    try:
+        import sqlite3 as _sq
+        from datetime import datetime, timezone
+        sconn = _sq.connect(os.environ.get("SURVIVOR_DB_PATH", "data/survivor.db"))
+        sconn.row_factory = _sq.Row
+        best_league = sconn.execute("""
+            SELECT league_id FROM survivor_game_schedule
+            WHERE week=1 AND season=?
+            GROUP BY league_id
+            ORDER BY MAX(kickoff_utc) DESC
+            LIMIT 1
+        """, (season,)).fetchone()
+        if not best_league:
+            sconn.close()
+            return current_nfl_week()
+        rows = sconn.execute("""
+            SELECT week, MIN(kickoff_utc) as first_kickoff
+            FROM survivor_game_schedule
+            WHERE season=? AND league_id=?
+            GROUP BY week ORDER BY week ASC
+        """, (season, best_league[0])).fetchall()
+        sconn.close()
+        now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        week = 1
+        for r in rows:
+            if r["first_kickoff"] <= now_iso:
+                week = r["week"]
+            else:
+                break
+        return week
+    except Exception:
+        return current_nfl_week()
+
+
 @app.get("/research", response_class=HTMLResponse)
 def research_page(request: Request, user=Depends(get_current_user)):
     if not user:
         return RedirectResponse("/login", status_code=303)
+    season = int(os.environ.get("NFL_SEASON", "2026"))
     return templates.TemplateResponse("research.html", {
         "request": request,
         "user": user,
-        "nfl_season": int(os.environ.get("NFL_SEASON", "2026")),
+        "nfl_season": season,
+        "current_week": _get_research_current_week(season),
     })
 
 @app.get("/dashboard")
@@ -1442,25 +1482,36 @@ def api_nfl_schedule(week: int, season: int = None, user=Depends(get_current_use
         """, (season,)).fetchone()
         best_lid = best_league[0] if best_league else 1
         rows = sconn.execute("""
-            SELECT kickoff_utc, team
+            SELECT kickoff_utc, team, opponent, is_home
             FROM survivor_game_schedule
             WHERE week=? AND season=? AND league_id=?
             ORDER BY kickoff_utc ASC, team ASC
         """, (week, season, best_lid)).fetchall()
         sconn.close()
-        # Group teams by kickoff time - show timeslots not matchups
-        # since we don't store away/home distinction
-        from collections import defaultdict
-        timeslots = defaultdict(list)
+
+        # Build real matchups from stored opponent/is_home pairs (one row per
+        # team, so take the away-team row for each game to avoid duplicates).
+        # Fall back to the old kickoff-time grouping only for legacy rows
+        # that predate the opponent column (opponent is NULL).
+        games_by_time = {}
+        legacy_by_time = {}
         for r in rows:
-            timeslots[r["kickoff_utc"]].append(r["team"])
+            if r["opponent"] and r["is_home"] is not None:
+                if r["is_home"] == 0:  # away-team row = canonical "away @ home"
+                    games_by_time.setdefault(r["kickoff_utc"], []).append(
+                        {"away": r["team"], "home": r["opponent"]}
+                    )
+            else:
+                legacy_by_time.setdefault(r["kickoff_utc"], []).append(r["team"])
 
         games = []
-        for kickoff, teams in sorted(timeslots.items()):
-            games.append({
-                "kickoff_utc": kickoff,
-                "teams": teams,
-            })
+        all_times = sorted(set(games_by_time) | set(legacy_by_time))
+        for kickoff in all_times:
+            matchups = list(games_by_time.get(kickoff, []))
+            legacy_teams = legacy_by_time.get(kickoff, [])
+            for i in range(0, len(legacy_teams) - 1, 2):
+                matchups.append({"away": legacy_teams[i], "home": legacy_teams[i + 1]})
+            games.append({"kickoff_utc": kickoff, "matchups": matchups})
         return {"week": week, "season": season, "games": games}
     except Exception as e:
         return {"week": week, "season": season, "games": [], "error": str(e)}
@@ -3528,9 +3579,17 @@ def api_nfl_news(limit: int = 25, user=Depends(get_current_user)):
 
     url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit={limit}"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read())
+        # ESPN's bot protection blocks urllib's TLS fingerprint even with a
+        # browser User-Agent header, but plain curl gets through fine from
+        # this server — so shell out to curl instead of using urllib here.
+        import subprocess
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "8", url],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0 or not result.stdout:
+            raise RuntimeError(f"curl failed (exit {result.returncode}): {result.stderr[:200]}")
+        data = json.loads(result.stdout)
     except Exception as e:
         return {"articles": [], "error": str(e)}
 
@@ -3886,26 +3945,47 @@ PLAYOFF_ROUND_NAMES = {
 
 
 @app.get("/api/nfl-games")
-def api_nfl_games(week: int, season: int = None):
+def api_nfl_games(week: int, season: int = None, season_type: int = 3):
     """
-    Fetch NFL playoff game scores from ESPN's public postseason scoreboard.
-    week = fantasy playoff week (1=Wild Card, 2=Divisional, 3=Conf Champ, 4=Super Bowl)
+    Fetch NFL game scores from ESPN's public scoreboard.
+    season_type: 3 = postseason (default, week = fantasy playoff week
+                     1=Wild Card, 2=Divisional, 3=Conf Champ, 4=Super Bowl,
+                     translated to ESPN's postseason week numbering)
+                 2 = regular season (week = actual NFL week number 1-18,
+                     used as-is)
     Returns games keyed by team abbreviation + a games_list for display.
     """
     import os
+    import time
 
     if season is None:
         season = int(os.environ.get("NFL_SEASON", "2024"))
 
-    espn_week = PLAYOFF_WEEK_MAP.get(week, week)
+    cache_key = (week, season, season_type)
+    cache = getattr(api_nfl_games, "_cache", None)
+    if cache and cache[0] == cache_key and time.time() - cache[1] < 15:
+        return cache[2]
+
+    if season_type == 3:
+        espn_week = PLAYOFF_WEEK_MAP.get(week, week)
+    else:
+        espn_week = week
     url = (
         f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-        f"?week={espn_week}&seasontype=3&dates={season}"
+        f"?week={espn_week}&seasontype={season_type}&dates={season}"
     )
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read())
+        # ESPN's bot protection blocks urllib's TLS fingerprint even with a
+        # browser User-Agent header, but plain curl gets through fine from
+        # this server — so shell out to curl instead of using urllib here.
+        import subprocess
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "5", url],
+            capture_output=True, text=True, timeout=8
+        )
+        if result.returncode != 0 or not result.stdout:
+            raise RuntimeError(f"curl failed (exit {result.returncode}): {result.stderr[:200]}")
+        data = json.loads(result.stdout)
     except Exception as e:
         return {"error": str(e), "games": {}}
 
@@ -3940,6 +4020,7 @@ def api_nfl_games(week: int, season: int = None):
         situation = comp.get("situation", {})
         period = situation.get("period", 0)
         clock = situation.get("displayClock", "")
+        down_distance = situation.get("downDistanceText", "")
         quarter_str = ""
         if not completed and period > 0:
             q_names = {1: "Q1", 2: "Q2", 3: "Q3", 4: "Q4", 5: "OT"}
@@ -3956,6 +4037,9 @@ def api_nfl_games(week: int, season: int = None):
             "completed": completed,
             "live": quarter_str,
             "name": event.get("name", ""),
+            "kickoff_utc": event.get("date", ""),
+            "state": status_type.get("state", ""),
+            "down_distance": down_distance,
         }
         games_by_team[home_abbr] = game
         games_by_team[away_abbr] = game
@@ -3963,13 +4047,15 @@ def api_nfl_games(week: int, season: int = None):
     # Ordered list for display in the scores sidebar
     games_list = list({id(g): g for g in games_by_team.values()}.values())
 
-    return {
+    result = {
         "games": games_by_team,
         "games_list": games_list,
         "week": week,
         "season": season,
         "round_name": PLAYOFF_ROUND_NAMES.get(week, f"Week {week}"),
     }
+    api_nfl_games._cache = (cache_key, time.time(), result)
+    return result
 
 
 @app.get("/api/league/{league_id}/scores/week/{week}")
@@ -4518,17 +4604,6 @@ def admin_delete_survivor_league(league_id: int = Form(...), user=Depends(get_cu
                 details=f"Deleted survivor league '{league_name}' (id={league_id})")
     return RedirectResponse("/admin?msg=league_deleted", status_code=303)
 
-
-@app.get("/research", response_class=HTMLResponse)
-def research_page(request: Request, user=Depends(get_current_user)):
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-    season = int(os.environ.get("NFL_SEASON", "2026"))
-    return templates.TemplateResponse("research.html", {
-        "request": request,
-        "user": user,
-        "season": season,
-    })
 
 @app.get("/api/player-headshot")
 def api_player_headshot(name: str, user=Depends(get_current_user)):

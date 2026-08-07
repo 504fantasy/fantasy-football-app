@@ -386,9 +386,7 @@
   <div class="nav-end">
     <strong>{{ user.username }}</strong>
     {% if user.is_superadmin %}<span class="badge b-admin">Superadmin</span>{% endif %}
-    <a href="/survivor/dashboard" class="btn btn-ghost btn-sm" title="Survivor Game">🎯 Survivor</a>
     <a href="/research" class="btn btn-ghost btn-sm" title="Research">🔍 Research</a>
-    <a href="/dashboard" class="btn btn-ghost btn-sm">🏟</a>
     {% if user.is_superadmin %}
     <a href="/admin" class="btn btn-ghost btn-sm" style="color:#93c5fd;border-color:rgba(59,130,246,.3)">⚙ Admin</a>
     {% endif %}
