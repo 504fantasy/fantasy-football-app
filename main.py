@@ -3968,6 +3968,11 @@ def api_nfl_games(week: int, season: int = None, season_type: int = 3):
 
     if season_type == 3:
         espn_week = PLAYOFF_WEEK_MAP.get(week, week)
+    elif season_type == 1:
+        # ESPN counts the standalone Hall of Fame Game as preseason "Week 1",
+        # so the first full preseason slate (our leagues' Week 1) is actually
+        # ESPN's Week 2, and so on — a consistent +1 offset.
+        espn_week = week + 1
     else:
         espn_week = week
     url = (
@@ -4052,7 +4057,7 @@ def api_nfl_games(week: int, season: int = None, season_type: int = 3):
         "games_list": games_list,
         "week": week,
         "season": season,
-        "round_name": PLAYOFF_ROUND_NAMES.get(week, f"Week {week}"),
+        "round_name": PLAYOFF_ROUND_NAMES.get(week, f"Week {week}") if season_type == 3 else f"Week {week}",
     }
     api_nfl_games._cache = (cache_key, time.time(), result)
     return result
