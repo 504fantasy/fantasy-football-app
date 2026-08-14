@@ -23,7 +23,7 @@ from passlib.context import CryptContext
 from db import adapt_sql, execute_returning, get_db
 from db import init_db as _init_db
 from nfl_sync import current_nfl_week, seed_players, sync_scheduler, sync_week
-from scoring import calculate_fantasy_points
+from scoring import calculate_fantasy_points, resolve_scoring_settings
 from stat_parsing import parse_team_stats  # noqa: F401 — re-exported for convenience
 
 # ======================================================
@@ -310,7 +310,7 @@ def row_to_stats(row: dict) -> dict:
         fgs = json.loads(row.get("field_goals_json") or "[]")
     except Exception:
         fgs = []
-    return {
+    stats = {
         "receptions": row.get("receptions", 0) or 0,
         "receiving_yards": row.get("receiving_yards", 0) or 0,
         "rushing_yards": row.get("rushing_yards", 0) or 0,
@@ -322,6 +322,30 @@ def row_to_stats(row: dict) -> dict:
         "field_goals_made": fgs,
         "return_fumbles_lost": row.get("return_fumbles_lost", 0) or 0,
     }
+    # Only include the split TD columns when actually populated — omitting
+    # them lets scoring.py fall back to the legacy total_tds field for rows
+    # written before the passing/other split existed.
+    if row.get("passing_tds") is not None or row.get("other_tds") is not None:
+        stats["passing_tds"] = row.get("passing_tds", 0) or 0
+        stats["other_tds"] = row.get("other_tds", 0) or 0
+    # New bonus/defense categories — no legacy fallback needed, these never
+    # existed before, so a missing/NULL value simply means "0 of this stat".
+    stats["two_pt_conversions"] = row.get("two_pt_conversions", 0) or 0
+    stats["pass_40_completions"] = row.get("pass_40_completions", 0) or 0
+    stats["pass_td_40"] = row.get("pass_td_40", 0) or 0
+    stats["pass_td_50"] = row.get("pass_td_50", 0) or 0
+    stats["rush_td_40"] = row.get("rush_td_40", 0) or 0
+    stats["rush_td_50"] = row.get("rush_td_50", 0) or 0
+    stats["rec_td_40"] = row.get("rec_td_40", 0) or 0
+    stats["rec_td_50"] = row.get("rec_td_50", 0) or 0
+    stats["pat_made"] = row.get("pat_made", 0) or 0
+    stats["fg_missed"] = row.get("fg_missed", 0) or 0
+    stats["sacks"] = row.get("sacks", 0) or 0
+    stats["safeties"] = row.get("safeties", 0) or 0
+    stats["forced_fumbles"] = row.get("forced_fumbles", 0) or 0
+    stats["blocked_kicks"] = row.get("blocked_kicks", 0) or 0
+    stats["points_allowed"] = row.get("points_allowed")
+    return stats
 
 
 def get_team_week_score(
@@ -341,6 +365,12 @@ def get_team_week_score(
                p.name, p.position, p.nfl_team, p.headshot_url,
                ps.receptions, ps.receiving_yards, ps.rushing_yards,
                ps.return_yards, ps.passing_yards, ps.total_tds,
+               ps.passing_tds, ps.other_tds,
+               ps.two_pt_conversions, ps.pass_40_completions,
+               ps.pass_td_40, ps.pass_td_50, ps.rush_td_40, ps.rush_td_50,
+               ps.rec_td_40, ps.rec_td_50, ps.pat_made, ps.fg_missed,
+               ps.sacks, ps.safeties, ps.forced_fumbles, ps.blocked_kicks,
+               ps.points_allowed,
                ps.fumbles_lost, ps.interceptions, ps.field_goals_json,
                ps.return_fumbles_lost, ps.override_points, ps.override_note
         FROM team_roster tr
@@ -355,12 +385,19 @@ def get_team_week_score(
     # Load snapshot multipliers if available — these override live values
     pony_locked = False
     snap: dict = {}
+    scoring_settings = resolve_scoring_settings(None)
     if league_id:
         snap = get_snapshot_multipliers(league_id, week)
         lconn = get_db()
-        lr = lconn.execute("SELECT pony_locked FROM leagues WHERE id=?", (league_id,)).fetchone()
+        lr = lconn.execute("SELECT pony_locked, scoring_settings FROM leagues WHERE id=?", (league_id,)).fetchone()
         lconn.close()
-        if lr: pony_locked = bool(lr["pony_locked"])
+        if lr:
+            pony_locked = bool(lr["pony_locked"])
+            try:
+                overrides = json.loads(lr["scoring_settings"]) if lr["scoring_settings"] else None
+            except Exception:
+                overrides = None
+            scoring_settings = resolve_scoring_settings(overrides)
 
     players_out = []
     total = 0.0
@@ -382,8 +419,8 @@ def get_team_week_score(
             final = base
         else:
             stats = row_to_stats(r)
-            base = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats)
-            final = calculate_fantasy_points({"pos": pos, "multiplier": mult}, stats)
+            base = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats, scoring_settings)
+            final = calculate_fantasy_points({"pos": pos, "multiplier": mult}, stats, scoring_settings)
 
         total += final
         players_out.append(
@@ -2430,6 +2467,14 @@ def manage_page(league_id: int, request: Request, user=Depends(get_current_user)
     conn2.close()
     rosters_for_move = [dict(r) for r in roster_rows]
 
+    draft_state = get_draft_state(league_id)
+    try:
+        _overrides = json.loads(league["scoring_settings"]) if league["scoring_settings"] else None
+    except Exception:
+        _overrides = None
+    scoring_settings = resolve_scoring_settings(_overrides)
+    scoring_locked = bool(draft_state.get("is_complete"))
+
     return templates.TemplateResponse(
         "manage.html",
         {
@@ -2439,7 +2484,7 @@ def manage_page(league_id: int, request: Request, user=Depends(get_current_user)
             "members": [dict(m) for m in members],
             "teams": teams_with_owners,
             "players": players,
-            "draft_state": get_draft_state(league_id),
+            "draft_state": draft_state,
             "current_week": cw,
             "multipliers_locked": multipliers_locked_for(league),
             "week_scores": week_scores,
@@ -2452,6 +2497,8 @@ def manage_page(league_id: int, request: Request, user=Depends(get_current_user)
             "snapshotted_weeks": [
                 w for w in range(1, 5) if week_has_snapshot(league_id, w)
             ],
+            "scoring_settings": scoring_settings,
+            "scoring_locked": scoring_locked,
         },
     )
 
@@ -2922,6 +2969,49 @@ def manage_settings(
     )
 
 
+@app.post("/league/{league_id}/manage/scoring")
+async def manage_scoring_settings(
+    league_id: int,
+    request: Request,
+    user=Depends(get_current_user),
+):
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    if bool(get_draft_state(league_id).get("is_complete")):
+        return RedirectResponse(
+            f"/league/{league_id}/manage?error=scoring_locked", status_code=303
+        )
+
+    from scoring import DEFAULT_SCORING
+    form = await request.form()
+    settings = {}
+    for key in DEFAULT_SCORING:
+        raw = form.get(key)
+        try:
+            settings[key] = float(raw)
+        except (TypeError, ValueError):
+            settings[key] = DEFAULT_SCORING[key]
+    conn = get_db()
+    conn.execute(
+        "UPDATE leagues SET scoring_settings=? WHERE id=?",
+        (json.dumps(settings), league_id),
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"],
+        action="SCORING_SETTINGS_UPDATE",
+        league_id=league_id,
+        details=json.dumps(settings),
+    )
+    return RedirectResponse(
+        f"/league/{league_id}/manage?msg=scoring_saved", status_code=303
+    )
+
+
 # -- Score entry --
 
 
@@ -2935,7 +3025,23 @@ def manage_score_entry(
     rushing_yards: float = Form(0),
     return_yards: float = Form(0),
     passing_yards: float = Form(0),
-    total_tds: int = Form(0),
+    passing_tds: int = Form(0),
+    other_tds: int = Form(0),
+    two_pt_conversions: int = Form(0),
+    pass_40_completions: int = Form(0),
+    pass_td_40: int = Form(0),
+    pass_td_50: int = Form(0),
+    rush_td_40: int = Form(0),
+    rush_td_50: int = Form(0),
+    rec_td_40: int = Form(0),
+    rec_td_50: int = Form(0),
+    pat_made: int = Form(0),
+    fg_missed: int = Form(0),
+    sacks: float = Form(0),
+    safeties: int = Form(0),
+    forced_fumbles: int = Form(0),
+    blocked_kicks: int = Form(0),
+    points_allowed: str = Form(""),
     fumbles_lost: int = Form(0),
     interceptions: int = Form(0),
     return_fumbles_lost: int = Form(0),
@@ -2949,6 +3055,8 @@ def manage_score_entry(
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403)
 
+    total_tds = passing_tds + other_tds
+    points_allowed_val = int(points_allowed) if points_allowed.strip() else None
     override = float(override_points) if override_points.strip() else None
     conn = get_db()
     p_row = conn.execute(
@@ -2966,13 +3074,28 @@ def manage_score_entry(
             """
         INSERT INTO player_scores (
             player_id, week, receptions, receiving_yards, rushing_yards,
-            return_yards, passing_yards, total_tds, fumbles_lost, interceptions,
+            return_yards, passing_yards, total_tds, passing_tds, other_tds,
+            two_pt_conversions, pass_40_completions,
+            pass_td_40, pass_td_50, rush_td_40, rush_td_50,
+            rec_td_40, rec_td_50, pat_made, fg_missed,
+            sacks, safeties, forced_fumbles, blocked_kicks, points_allowed,
+            fumbles_lost, interceptions,
             return_fumbles_lost, override_points, override_note
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(player_id, week) DO UPDATE SET
             receptions=excluded.receptions, receiving_yards=excluded.receiving_yards,
             rushing_yards=excluded.rushing_yards, return_yards=excluded.return_yards,
             passing_yards=excluded.passing_yards, total_tds=excluded.total_tds,
+            passing_tds=excluded.passing_tds, other_tds=excluded.other_tds,
+            two_pt_conversions=excluded.two_pt_conversions,
+            pass_40_completions=excluded.pass_40_completions,
+            pass_td_40=excluded.pass_td_40, pass_td_50=excluded.pass_td_50,
+            rush_td_40=excluded.rush_td_40, rush_td_50=excluded.rush_td_50,
+            rec_td_40=excluded.rec_td_40, rec_td_50=excluded.rec_td_50,
+            pat_made=excluded.pat_made, fg_missed=excluded.fg_missed,
+            sacks=excluded.sacks, safeties=excluded.safeties,
+            forced_fumbles=excluded.forced_fumbles, blocked_kicks=excluded.blocked_kicks,
+            points_allowed=excluded.points_allowed,
             fumbles_lost=excluded.fumbles_lost, interceptions=excluded.interceptions,
             return_fumbles_lost=excluded.return_fumbles_lost,
             override_points=excluded.override_points, override_note=excluded.override_note
@@ -2987,6 +3110,23 @@ def manage_score_entry(
             return_yards,
             passing_yards,
             total_tds,
+            passing_tds,
+            other_tds,
+            two_pt_conversions,
+            pass_40_completions,
+            pass_td_40,
+            pass_td_50,
+            rush_td_40,
+            rush_td_50,
+            rec_td_40,
+            rec_td_50,
+            pat_made,
+            fg_missed,
+            sacks,
+            safeties,
+            forced_fumbles,
+            blocked_kicks,
+            points_allowed_val,
             fumbles_lost,
             interceptions,
             return_fumbles_lost,
@@ -3155,8 +3295,8 @@ def get_team_matchup_history(team_id: int, league_id: int) -> list[dict]:
             )
             continue
 
-        my_pts = get_team_week_score(team_id, week)["total"]
-        opp_pts = get_team_week_score(opponent_id, week)["total"]
+        my_pts = get_team_week_score(team_id, week, league_id)["total"]
+        opp_pts = get_team_week_score(opponent_id, week, league_id)["total"]
         result = "W" if my_pts > opp_pts else ("L" if my_pts < opp_pts else "T")
 
         history.append(

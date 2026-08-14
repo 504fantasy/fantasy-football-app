@@ -228,6 +228,90 @@
       <button type="submit" class="btn btn-gold">Save Settings</button>
     </form>
   </div>
+
+  <div class="card mt-2">
+    <div class="card-title">🎯 Scoring Settings</div>
+    {% if scoring_locked %}
+    <div style="background:var(--s2);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;color:var(--muted)">
+      🔒 Locked — scoring can only be changed before Week 1 kicks off.
+    </div>
+    {% endif %}
+    <form method="post" action="/survivor/{{ league.id }}/manage/scoring" style="max-width:520px;">
+      <fieldset {% if scoring_locked %}disabled{% endif %} style="border:none;padding:0;margin:0">
+
+        <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:0 0 .4rem">Touchdowns</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>Points / Passing TD</label><input type="number" step="0.01" name="passing_td" value="{{ scoring_settings.passing_td }}"></div>
+          <div class="form-group"><label>Points / Rush-Rec TD</label><input type="number" step="0.01" name="other_td" value="{{ scoring_settings.other_td }}"></div>
+        </div>
+        <div style="font-size:.68rem;color:var(--muted);margin:.35rem 0 1rem">Rushing and receiving TDs share one base rate — they're tracked as a combined stat, not separately.</div>
+
+        <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:0 0 .4rem">Passing</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>Points / Pass Yard</label><input type="number" step="0.01" name="passing_yard" value="{{ scoring_settings.passing_yard }}"></div>
+          <div class="form-group"><label>2 Pt. Conversion</label><input type="number" step="0.01" name="two_pt_conversion" value="{{ scoring_settings.two_pt_conversion }}"></div>
+          <div class="form-group"><label>40+ Yd Completion Bonus</label><input type="number" step="0.01" name="pass_40_completion" value="{{ scoring_settings.pass_40_completion }}"></div>
+          <div class="form-group"><label>40+ Yd Pass TD Bonus</label><input type="number" step="0.01" name="pass_td_40_bonus" value="{{ scoring_settings.pass_td_40_bonus }}"></div>
+          <div class="form-group"><label>50+ Yd Pass TD Bonus</label><input type="number" step="0.01" name="pass_td_50_bonus" value="{{ scoring_settings.pass_td_50_bonus }}"></div>
+        </div>
+
+        <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:1.1rem 0 .4rem">Rushing</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>Points / Rush Yard</label><input type="number" step="0.01" name="rushing_yard" value="{{ scoring_settings.rushing_yard }}"></div>
+          <div class="form-group"><label>40+ Yd Rush TD Bonus</label><input type="number" step="0.01" name="rush_td_40_bonus" value="{{ scoring_settings.rush_td_40_bonus }}"></div>
+          <div class="form-group"><label>50+ Yd Rush TD Bonus</label><input type="number" step="0.01" name="rush_td_50_bonus" value="{{ scoring_settings.rush_td_50_bonus }}"></div>
+        </div>
+
+        <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:1.1rem 0 .4rem">Receiving</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>Points / Reception</label><input type="number" step="0.01" name="reception" value="{{ scoring_settings.reception }}"></div>
+          <div class="form-group"><label>Points / Rec Yard</label><input type="number" step="0.01" name="receiving_yard" value="{{ scoring_settings.receiving_yard }}"></div>
+          <div class="form-group"><label>40+ Yd Reception TD Bonus</label><input type="number" step="0.01" name="rec_td_40_bonus" value="{{ scoring_settings.rec_td_40_bonus }}"></div>
+          <div class="form-group"><label>50+ Yd Reception TD Bonus</label><input type="number" step="0.01" name="rec_td_50_bonus" value="{{ scoring_settings.rec_td_50_bonus }}"></div>
+        </div>
+
+        <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:1.1rem 0 .4rem">Other / Turnovers</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>Points / Return Yard</label><input type="number" step="0.01" name="return_yard" value="{{ scoring_settings.return_yard }}"></div>
+          <div class="form-group"><label>Points / Fumble Lost</label><input type="number" step="0.01" name="fumble_lost" value="{{ scoring_settings.fumble_lost }}"></div>
+          <div class="form-group"><label>Points / Interception</label><input type="number" step="0.01" name="interception" value="{{ scoring_settings.interception }}"></div>
+        </div>
+
+        <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:1.1rem 0 .4rem">Kicking</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>Pts / FG Yard</label><input type="number" step="0.01" name="fg_yard" value="{{ scoring_settings.fg_yard }}"></div>
+          <div class="form-group"><label>PAT Made</label><input type="number" step="0.01" name="pat_made" value="{{ scoring_settings.pat_made }}"></div>
+          <div class="form-group"><label>FG Missed</label><input type="number" step="0.01" name="fg_missed" value="{{ scoring_settings.fg_missed }}"></div>
+        </div>
+
+        <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:1.1rem 0 .4rem">Defense / Special Teams</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>Pts / Return Yard</label><input type="number" step="0.01" name="def_return_yard" value="{{ scoring_settings.def_return_yard }}"></div>
+          <div class="form-group"><label>Pts / Fumble Lost</label><input type="number" step="0.01" name="def_fumble_lost" value="{{ scoring_settings.def_fumble_lost }}"></div>
+          <div class="form-group"><label>Sacks</label><input type="number" step="0.01" name="sack" value="{{ scoring_settings.sack }}"></div>
+          <div class="form-group"><label>Safety</label><input type="number" step="0.01" name="safety" value="{{ scoring_settings.safety }}"></div>
+          <div class="form-group"><label>Forced Fumble</label><input type="number" step="0.01" name="forced_fumble" value="{{ scoring_settings.forced_fumble }}"></div>
+          <div class="form-group"><label>Blocked Kick</label><input type="number" step="0.01" name="blocked_kick" value="{{ scoring_settings.blocked_kick }}"></div>
+        </div>
+
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:1rem 0 .4rem">Points Allowed</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
+          <div class="form-group"><label>0 Points</label><input type="number" step="0.01" name="points_allowed_0" value="{{ scoring_settings.points_allowed_0 }}"></div>
+          <div class="form-group"><label>1–6 Points</label><input type="number" step="0.01" name="points_allowed_1_6" value="{{ scoring_settings.points_allowed_1_6 }}"></div>
+          <div class="form-group"><label>7–13 Points</label><input type="number" step="0.01" name="points_allowed_7_13" value="{{ scoring_settings.points_allowed_7_13 }}"></div>
+          <div class="form-group"><label>14–20 Points</label><input type="number" step="0.01" name="points_allowed_14_20" value="{{ scoring_settings.points_allowed_14_20 }}"></div>
+          <div class="form-group"><label>21–27 Points</label><input type="number" step="0.01" name="points_allowed_21_27" value="{{ scoring_settings.points_allowed_21_27 }}"></div>
+          <div class="form-group"><label>28–34 Points</label><input type="number" step="0.01" name="points_allowed_28_34" value="{{ scoring_settings.points_allowed_28_34 }}"></div>
+          <div class="form-group"><label>35+ Points</label><input type="number" step="0.01" name="points_allowed_35_plus" value="{{ scoring_settings.points_allowed_35_plus }}"></div>
+        </div>
+
+        <div style="font-size:.75rem;color:var(--muted);margin:.75rem 0 .75rem">
+          Fumble/interception/defense-fumble/FG-missed values are point penalties — enter them as negative numbers (e.g. -2). A 50+ yard TD counts only toward the 50+ bonus, not also the 40+ bonus.
+        </div>
+        <button type="submit" class="btn btn-gold">Save Scoring</button>
+      </fieldset>
+    </form>
+  </div>
 </div>
 
 <!-- MEMBERS -->
@@ -278,9 +362,25 @@
         <div class="form-group"><label>Rush Yards</label><input type="number" name="rushing_yards" value="0" step="0.5"></div>
         <div class="form-group"><label>Pass Yards</label><input type="number" name="passing_yards" value="0" step="0.5"></div>
         <div class="form-group"><label>Return Yards</label><input type="number" name="return_yards" value="0" step="0.5"></div>
-        <div class="form-group"><label>Total TDs</label><input type="number" name="total_tds" value="0"></div>
+        <div class="form-group"><label>Pass TDs</label><input type="number" name="passing_tds" value="0"></div>
+        <div class="form-group"><label>Rush/Rec TDs</label><input type="number" name="other_tds" value="0"></div>
         <div class="form-group"><label>Fumbles Lost</label><input type="number" name="fumbles_lost" value="0"></div>
         <div class="form-group"><label>INTs Thrown</label><input type="number" name="interceptions" value="0"></div>
+        <div class="form-group"><label>2 Pt Conv</label><input type="number" name="two_pt_conversions" value="0"></div>
+        <div class="form-group"><label>40+ Yd Compl</label><input type="number" name="pass_40_completions" value="0"></div>
+        <div class="form-group"><label>40+ Pass TD</label><input type="number" name="pass_td_40" value="0"></div>
+        <div class="form-group"><label>50+ Pass TD</label><input type="number" name="pass_td_50" value="0"></div>
+        <div class="form-group"><label>40+ Rush TD</label><input type="number" name="rush_td_40" value="0"></div>
+        <div class="form-group"><label>50+ Rush TD</label><input type="number" name="rush_td_50" value="0"></div>
+        <div class="form-group"><label>40+ Rec TD</label><input type="number" name="rec_td_40" value="0"></div>
+        <div class="form-group"><label>50+ Rec TD</label><input type="number" name="rec_td_50" value="0"></div>
+        <div class="form-group"><label>PAT Made</label><input type="number" name="pat_made" value="0"></div>
+        <div class="form-group"><label>FG Missed</label><input type="number" name="fg_missed" value="0"></div>
+        <div class="form-group"><label>Sacks (DST)</label><input type="number" name="sacks" value="0" step="0.5"></div>
+        <div class="form-group"><label>Safeties (DST)</label><input type="number" name="safeties" value="0"></div>
+        <div class="form-group"><label>Forced Fum (DST)</label><input type="number" name="forced_fumbles" value="0"></div>
+        <div class="form-group"><label>Blocked Kicks (DST)</label><input type="number" name="blocked_kicks" value="0"></div>
+        <div class="form-group"><label>Points Allowed (DST)</label><input type="number" name="points_allowed" placeholder="e.g. 17"></div>
         <div class="form-group"><label>Override Pts</label><input type="number" name="override_points" value="" step="0.01" placeholder="Optional"></div>
         <div class="form-group"><label>Override Note</label><input type="text" name="override_note" placeholder="Reason"></div>
       </div>

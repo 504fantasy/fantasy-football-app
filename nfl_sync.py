@@ -270,10 +270,9 @@ def fetch_weekly_stats(season: int = CURRENT_SEASON,
             except (TypeError, ValueError):
                 return 0.0
 
-        total_tds = (
-            _f("receiving_tds") + _f("rushing_tds") +
-            _f("passing_tds")   + _f("special_teams_tds")
-        )
+        passing_tds = _f("passing_tds")
+        other_tds = _f("receiving_tds") + _f("rushing_tds") + _f("special_teams_tds")
+        total_tds = passing_tds + other_tds
         fumbles_lost = (
             _f("sack_fumbles_lost") +
             _f("receiving_fumbles_lost") +
@@ -293,6 +292,8 @@ def fetch_weekly_stats(season: int = CURRENT_SEASON,
             "return_yards":  0.0,   # filled in by PBP pass if needed
             "passing_yards": _f("passing_yards"),
             "total_tds":     total_tds,
+            "passing_tds":   passing_tds,
+            "other_tds":     other_tds,
             "fumbles_lost":  fumbles_lost,
             "interceptions": _f("interceptions"),
             "field_goals_json": "[]",   # filled in for kickers below
@@ -350,6 +351,178 @@ def fetch_kicker_fg_data(season: int = CURRENT_SEASON,
     except Exception as e:
         logger.error(f"Error processing PBP FG data: {e}")
         return {}
+
+
+def fetch_pbp_bonus_stats(season: int = CURRENT_SEASON,
+                           week: Optional[int] = None) -> tuple[dict, dict]:
+    """
+    Derive bonus/defense stats from play-by-play data that aren't in the
+    per-player weekly aggregate table:
+      - 2pt conversions, 40+ yard completions, 40+/50+ yard TD bonuses
+        (passing/rushing/receiving), PAT made, FG missed — per player.
+      - Sacks, safeties, forced fumbles, blocked kicks — per defensive team.
+    50+ yard bonuses take priority over 40+ (a play scores one or the other,
+    never both, to avoid double-counting a single big play).
+    Returns (player_bonus, team_bonus), each keyed by (id, week) -> dict of
+    stat_name -> count.
+    """
+    nfl = _import_nfl()
+    player_bonus: dict[tuple, dict] = {}
+    team_bonus: dict[tuple, dict] = {}
+
+    def _bump(store: dict, key: tuple, field: str, amt=1):
+        store.setdefault(key, {})
+        store[key][field] = store[key].get(field, 0) + amt
+
+    try:
+        df = nfl.import_pbp_data([season])
+    except Exception as e:
+        logger.error(f"Failed to fetch PBP data for bonus stats: {e}")
+        return player_bonus, team_bonus
+
+    if week:
+        df = df[df["week"] == week]
+
+    for _, row in df.iterrows():
+        w = row.get("week")
+        if not w:
+            continue
+        try:
+            w = int(w)
+        except (TypeError, ValueError):
+            continue
+
+        yards = row.get("yards_gained", 0)
+        try:
+            yards = float(yards) if yards == yards else 0.0  # NaN check
+        except (TypeError, ValueError):
+            yards = 0.0
+
+        def _pid(col):
+            v = row.get(col)
+            if v is None:
+                return None
+            try:
+                if v != v:  # NaN check — NaN is the only value where this is True
+                    return None
+            except Exception:
+                pass
+            s = str(v).strip()
+            return s if s and s.lower() != "nan" else None
+
+        # -- 40+ yard completion bonus (passer) --
+        if row.get("complete_pass") == 1 and yards >= 40:
+            passer = _pid("passer_player_id")
+            if passer:
+                _bump(player_bonus, (passer, w), "pass_40_completions")
+
+        # -- Pass TD distance bonus (passer + receiver) --
+        if row.get("pass_touchdown") == 1:
+            passer = _pid("passer_player_id")
+            receiver = _pid("receiver_player_id")
+            if yards >= 50:
+                if passer:
+                    _bump(player_bonus, (passer, w), "pass_td_50")
+                if receiver:
+                    _bump(player_bonus, (receiver, w), "rec_td_50")
+            elif yards >= 40:
+                if passer:
+                    _bump(player_bonus, (passer, w), "pass_td_40")
+                if receiver:
+                    _bump(player_bonus, (receiver, w), "rec_td_40")
+
+        # -- Rush TD distance bonus --
+        if row.get("rush_touchdown") == 1:
+            rusher = _pid("rusher_player_id")
+            if rusher:
+                if yards >= 50:
+                    _bump(player_bonus, (rusher, w), "rush_td_50")
+                elif yards >= 40:
+                    _bump(player_bonus, (rusher, w), "rush_td_40")
+
+        # -- 2pt conversions (credit whichever player(s) were involved) --
+        if row.get("two_point_conv_result") == "success":
+            for col in ("passer_player_id", "rusher_player_id", "receiver_player_id"):
+                pid = _pid(col)
+                if pid:
+                    _bump(player_bonus, (pid, w), "two_pt_conversions")
+
+        # -- Kicking: PAT made, FG missed --
+        if row.get("extra_point_result") == "good":
+            pid = _pid("kicker_player_id")
+            if pid:
+                _bump(player_bonus, (pid, w), "pat_made")
+        if row.get("field_goal_result") == "missed":
+            pid = _pid("kicker_player_id")
+            if pid:
+                _bump(player_bonus, (pid, w), "fg_missed")
+
+        # -- Defense (team-level) --
+        _dt = row.get("defteam")
+        defteam_raw = "" if _dt is None or _dt != _dt else str(_dt).upper().strip()
+        if defteam_raw and defteam_raw.lower() != "nan":
+            defteam = TEAM_MAP.get(defteam_raw, defteam_raw)
+            if row.get("sack") == 1:
+                _bump(team_bonus, (defteam, w), "sacks")
+            if row.get("safety") == 1:
+                _bump(team_bonus, (defteam, w), "safeties")
+            if row.get("fumble_forced") == 1:
+                _bump(team_bonus, (defteam, w), "forced_fumbles")
+            if row.get("field_goal_result") == "blocked" or row.get("punt_blocked") == 1:
+                _bump(team_bonus, (defteam, w), "blocked_kicks")
+
+    return player_bonus, team_bonus
+
+
+def fetch_points_allowed(season: int, week: int, season_type: int = 2) -> dict:
+    """
+    Fetch each team's points allowed for a given week from ESPN's public
+    scoreboard (completed games only). Returns {team_abbr: points_allowed}.
+    Uses curl rather than urllib — ESPN's bot protection blocks urllib's
+    TLS fingerprint even with a browser User-Agent header, but plain curl
+    gets through fine.
+    """
+    import subprocess
+    url = (
+        f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        f"?week={week}&seasontype={season_type}&dates={season}"
+    )
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "8", url],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0 or not result.stdout:
+            return {}
+        data = json.loads(result.stdout)
+    except Exception as e:
+        logger.error(f"Failed to fetch points-allowed data: {e}")
+        return {}
+
+    points_allowed: dict = {}
+    for event in data.get("events", []):
+        status = event.get("status", {}).get("type", {})
+        if not status.get("completed"):
+            continue
+        comps = event.get("competitions", [{}])[0].get("competitors", [])
+        if len(comps) != 2:
+            continue
+        team_scores = {}
+        for c in comps:
+            abbr = str(c.get("team", {}).get("abbreviation", "")).upper()
+            try:
+                score = int(c.get("score", 0))
+            except (TypeError, ValueError):
+                score = 0
+            if abbr:
+                team_scores[TEAM_MAP.get(abbr, abbr)] = score
+        teams = list(team_scores.keys())
+        if len(teams) == 2:
+            t1, t2 = teams
+            points_allowed[t1] = team_scores[t2]
+            points_allowed[t2] = team_scores[t1]
+
+    return points_allowed
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -456,6 +629,13 @@ def sync_week(league_id: int, week: int,
 
     weekly  = fetch_weekly_stats(season, raw_nfl_week)
     fg_data = fetch_kicker_fg_data(season, raw_nfl_week)
+    player_bonus, team_bonus = fetch_pbp_bonus_stats(season, raw_nfl_week)
+    # Mirrors main.py's PLAYOFF_WEEK_MAP (kept local to avoid a circular import,
+    # since main.py imports from this module, not the other way around).
+    _playoff_espn_week = {1: 1, 2: 2, 3: 3, 4: 5}
+    points_allowed_map = fetch_points_allowed(
+        season, _playoff_espn_week.get(fantasy_week, fantasy_week), season_type=3
+    )
 
     if not weekly:
         return {"updated": 0, "skipped": 0, "errors": 1,
@@ -494,6 +674,8 @@ def sync_week(league_id: int, week: int,
             fg_key  = (row["player_id_nfl"], week)
             fg_json = fg_data.get(fg_key, "[]")
 
+        bonus = player_bonus.get((row["player_id_nfl"], raw_nfl_week), {})
+
         try:
             # Upsert — update if exists, insert if not
             # Check if override_points is set — don't overwrite manual overrides
@@ -509,12 +691,22 @@ def sync_week(league_id: int, week: int,
                     UPDATE player_scores SET
                         receptions=?, receiving_yards=?, rushing_yards=?,
                         return_yards=?, passing_yards=?, total_tds=?,
+                        passing_tds=?, other_tds=?,
+                        two_pt_conversions=?, pass_40_completions=?,
+                        pass_td_40=?, pass_td_50=?, rush_td_40=?, rush_td_50=?,
+                        rec_td_40=?, rec_td_50=?, pat_made=?, fg_missed=?,
                         fumbles_lost=?, interceptions=?, field_goals_json=?,
                         return_fumbles_lost=0
                     WHERE player_id=? AND week=?
                 """), (
                     row["receptions"], row["receiving_yards"], row["rushing_yards"],
                     row["return_yards"], row["passing_yards"], row["total_tds"],
+                    row["passing_tds"], row["other_tds"],
+                    bonus.get("two_pt_conversions", 0), bonus.get("pass_40_completions", 0),
+                    bonus.get("pass_td_40", 0), bonus.get("pass_td_50", 0),
+                    bonus.get("rush_td_40", 0), bonus.get("rush_td_50", 0),
+                    bonus.get("rec_td_40", 0), bonus.get("rec_td_50", 0),
+                    bonus.get("pat_made", 0), bonus.get("fg_missed", 0),
                     row["fumbles_lost"], row["interceptions"], fg_json,
                     player_db_id, fantasy_week
                 ))
@@ -522,19 +714,78 @@ def sync_week(league_id: int, week: int,
                 conn.execute(adapt_sql("""
                     INSERT INTO player_scores (
                         player_id, week, receptions, receiving_yards, rushing_yards,
-                        return_yards, passing_yards, total_tds, fumbles_lost,
-                        interceptions, field_goals_json, return_fumbles_lost
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,0)
+                        return_yards, passing_yards, total_tds, passing_tds, other_tds,
+                        two_pt_conversions, pass_40_completions,
+                        pass_td_40, pass_td_50, rush_td_40, rush_td_50,
+                        rec_td_40, rec_td_50, pat_made, fg_missed,
+                        fumbles_lost, interceptions, field_goals_json, return_fumbles_lost
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)
                 """), (
                     player_db_id, fantasy_week,
                     row["receptions"], row["receiving_yards"], row["rushing_yards"],
                     row["return_yards"], row["passing_yards"], row["total_tds"],
+                    row["passing_tds"], row["other_tds"],
+                    bonus.get("two_pt_conversions", 0), bonus.get("pass_40_completions", 0),
+                    bonus.get("pass_td_40", 0), bonus.get("pass_td_50", 0),
+                    bonus.get("rush_td_40", 0), bonus.get("rush_td_50", 0),
+                    bonus.get("rec_td_40", 0), bonus.get("rec_td_50", 0),
+                    bonus.get("pat_made", 0), bonus.get("fg_missed", 0),
                     row["fumbles_lost"], row["interceptions"], fg_json
                 ))
             updated += 1
 
         except Exception as e:
             logger.error(f"Error upserting player {player_db_id} fantasy_week {fantasy_week}: {e}")
+            errors += 1
+
+    # -- DST auto-sync: sacks, safeties, forced fumbles, blocked kicks, and
+    # points allowed. This previously had no automated sync at all — DST
+    # scoring depended entirely on manual entry. Return yards / return
+    # fumbles lost remain manual-only (not covered by PBP defteam data here),
+    # so this only touches the new automated columns. --
+    dst_rows = conn.execute(adapt_sql(
+        "SELECT id, nfl_team FROM players WHERE league_id=? AND position='DST'"
+    ), (league_id,)).fetchall()
+
+    for dst in dst_rows:
+        team = dst["nfl_team"]
+        tb = team_bonus.get((team, raw_nfl_week), {})
+        pa = points_allowed_map.get(team)
+        try:
+            existing = conn.execute(adapt_sql(
+                "SELECT id, override_points FROM player_scores WHERE player_id=? AND week=?"
+            ), (dst["id"], fantasy_week)).fetchone()
+
+            if existing:
+                if existing["override_points"] is not None:
+                    skipped += 1
+                    continue
+                conn.execute(adapt_sql("""
+                    UPDATE player_scores SET
+                        sacks=?, safeties=?, forced_fumbles=?, blocked_kicks=?,
+                        points_allowed=?
+                    WHERE player_id=? AND week=?
+                """), (
+                    tb.get("sacks", 0), tb.get("safeties", 0),
+                    tb.get("forced_fumbles", 0), tb.get("blocked_kicks", 0),
+                    pa,
+                    dst["id"], fantasy_week
+                ))
+            else:
+                conn.execute(adapt_sql("""
+                    INSERT INTO player_scores (
+                        player_id, week, sacks, safeties, forced_fumbles,
+                        blocked_kicks, points_allowed
+                    ) VALUES (?,?,?,?,?,?,?)
+                """), (
+                    dst["id"], fantasy_week,
+                    tb.get("sacks", 0), tb.get("safeties", 0),
+                    tb.get("forced_fumbles", 0), tb.get("blocked_kicks", 0),
+                    pa
+                ))
+            updated += 1
+        except Exception as e:
+            logger.error(f"Error upserting DST {dst['id']} fantasy_week {fantasy_week}: {e}")
             errors += 1
 
     conn.commit()

@@ -65,7 +65,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 # Reuse scoring engine and NFL sync from the main game
-from scoring import calculate_fantasy_points
+from scoring import calculate_fantasy_points, resolve_scoring_settings
 from survivor_db import (
     get_league_slots,
     NFL_REGULAR_SEASON_WEEKS,
@@ -597,7 +597,7 @@ def _row_to_stats(row: dict) -> dict:
         fgs = json.loads(row.get("field_goals_json") or "[]")
     except Exception:
         fgs = []
-    return {
+    stats = {
         "receptions": row.get("receptions", 0) or 0,
         "receiving_yards": row.get("receiving_yards", 0) or 0,
         "rushing_yards": row.get("rushing_yards", 0) or 0,
@@ -609,6 +609,28 @@ def _row_to_stats(row: dict) -> dict:
         "field_goals_made": fgs,
         "return_fumbles_lost": row.get("return_fumbles_lost", 0) or 0,
     }
+    # Only include the split TD columns when actually populated — omitting
+    # them lets scoring.py fall back to the legacy total_tds field for rows
+    # written before the passing/other split existed.
+    if row.get("passing_tds") is not None or row.get("other_tds") is not None:
+        stats["passing_tds"] = row.get("passing_tds", 0) or 0
+        stats["other_tds"] = row.get("other_tds", 0) or 0
+    stats["two_pt_conversions"] = row.get("two_pt_conversions", 0) or 0
+    stats["pass_40_completions"] = row.get("pass_40_completions", 0) or 0
+    stats["pass_td_40"] = row.get("pass_td_40", 0) or 0
+    stats["pass_td_50"] = row.get("pass_td_50", 0) or 0
+    stats["rush_td_40"] = row.get("rush_td_40", 0) or 0
+    stats["rush_td_50"] = row.get("rush_td_50", 0) or 0
+    stats["rec_td_40"] = row.get("rec_td_40", 0) or 0
+    stats["rec_td_50"] = row.get("rec_td_50", 0) or 0
+    stats["pat_made"] = row.get("pat_made", 0) or 0
+    stats["fg_missed"] = row.get("fg_missed", 0) or 0
+    stats["sacks"] = row.get("sacks", 0) or 0
+    stats["safeties"] = row.get("safeties", 0) or 0
+    stats["forced_fumbles"] = row.get("forced_fumbles", 0) or 0
+    stats["blocked_kicks"] = row.get("blocked_kicks", 0) or 0
+    stats["points_allowed"] = row.get("points_allowed")
+    return stats
 
 
 def get_team_week_score(team_id: int, week: int) -> dict:
@@ -623,6 +645,12 @@ def get_team_week_score(team_id: int, week: int) -> dict:
                p.id as player_id, p.name, p.nfl_team, p.position as player_pos, p.headshot_url,
                ps.receptions, ps.receiving_yards, ps.rushing_yards,
                ps.return_yards, ps.passing_yards, ps.total_tds,
+               ps.passing_tds, ps.other_tds,
+               ps.two_pt_conversions, ps.pass_40_completions,
+               ps.pass_td_40, ps.pass_td_50, ps.rush_td_40, ps.rush_td_50,
+               ps.rec_td_40, ps.rec_td_50, ps.pat_made, ps.fg_missed,
+               ps.sacks, ps.safeties, ps.forced_fumbles, ps.blocked_kicks,
+               ps.points_allowed,
                ps.fumbles_lost, ps.interceptions, ps.field_goals_json,
                ps.return_fumbles_lost, ps.override_points, ps.override_note
         FROM survivor_lineups sl
@@ -633,6 +661,18 @@ def get_team_week_score(team_id: int, week: int) -> dict:
     """,
         (week, team_id, week),
     ).fetchall()
+
+    scoring_settings = resolve_scoring_settings(None)
+    trow = conn.execute("SELECT league_id FROM survivor_teams WHERE id=?", (team_id,)).fetchone()
+    if trow:
+        lrow = conn.execute(
+            "SELECT scoring_settings FROM survivor_leagues WHERE id=?", (trow["league_id"],)
+        ).fetchone()
+        if lrow and lrow["scoring_settings"]:
+            try:
+                scoring_settings = resolve_scoring_settings(json.loads(lrow["scoring_settings"]))
+            except Exception:
+                pass
     conn.close()
 
     players_out = []
@@ -644,7 +684,7 @@ def get_team_week_score(team_id: int, week: int) -> dict:
             pts = float(r["override_points"])
         else:
             stats = _row_to_stats(r)
-            pts = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats)
+            pts = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats, scoring_settings)
         total += pts
         players_out.append({**r, "final_points": round(pts, 2)})
 
@@ -1326,6 +1366,23 @@ def scores_page(league_id: int, request: Request, week: int = None):
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def _survivor_season_locked(league_id: int) -> bool:
+    """True once the first game of Week 1 has kicked off — scoring settings
+    can no longer be changed after this point."""
+    from datetime import datetime, timezone
+    conn = get_db()
+    sched = conn.execute(
+        "SELECT kickoff_utc FROM survivor_game_schedule "
+        "WHERE league_id=? AND week=1 ORDER BY kickoff_utc ASC LIMIT 1",
+        (league_id,)
+    ).fetchone()
+    conn.close()
+    if not sched:
+        return False
+    first_ko = datetime.fromisoformat(sched["kickoff_utc"]).replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) >= first_ko
+
+
 @app.get("/survivor/{league_id}/manage", response_class=HTMLResponse)
 def manage_page(league_id: int, request: Request):
     user = get_current_user(request)
@@ -1399,6 +1456,13 @@ def manage_page(league_id: int, request: Request):
         }
     conn2.close()
 
+    try:
+        _overrides = json.loads(league["scoring_settings"]) if league["scoring_settings"] else None
+    except Exception:
+        _overrides = None
+    scoring_settings = resolve_scoring_settings(_overrides)
+    scoring_locked = _survivor_season_locked(league_id)
+
     return templates.TemplateResponse(
         "manage.html",
         {
@@ -1420,11 +1484,56 @@ def manage_page(league_id: int, request: Request):
             "required_positions": REQUIRED_POSITIONS,
             "current_nfl_week": current_nfl_week(),
             "my_team": get_user_team_in_league(league_id, user["id"]),
+            "scoring_settings": scoring_settings,
+            "scoring_locked": scoring_locked,
         },
     )
 
 
 # ── League settings ──────────────────────────────────────────────────────────
+
+
+@app.post("/survivor/{league_id}/manage/scoring")
+async def manage_scoring_settings(
+    league_id: int,
+    request: Request,
+):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    if _survivor_season_locked(league_id):
+        return RedirectResponse(
+            f"/survivor/{league_id}/manage?error=scoring_locked", status_code=303
+        )
+
+    from scoring import DEFAULT_SCORING
+    form = await request.form()
+    settings = {}
+    for key in DEFAULT_SCORING:
+        raw = form.get(key)
+        try:
+            settings[key] = float(raw)
+        except (TypeError, ValueError):
+            settings[key] = DEFAULT_SCORING[key]
+    conn = get_db()
+    conn.execute(
+        "UPDATE survivor_leagues SET scoring_settings=? WHERE id=?",
+        (json.dumps(settings), league_id),
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"],
+        action="SCORING_SETTINGS_UPDATE",
+        league_id=league_id,
+        details=json.dumps(settings),
+    )
+    return RedirectResponse(
+        f"/survivor/{league_id}/manage?msg=scoring_saved", status_code=303
+    )
 
 
 @app.post("/survivor/{league_id}/manage/team/payment")
@@ -1778,7 +1887,23 @@ def manage_score_entry(
     rushing_yards: float = Form(0),
     return_yards: float = Form(0),
     passing_yards: float = Form(0),
-    total_tds: int = Form(0),
+    passing_tds: int = Form(0),
+    other_tds: int = Form(0),
+    two_pt_conversions: int = Form(0),
+    pass_40_completions: int = Form(0),
+    pass_td_40: int = Form(0),
+    pass_td_50: int = Form(0),
+    rush_td_40: int = Form(0),
+    rush_td_50: int = Form(0),
+    rec_td_40: int = Form(0),
+    rec_td_50: int = Form(0),
+    pat_made: int = Form(0),
+    fg_missed: int = Form(0),
+    sacks: float = Form(0),
+    safeties: int = Form(0),
+    forced_fumbles: int = Form(0),
+    blocked_kicks: int = Form(0),
+    points_allowed: str = Form(""),
     fumbles_lost: int = Form(0),
     interceptions: int = Form(0),
     return_fumbles_lost: int = Form(0),
@@ -1792,6 +1917,8 @@ def manage_score_entry(
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403)
 
+    total_tds = passing_tds + other_tds
+    points_allowed_val = int(points_allowed) if points_allowed.strip() else None
     override = float(override_points) if override_points.strip() else None
     conn = get_db()
     p_row = conn.execute(
@@ -1810,9 +1937,14 @@ def manage_score_entry(
             """
         INSERT INTO survivor_player_scores (
             player_id, week, receptions, receiving_yards, rushing_yards,
-            return_yards, passing_yards, total_tds, fumbles_lost, interceptions,
+            return_yards, passing_yards, total_tds, passing_tds, other_tds,
+            two_pt_conversions, pass_40_completions,
+            pass_td_40, pass_td_50, rush_td_40, rush_td_50,
+            rec_td_40, rec_td_50, pat_made, fg_missed,
+            sacks, safeties, forced_fumbles, blocked_kicks, points_allowed,
+            fumbles_lost, interceptions,
             return_fumbles_lost, override_points, override_note
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(player_id, week) DO UPDATE SET
             receptions=excluded.receptions,
             receiving_yards=excluded.receiving_yards,
@@ -1820,6 +1952,17 @@ def manage_score_entry(
             return_yards=excluded.return_yards,
             passing_yards=excluded.passing_yards,
             total_tds=excluded.total_tds,
+            passing_tds=excluded.passing_tds,
+            other_tds=excluded.other_tds,
+            two_pt_conversions=excluded.two_pt_conversions,
+            pass_40_completions=excluded.pass_40_completions,
+            pass_td_40=excluded.pass_td_40, pass_td_50=excluded.pass_td_50,
+            rush_td_40=excluded.rush_td_40, rush_td_50=excluded.rush_td_50,
+            rec_td_40=excluded.rec_td_40, rec_td_50=excluded.rec_td_50,
+            pat_made=excluded.pat_made, fg_missed=excluded.fg_missed,
+            sacks=excluded.sacks, safeties=excluded.safeties,
+            forced_fumbles=excluded.forced_fumbles, blocked_kicks=excluded.blocked_kicks,
+            points_allowed=excluded.points_allowed,
             fumbles_lost=excluded.fumbles_lost,
             interceptions=excluded.interceptions,
             return_fumbles_lost=excluded.return_fumbles_lost,
@@ -1836,6 +1979,23 @@ def manage_score_entry(
             return_yards,
             passing_yards,
             total_tds,
+            passing_tds,
+            other_tds,
+            two_pt_conversions,
+            pass_40_completions,
+            pass_td_40,
+            pass_td_50,
+            rush_td_40,
+            rush_td_50,
+            rec_td_40,
+            rec_td_50,
+            pat_made,
+            fg_missed,
+            sacks,
+            safeties,
+            forced_fumbles,
+            blocked_kicks,
+            points_allowed_val,
             fumbles_lost,
             interceptions,
             return_fumbles_lost,
@@ -1972,10 +2132,14 @@ def sync_scores_now(league_id: int, request: Request, week: int = Form(...)):
                     """
                 INSERT INTO survivor_player_scores (
                     player_id, week, receptions, receiving_yards, rushing_yards,
-                    return_yards, passing_yards, total_tds, fumbles_lost,
-                    interceptions, field_goals_json, return_fumbles_lost,
+                    return_yards, passing_yards, total_tds, passing_tds, other_tds,
+                    two_pt_conversions, pass_40_completions,
+                    pass_td_40, pass_td_50, rush_td_40, rush_td_50,
+                    rec_td_40, rec_td_50, pat_made, fg_missed,
+                    sacks, safeties, forced_fumbles, blocked_kicks, points_allowed,
+                    fumbles_lost, interceptions, field_goals_json, return_fumbles_lost,
                     override_points, override_note
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(player_id, week) DO UPDATE SET
                     receptions=excluded.receptions,
                     receiving_yards=excluded.receiving_yards,
@@ -1983,6 +2147,17 @@ def sync_scores_now(league_id: int, request: Request, week: int = Form(...)):
                     return_yards=excluded.return_yards,
                     passing_yards=excluded.passing_yards,
                     total_tds=excluded.total_tds,
+                    passing_tds=excluded.passing_tds,
+                    other_tds=excluded.other_tds,
+                    two_pt_conversions=excluded.two_pt_conversions,
+                    pass_40_completions=excluded.pass_40_completions,
+                    pass_td_40=excluded.pass_td_40, pass_td_50=excluded.pass_td_50,
+                    rush_td_40=excluded.rush_td_40, rush_td_50=excluded.rush_td_50,
+                    rec_td_40=excluded.rec_td_40, rec_td_50=excluded.rec_td_50,
+                    pat_made=excluded.pat_made, fg_missed=excluded.fg_missed,
+                    sacks=excluded.sacks, safeties=excluded.safeties,
+                    forced_fumbles=excluded.forced_fumbles, blocked_kicks=excluded.blocked_kicks,
+                    points_allowed=excluded.points_allowed,
                     fumbles_lost=excluded.fumbles_lost,
                     interceptions=excluded.interceptions,
                     field_goals_json=excluded.field_goals_json,
@@ -1998,6 +2173,23 @@ def sync_scores_now(league_id: int, request: Request, week: int = Form(...)):
                     mrow["return_yards"],
                     mrow["passing_yards"],
                     mrow["total_tds"],
+                    mrow["passing_tds"] if "passing_tds" in mrow.keys() else None,
+                    mrow["other_tds"] if "other_tds" in mrow.keys() else None,
+                    mrow["two_pt_conversions"] if "two_pt_conversions" in mrow.keys() else 0,
+                    mrow["pass_40_completions"] if "pass_40_completions" in mrow.keys() else 0,
+                    mrow["pass_td_40"] if "pass_td_40" in mrow.keys() else 0,
+                    mrow["pass_td_50"] if "pass_td_50" in mrow.keys() else 0,
+                    mrow["rush_td_40"] if "rush_td_40" in mrow.keys() else 0,
+                    mrow["rush_td_50"] if "rush_td_50" in mrow.keys() else 0,
+                    mrow["rec_td_40"] if "rec_td_40" in mrow.keys() else 0,
+                    mrow["rec_td_50"] if "rec_td_50" in mrow.keys() else 0,
+                    mrow["pat_made"] if "pat_made" in mrow.keys() else 0,
+                    mrow["fg_missed"] if "fg_missed" in mrow.keys() else 0,
+                    mrow["sacks"] if "sacks" in mrow.keys() else 0,
+                    mrow["safeties"] if "safeties" in mrow.keys() else 0,
+                    mrow["forced_fumbles"] if "forced_fumbles" in mrow.keys() else 0,
+                    mrow["blocked_kicks"] if "blocked_kicks" in mrow.keys() else 0,
+                    mrow["points_allowed"] if "points_allowed" in mrow.keys() else None,
                     mrow["fumbles_lost"],
                     mrow["interceptions"],
                     mrow["field_goals_json"] or "[]",
