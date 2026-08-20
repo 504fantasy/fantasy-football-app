@@ -2489,6 +2489,7 @@ def manage_page(league_id: int, request: Request, user=Depends(get_current_user)
             "multipliers_locked": multipliers_locked_for(league),
             "week_scores": week_scores,
             "msg": request.query_params.get("msg", ""),
+            "error": request.query_params.get("error", ""),
             "is_commissioner": True,
             "sync_status": sync_scheduler.last_status(league_id),
             "current_nfl_week": current_nfl_week(),
@@ -2980,13 +2981,15 @@ async def manage_scoring_settings(
     league = league_ctx(league_id, user)
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403)
-    if bool(get_draft_state(league_id).get("is_complete")):
-        return RedirectResponse(
-            f"/league/{league_id}/manage?error=scoring_locked", status_code=303
-        )
 
     from scoring import DEFAULT_SCORING
     form = await request.form()
+
+    if bool(get_draft_state(league_id).get("is_complete")) and not form.get("confirm_override"):
+        return RedirectResponse(
+            f"/league/{league_id}/manage?error=scoring_needs_confirm", status_code=303
+        )
+
     settings = {}
     for key in DEFAULT_SCORING:
         raw = form.get(key)
@@ -3001,11 +3004,12 @@ async def manage_scoring_settings(
     )
     conn.commit()
     conn.close()
+    is_override = bool(get_draft_state(league_id).get("is_complete"))
     write_audit(
         actor=user["username"],
         action="SCORING_SETTINGS_UPDATE",
         league_id=league_id,
-        details=json.dumps(settings),
+        details=("[POST-LOCK OVERRIDE] " if is_override else "") + json.dumps(settings),
     )
     return RedirectResponse(
         f"/league/{league_id}/manage?msg=scoring_saved", status_code=303

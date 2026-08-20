@@ -232,12 +232,12 @@
   <div class="card mt-2">
     <div class="card-title">🎯 Scoring Settings</div>
     {% if scoring_locked %}
-    <div style="background:var(--s2);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;color:var(--muted)">
-      🔒 Locked — scoring can only be changed before Week 1 kicks off.
+    <div style="background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.3);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;color:var(--text)">
+      ⚠️ Week 1 has kicked off. Changing scoring now affects <strong>past and future</strong> weeks' calculated scores — check the box below to confirm before saving.
     </div>
     {% endif %}
     <form method="post" action="/survivor/{{ league.id }}/manage/scoring" style="max-width:520px;">
-      <fieldset {% if scoring_locked %}disabled{% endif %} style="border:none;padding:0;margin:0">
+      <fieldset style="border:none;padding:0;margin:0">
 
         <div style="font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:0 0 .4rem">Touchdowns</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;">
@@ -308,11 +308,24 @@
         <div style="font-size:.75rem;color:var(--muted);margin:.75rem 0 .75rem">
           Fumble/interception/defense-fumble/FG-missed values are point penalties — enter them as negative numbers (e.g. -2). A 50+ yard TD counts only toward the 50+ bonus, not also the 40+ bonus.
         </div>
-        <button type="submit" class="btn btn-gold">Save Scoring</button>
+        {% if scoring_locked %}
+        <label style="display:flex;align-items:flex-start;gap:.5rem;font-size:.8rem;color:var(--text);margin-bottom:.75rem;cursor:pointer">
+          <input type="checkbox" name="confirm_override" id="survivor-scoring-confirm-override" value="1" style="margin-top:.2rem">
+          I understand this will change scoring for past and future weeks in this league.
+        </label>
+        {% endif %}
+        <button type="submit" class="btn btn-gold" id="survivor-scoring-save-btn" {% if scoring_locked %}disabled{% endif %}>Save Scoring</button>
       </fieldset>
     </form>
   </div>
 </div>
+{% if scoring_locked %}
+<script>
+  document.getElementById('survivor-scoring-confirm-override').addEventListener('change', function() {
+    document.getElementById('survivor-scoring-save-btn').disabled = !this.checked;
+  });
+</script>
+{% endif %}
 
 <!-- MEMBERS -->
 <div id="s-panel-members" class="s-panel">

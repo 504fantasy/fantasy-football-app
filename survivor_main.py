@@ -81,6 +81,8 @@ try:
     from nfl_sync import current_nfl_week
     from nfl_sync import seed_players as _seed_players
     from nfl_sync import sync_week as _sync_week
+    from nfl_sync import sync_survivor_week
+    from nfl_sync import NFLSyncScheduler
 except ImportError:
 
     def _seed_players(*a, **kw):
@@ -89,8 +91,13 @@ except ImportError:
     def _sync_week(*a, **kw):
         return {"updated": 0}
 
+    def sync_survivor_week(*a, **kw):
+        return {"added": 0, "skipped": 0, "errors": 0}
+
     def current_nfl_week():
         return 1
+
+    NFLSyncScheduler = None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -184,7 +191,7 @@ def _auto_advance_week(league_id: int, current_week: int) -> bool:
     return False
 
 def _auto_sync_schedules():
-    """Refresh game schedules and auto-advance weeks for all active leagues once per day."""
+    """Refresh game schedules and auto-advance weeks for regular-season leagues once per day. Player stat syncing runs separately on the live game-window scheduler (see survivor_sync_scheduler below)."""
     import time as _time
     while True:
         try:
@@ -210,6 +217,53 @@ def _auto_sync_schedules():
 
 _sync_thread = _threading.Thread(target=_auto_sync_schedules, daemon=True)
 _sync_thread.start()
+
+
+def _survivor_get_active_league_ids() -> list:
+    """All active survivor leagues (regular season and preseason both sync live)."""
+    try:
+        conn = get_db()
+        rows = conn.execute("SELECT id FROM survivor_leagues WHERE is_active=1").fetchall()
+        conn.close()
+        return [r["id"] for r in rows]
+    except Exception as e:
+        print(f"[survivor] Could not get active league IDs: {e}")
+        return []
+
+
+def _survivor_get_week(league_id: int) -> list:
+    """
+    Every week from 1 through this league's current week — unlike the main
+    app (one global week for all leagues), and unlike just returning the
+    single current week, this keeps PAST weeks refreshing automatically
+    too. Without this, once a league advances to Week 2, Week 1 would
+    never sync again even if its game data was published late or a stat
+    correction comes in — the scheduler would just keep re-syncing Week 2
+    forever. Syncing the whole range each cycle is cheap (a preseason or
+    regular season is at most 18 weeks, a handful of ESPN calls) and keeps
+    every week current, not just the newest one.
+    """
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT current_week FROM survivor_leagues WHERE id=?", (league_id,)
+        ).fetchone()
+        conn.close()
+        current = row["current_week"] if row else 1
+        return list(range(1, max(1, current) + 1))
+    except Exception:
+        return [1]
+
+
+if NFLSyncScheduler:
+    survivor_sync_scheduler = NFLSyncScheduler(
+        sync_fn=sync_survivor_week,
+        get_active_league_ids_fn=_survivor_get_active_league_ids,
+        get_week_fn=_survivor_get_week,
+        thread_name="survivor-nfl-sync",
+    )
+    survivor_sync_scheduler.start()
+
 templates = Jinja2Templates(directory="survivor_templates")
 
 _ESPN_LOGO_ABBR = {"WAS": "wsh"}  # ESPN's logo CDN uses non-standard slugs for a few teams
@@ -1504,13 +1558,15 @@ async def manage_scoring_settings(
     league = league_ctx(league_id, user)
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403)
-    if _survivor_season_locked(league_id):
-        return RedirectResponse(
-            f"/survivor/{league_id}/manage?error=scoring_locked", status_code=303
-        )
 
     from scoring import DEFAULT_SCORING
     form = await request.form()
+
+    if _survivor_season_locked(league_id) and not form.get("confirm_override"):
+        return RedirectResponse(
+            f"/survivor/{league_id}/manage?error=scoring_needs_confirm", status_code=303
+        )
+
     settings = {}
     for key in DEFAULT_SCORING:
         raw = form.get(key)
@@ -1525,11 +1581,12 @@ async def manage_scoring_settings(
     )
     conn.commit()
     conn.close()
+    is_override = _survivor_season_locked(league_id)
     write_audit(
         actor=user["username"],
         action="SCORING_SETTINGS_UPDATE",
         league_id=league_id,
-        details=json.dumps(settings),
+        details=("[POST-LOCK OVERRIDE] " if is_override else "") + json.dumps(settings),
     )
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=scoring_saved", status_code=303

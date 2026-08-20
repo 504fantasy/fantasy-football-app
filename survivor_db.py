@@ -347,6 +347,7 @@ def init_db(conn=None):
     _safe_alter(conn, "ALTER TABLE survivor_game_schedule ADD COLUMN opponent TEXT")
     _safe_alter(conn, "ALTER TABLE survivor_game_schedule ADD COLUMN is_home INTEGER")
     _safe_alter(conn, "ALTER TABLE survivor_leagues        ADD COLUMN scoring_settings TEXT")
+    _safe_alter(conn, "ALTER TABLE survivor_leagues        ADD COLUMN season_type      TEXT DEFAULT 'regular'")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN passing_tds      INTEGER DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN other_tds        INTEGER DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN two_pt_conversions   INTEGER DEFAULT 0")

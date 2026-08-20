@@ -95,10 +95,19 @@
   {% elif msg=='pony_lock_updated' %}✅ Pony lock updated.
   {% elif msg=='score_saved'       %}✅ Score saved.
   {% elif msg=='settings_saved'    %}✅ Settings saved.
+  {% elif msg=='scoring_saved'     %}✅ Scoring settings saved.
   {% elif msg.startswith('sync_ok_') %}✅ Roster synced — {{ msg.split('_')[-1] | e }} players added.
   {% elif msg.startswith('scores_synced_') %}✅ Scores synced — {{ msg.split('_')[-1] | e }} players updated.
   {% elif msg=='sync_error'         %}❌ Sync failed — check server logs.
   {% else %}✅ Done.{% endif %}
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger">
+  {% if   error=='scoring_needs_confirm' %}⚠️ Check the confirmation box to save scoring changes after the draft is complete.
+  {% elif error=='bad_player'            %}❌ Player not found.
+  {% else %}❌ {{ error | replace('_', ' ') | title | e }}{% endif %}
 </div>
 {% endif %}
 
@@ -644,12 +653,12 @@
   <div class="card mt-2">
     <div class="card-title">🎯 Scoring Settings</div>
     {% if scoring_locked %}
-    <div style="background:var(--s2);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;color:var(--muted)">
-      🔒 Locked — scoring can only be changed before the draft is complete.
+    <div style="background:rgba(232,184,75,.1);border:1px solid rgba(232,184,75,.3);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;color:var(--text)">
+      ⚠️ The draft is complete. Changing scoring now affects <strong>past and future</strong> weeks' calculated scores — check the box below to confirm before saving.
     </div>
     {% endif %}
     <form method="post" action="/league/{{ league.id }}/manage/scoring">
-      <fieldset {% if scoring_locked %}disabled{% endif %} style="border:none;padding:0;margin:0">
+      <fieldset style="border:none;padding:0;margin:0">
 
         <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:0 0 .5rem">Touchdowns</div>
         <div class="score-grid">
@@ -720,10 +729,23 @@
         <div style="font-size:.75rem;color:var(--muted);margin:.75rem 0 1rem">
           Fumble/interception/defense-fumble/FG-missed values are point penalties — enter them as negative numbers (e.g. -2). A 50+ yard TD counts only toward the 50+ bonus, not also the 40+ bonus.
         </div>
-        <button class="btn btn-gold mt-1">Save Scoring</button>
+        {% if scoring_locked %}
+        <label style="display:flex;align-items:flex-start;gap:.5rem;font-size:.82rem;color:var(--text);margin-bottom:.75rem;cursor:pointer">
+          <input type="checkbox" name="confirm_override" id="scoring-confirm-override" value="1" style="margin-top:.2rem">
+          I understand this will change scoring for past and future weeks in this league.
+        </label>
+        {% endif %}
+        <button class="btn btn-gold mt-1" id="scoring-save-btn" {% if scoring_locked %}disabled{% endif %}>Save Scoring</button>
       </fieldset>
     </form>
   </div>
+  {% if scoring_locked %}
+  <script>
+    document.getElementById('scoring-confirm-override').addEventListener('change', function() {
+      document.getElementById('scoring-save-btn').disabled = !this.checked;
+    });
+  </script>
+  {% endif %}
 
   <!-- ── Multiplier Lock ───────────────────────────────────────────────── -->
   <div class="card mt-2">
