@@ -275,6 +275,7 @@ def _espn_logo_url(abbr):
     return f"https://a.espncdn.com/i/teamlogos/nfl/500/{slug}.png"
 
 templates.env.filters["espn_logo"] = _espn_logo_url
+templates.env.filters["fromjson"] = json.loads
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Current-user helper

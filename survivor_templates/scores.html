@@ -80,7 +80,7 @@
     {% elif ts.players %}
     <style>
     .stat-chips{display:flex;flex-wrap:wrap;gap:.25rem;align-items:center}
-    .sc{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;background:var(--s3);color:var(--muted2);border:1px solid var(--border)}
+    .sc{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;background:rgba(232,184,75,.12);color:var(--gold);border:1px solid rgba(232,184,75,.3)}
     .sc.highlight{background:rgba(232,184,75,.12);color:var(--gold);border-color:rgba(232,184,75,.3)}
     .sc.neg{background:rgba(239,68,68,.12);color:#fca5a5;border-color:rgba(239,68,68,.3)}
     .player-row{display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
@@ -129,28 +129,37 @@
       <div class="stat-chips">
         {% set pos = p.position or '' %}
         {% if pos == 'K' %}
-          {% if p.field_goals_json and p.field_goals_json != '[]' %}
-          <span class="sc highlight">FG ✓</span>
+          {% set fgs = (p.field_goals_json | fromjson) if p.field_goals_json and p.field_goals_json != '[]' else [] %}
+          {% if fgs %}
+          <span class="sc">{{ fgs | length }} FG ({{ fgs | map(attribute='distance') | map('int') | map('string') | join(', ') }} yd)</span>
+          {% endif %}
+          {% if p.pat_made and p.pat_made > 0 %}
+          <span class="sc">{{ p.pat_made | int }} PAT</span>
+          {% endif %}
+          {% if p.fg_missed and p.fg_missed > 0 %}
+          <span class="sc neg">{{ p.fg_missed | int }} FG missed</span>
+          {% endif %}
+          {% if not fgs and not (p.pat_made and p.pat_made > 0) and not (p.fg_missed and p.fg_missed > 0) %}
+          <span class="sc" style="font-style:italic">no stats</span>
           {% endif %}
         {% elif pos == 'DST' %}
           {% if p.return_yards and p.return_yards > 0 %}
-          <span class="sc highlight">{{ p.return_yards | int }} ret yds</span>
+          <span class="sc">{{ p.return_yards | int }} ret yds</span>
           {% endif %}
         {% else %}
           {% if p.receptions and p.receptions > 0 %}
-          <span class="sc {% if p.receptions >= 5 %}highlight{% endif %}">{{ p.receptions | int }} rec</span>
-          {% endif %}
-          {% if p.receiving_yards and p.receiving_yards > 0 %}
-          <span class="sc {% if p.receiving_yards >= 50 %}highlight{% endif %}">{{ p.receiving_yards | int }} rec yds</span>
+          <span class="sc">{{ p.receptions | int }} rec, {{ (p.receiving_yards or 0) | int }} yds</span>
+          {% elif p.receiving_yards and p.receiving_yards > 0 %}
+          <span class="sc">{{ p.receiving_yards | int }} rec yds</span>
           {% endif %}
           {% if p.rushing_yards and p.rushing_yards > 0 %}
-          <span class="sc {% if p.rushing_yards >= 50 %}highlight{% endif %}">{{ p.rushing_yards | int }} rush yds</span>
+          <span class="sc">{{ p.rushing_yards | int }} rush yds</span>
           {% endif %}
           {% if p.passing_yards and p.passing_yards > 0 %}
-          <span class="sc {% if p.passing_yards >= 200 %}highlight{% endif %}">{{ p.passing_yards | int }} pass yds</span>
+          <span class="sc">{{ p.passing_yards | int }} pass yds</span>
           {% endif %}
           {% if p.total_tds and p.total_tds > 0 %}
-          <span class="sc highlight">{{ p.total_tds | int }} TD{% if p.total_tds > 1 %}s{% endif %}</span>
+          <span class="sc">{{ p.total_tds | int }} TD{% if p.total_tds > 1 %}s{% endif %}</span>
           {% endif %}
           {% if p.interceptions and p.interceptions > 0 %}
           <span class="sc neg">{{ p.interceptions | int }} INT</span>
