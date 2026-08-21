@@ -143,8 +143,29 @@
           <span class="sc" style="font-style:italic">no stats</span>
           {% endif %}
         {% elif pos == 'DST' %}
+          {% if p.sacks and p.sacks > 0 %}
+          <span class="sc">{{ p.sacks | int if p.sacks == p.sacks | int else p.sacks }} sack{% if p.sacks != 1 %}s{% endif %}</span>
+          {% endif %}
+          {% if p.safeties and p.safeties > 0 %}
+          <span class="sc">{{ p.safeties | int }} safety{% if p.safeties > 1 %}s{% endif %}</span>
+          {% endif %}
+          {% if p.forced_fumbles and p.forced_fumbles > 0 %}
+          <span class="sc">{{ p.forced_fumbles | int }} FF</span>
+          {% endif %}
+          {% if p.blocked_kicks and p.blocked_kicks > 0 %}
+          <span class="sc">{{ p.blocked_kicks | int }} blocked kick{% if p.blocked_kicks > 1 %}s{% endif %}</span>
+          {% endif %}
+          {% if p.points_allowed is not none %}
+          <span class="sc">{{ p.points_allowed | int }} pts allowed</span>
+          {% endif %}
           {% if p.return_yards and p.return_yards > 0 %}
           <span class="sc">{{ p.return_yards | int }} ret yds</span>
+          {% endif %}
+          {% if p.return_fumbles_lost and p.return_fumbles_lost > 0 %}
+          <span class="sc neg">{{ p.return_fumbles_lost | int }} FUM lost</span>
+          {% endif %}
+          {% if not p.sacks and not p.safeties and not p.forced_fumbles and not p.blocked_kicks and p.points_allowed is none and not p.return_yards %}
+          <span class="sc" style="font-style:italic">no stats</span>
           {% endif %}
         {% else %}
           {% if p.receptions and p.receptions > 0 %}
