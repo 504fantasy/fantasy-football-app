@@ -23,6 +23,8 @@
     <div class="alert alert-error">⚠ One or more players have already been used by your team this season.</div>
   {% elif error == 'duplicate_players' %}
     <div class="alert alert-error">⚠ You cannot use the same player in two slots.</div>
+  {% elif 'game_started' in error or 'slot_locked' in error %}
+    <div class="alert alert-error">⚠ That player's game has already started — this pick is locked and can't be changed.</div>
   {% elif error == 'wrong_week' %}
     <div class="alert alert-error">⚠ You can only edit the current week's lineup.</div>
   {% else %}

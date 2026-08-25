@@ -1273,12 +1273,28 @@ async def lineup_submit(
             return False
     conn = get_db()
     used = get_used_player_ids_for_team(my_team["id"], exclude_week=week)
+    # Load existing lineup so we can tell if a slot's CURRENT player has
+    # already kicked off — that slot must stay frozen even if the
+    # replacement player's own game hasn't started yet. Checking only the
+    # incoming player's kickoff time (as before) missed this: swapping a
+    # locked-in player out for someone whose game hasn't started yet would
+    # pass that check even though the original pick should no longer be
+    # editable at all.
+    existing_lineup = {
+        (row["position"], row.get("slot", 1) or 1): row
+        for row in get_team_lineup(my_team["id"], week)
+    }
     # Validate all picks
     all_pids = list(picks.values())
     if len(set(all_pids)) != len(all_pids):
         conn.close()
         return RedirectResponse(f"{base}&error=duplicate_players", status_code=303)
     for (pos, slot), pid in picks.items():
+        existing = existing_lineup.get((pos, slot))
+        if existing and existing["player_id"] != pid:
+            if existing.get("locked") or _has_kicked_off(existing.get("nfl_team") or ""):
+                conn.close()
+                return RedirectResponse(f"{base}&error=slot_locked_{pos}", status_code=303)
         row = conn.execute(
             "SELECT * FROM survivor_players WHERE id=? AND league_id=?",
             (pid, league_id),
