@@ -103,12 +103,27 @@ def seed_preseason_schedule(league_id: int, overwrite: bool = False):
             except Exception:
                 skipped += 1
 
+    # Clean up any leftover rows using old/unmapped team abbreviations
+    # (e.g. 'LA' instead of 'LAR') that could exist if this league's
+    # schedule was ever corrupted by a regular-season sync being run
+    # against it — those don't match anything in PRESEASON_GAMES so the
+    # upserts above never touch them, and they'd otherwise sit there
+    # indefinitely with wrong dates, silently blocking auto-advance for
+    # whichever week they're in.
+    removed = 0
+    for stale_team in ("LA", "LAS", "JAC"):
+        cur = conn.execute(
+            "DELETE FROM survivor_game_schedule WHERE league_id=? AND team=?",
+            (league_id, stale_team)
+        )
+        removed += cur.rowcount
+
     conn.commit()
     conn.close()
-    print(f"Preseason schedule seed: added/updated={added} skipped={skipped}")
+    print(f"Preseason schedule seed: added/updated={added} skipped={skipped} stale_removed={removed}")
     print(f"Total games: {len(PRESEASON_GAMES)}, Teams covered: "
           f"{len(set(t for _, _, _, a, h in PRESEASON_GAMES for t in (a, h)))}")
-    return {"added": added, "skipped": skipped}
+    return {"added": added, "skipped": skipped, "stale_removed": removed}
 
 
 if __name__ == "__main__":

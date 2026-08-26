@@ -191,22 +191,27 @@ def _auto_advance_week(league_id: int, current_week: int) -> bool:
     return False
 
 def _auto_sync_schedules():
-    """Refresh game schedules and auto-advance weeks for regular-season leagues once per day. Player stat syncing runs separately on the live game-window scheduler (see survivor_sync_scheduler below)."""
+    """Refresh game schedules for regular-season leagues, and auto-advance
+    weeks for ALL leagues, once per day as a fallback safety net (the
+    primary, much more frequent advance check runs every live-scheduler
+    cycle instead — see _sync_and_maybe_advance below)."""
     import time as _time
     while True:
         try:
             conn = get_db()
             leagues = conn.execute(
-                "SELECT id, season, current_week FROM survivor_leagues "
-                "WHERE COALESCE(season_type, 'regular') != 'preseason'"
+                "SELECT id, season, current_week, "
+                "COALESCE(season_type, 'regular') as season_type "
+                "FROM survivor_leagues WHERE is_active=1"
             ).fetchall()
             conn.close()
             for league in leagues:
-                try:
-                    seed_game_schedule(league["id"], league["season"])
-                    print(f"[survivor] Auto-synced schedule for league {league['id']}")
-                except Exception as e:
-                    print(f"[survivor] Auto-sync error league {league['id']}: {e}")
+                if league["season_type"] != "preseason":
+                    try:
+                        seed_game_schedule(league["id"], league["season"])
+                        print(f"[survivor] Auto-synced schedule for league {league['id']}")
+                    except Exception as e:
+                        print(f"[survivor] Auto-sync error league {league['id']}: {e}")
                 try:
                     _auto_advance_week(league["id"], league["current_week"])
                 except Exception as e:
@@ -255,9 +260,31 @@ def _survivor_get_week(league_id: int) -> list:
         return [1]
 
 
+def _sync_and_maybe_advance(league_id: int, week: int, season: int) -> dict:
+    """
+    Wraps sync_survivor_week with an auto-advance check, run by the live
+    scheduler every cycle (60s during games, hourly otherwise) instead of
+    only once a day. Only checks advancement when syncing the league's
+    actual current week — checking on every past week in the range too
+    would be redundant.
+    """
+    result = sync_survivor_week(league_id, week, season)
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT current_week FROM survivor_leagues WHERE id=?", (league_id,)
+        ).fetchone()
+        conn.close()
+        if row and row["current_week"] == week:
+            _auto_advance_week(league_id, week)
+    except Exception as e:
+        print(f"[survivor] auto-advance check error league={league_id} week={week}: {e}")
+    return result
+
+
 if NFLSyncScheduler:
     survivor_sync_scheduler = NFLSyncScheduler(
-        sync_fn=sync_survivor_week,
+        sync_fn=_sync_and_maybe_advance,
         get_active_league_ids_fn=_survivor_get_active_league_ids,
         get_week_fn=_survivor_get_week,
         thread_name="survivor-nfl-sync",
@@ -769,6 +796,14 @@ def seed_game_schedule(league_id: int, season: int) -> dict:
     from datetime import datetime
     from zoneinfo import ZoneInfo
     added = skipped = 0
+    # Must match the same normalization used when seeding player rosters
+    # (seed_survivor_players) — nfl.import_schedules() and
+    # nfl.import_seasonal_rosters() use different abbreviations for a
+    # handful of teams (e.g. Rams: 'LA' here vs 'LAR' for rosters). Without
+    # normalizing both to the same value, a game-started lookup keyed on
+    # the player's team would silently miss the schedule entry for these
+    # teams and never detect that their game had actually started.
+    _TEAM_MAP = {"LA": "LAR", "LAS": "LV", "JAC": "JAX"}
     try:
         sched = nfl.import_schedules([season])
         conn = get_db()
@@ -778,6 +813,8 @@ def seed_game_schedule(league_id: int, season: int) -> dict:
             gametime = str(row.get("gametime", "") or "")
             away     = str(row.get("away_team", "") or "").upper().strip()
             home     = str(row.get("home_team", "") or "").upper().strip()
+            away     = _TEAM_MAP.get(away, away)
+            home     = _TEAM_MAP.get(home, home)
             if not gameday or not gametime or not week or not away or not home:
                 continue
             # gametime is Eastern local time; convert to UTC with real DST rules
@@ -1164,7 +1201,13 @@ def lineup_page(league_id: int, request: Request, week: int = None):
     for p in all_players:
         all_players_by_pos.setdefault(p["position"], []).append(p)
 
-    # Build used-players list with the week they were used (from locked lineups)
+    # Build used-players list with the week they were used. Matches
+    # get_used_player_ids_for_team's logic (any prior week, regardless of
+    # the locked flag) — a lineup submitted normally before kickoff never
+    # gets locked=1 set retroactively once the game starts, so filtering
+    # on that flag here was silently hiding real used players from this
+    # display list even though they correctly counted toward the total
+    # and were correctly blocked from re-selection.
     conn = get_db()
     used_rows = conn.execute(
         """
@@ -1172,7 +1215,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
                p.name, p.position, p.nfl_team, p.headshot_url
         FROM survivor_lineups sl
         JOIN survivor_players p ON sl.player_id = p.id
-        WHERE sl.team_id=? AND sl.locked=1 AND sl.week != ?
+        WHERE sl.team_id=? AND sl.week != ?
         ORDER BY sl.week
     """,
         (my_team["id"], week),
@@ -2141,7 +2184,19 @@ def sync_schedule_now(league_id: int, request: Request):
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403)
     try:
-        result = seed_game_schedule(league_id, league["season"])
+        if league.get("season_type") == "preseason":
+            # The regular-season seeder pulls from nfl.import_schedules(),
+            # which only has regular/postseason games — calling it for a
+            # preseason league would silently overwrite correct preseason
+            # kickoff times with real-season dates for any team sharing a
+            # (week, team) key, exactly as happened here (a Saints Week 2
+            # game got overwritten with a September date, making the
+            # system think that game hadn't happened yet weeks after it
+            # actually had).
+            from seed_preseason import seed_preseason_schedule
+            result = seed_preseason_schedule(league_id, overwrite=True)
+        else:
+            result = seed_game_schedule(league_id, league["season"])
         msg = f"schedule_sync_ok_{result.get('added', 0)}"
         write_audit(
             actor=user["username"],
