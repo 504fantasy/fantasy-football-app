@@ -83,6 +83,7 @@ try:
     from nfl_sync import sync_week as _sync_week
     from nfl_sync import sync_survivor_week
     from nfl_sync import NFLSyncScheduler
+    from nfl_sync import TEAM_MAP as _SHARED_TEAM_MAP
 except ImportError:
 
     def _seed_players(*a, **kw):
@@ -96,6 +97,8 @@ except ImportError:
 
     def current_nfl_week():
         return 1
+
+    _SHARED_TEAM_MAP = {"LA": "LAR", "LAS": "LV", "JAC": "JAX"}
 
     NFLSyncScheduler = None
 
@@ -803,7 +806,10 @@ def seed_game_schedule(league_id: int, season: int) -> dict:
     # normalizing both to the same value, a game-started lookup keyed on
     # the player's team would silently miss the schedule entry for these
     # teams and never detect that their game had actually started.
-    _TEAM_MAP = {"LA": "LAR", "LAS": "LV", "JAC": "JAX"}
+    # Uses the single shared map (_SHARED_TEAM_MAP, from nfl_sync.py) so
+    # this can't drift out of sync with the roster-seeding copy the way
+    # separate local copies could.
+    _TEAM_MAP = _SHARED_TEAM_MAP
     try:
         sched = nfl.import_schedules([season])
         conn = get_db()
@@ -884,7 +890,7 @@ def seed_survivor_players(league_id: int, overwrite: bool = False) -> dict:
         season = int(_os.environ.get("NFL_SEASON", "2024"))
         roster = nfl.import_seasonal_rosters([season])
         VALID_POS = {"QB", "RB", "WR", "TE", "K"}
-        TEAM_MAP  = {"LA": "LAR", "LAS": "LV", "JAC": "JAX"}
+        TEAM_MAP  = _SHARED_TEAM_MAP
         conn = get_db()
         for _, row in roster.iterrows():
             pos = str(row.get("position", "") or "").upper().strip()
