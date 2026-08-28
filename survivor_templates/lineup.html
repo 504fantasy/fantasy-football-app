@@ -24,7 +24,8 @@
   {% elif error == 'duplicate_players' %}
     <div class="alert alert-error">⚠ You cannot use the same player in two slots.</div>
   {% elif 'game_started' in error or 'slot_locked' in error %}
-    <div class="alert alert-error">⚠ That player's game has already started — this pick is locked and can't be changed.</div>
+    {% set pos_code = error.split('_')[-1] %}
+    <div class="alert alert-error">⚠ Your {{ pos_code }} pick's game has already started — that slot is locked to whoever you had saved there and can't be swapped to a different player until next week.</div>
   {% elif error == 'wrong_week' %}
     <div class="alert alert-error">⚠ You can only edit the current week's lineup.</div>
   {% else %}
@@ -94,7 +95,11 @@
       <select name="{{ field_name }}" required {% if avail | length == 0 %}disabled{% endif %}>
         <option value="">— Select {{ pos }}{% if num_slots > 1 %} #{{ slot_num }}{% endif %} —</option>
         {% for p in avail | sort(attribute='name') %}
-          {% if p.kicked_off %}
+          {% if cur_pick and cur_pick.player_id == p.id %}
+            <option value="{{ p.id }}" selected {% if p.kicked_off %}style="color:var(--gold)"{% endif %}>
+              {{ p.name }} ({{ p.nfl_team }}){% if p.kicked_off %} — 🔒 Locked{% endif %}
+            </option>
+          {% elif p.kicked_off %}
             <option value="" disabled style="color:#6b7280">
               {{ p.name }} ({{ p.nfl_team }}) — 🔒 Game Started
             </option>
@@ -103,13 +108,17 @@
               {{ p.name }} ({{ p.nfl_team }}) — Bye Week
             </option>
           {% else %}
-            <option value="{{ p.id }}"
-              {% if cur_pick and cur_pick.player_id == p.id %}selected{% endif %}>
+            <option value="{{ p.id }}">
               {{ p.name }} ({{ p.nfl_team }})
             </option>
           {% endif %}
         {% endfor %}
       </select>
+      {% if cur_pick and cur_pick.player_id and avail | selectattr('id', 'equalto', cur_pick.player_id) | selectattr('kicked_off') | list %}
+        <p style="color:var(--gold);font-size:11px;margin-top:6px;">
+          🔒 This pick is locked — {{ cur_pick.player_name }}'s game has already started.
+        </p>
+      {% endif %}
       {% if avail | length == 0 %}
         <p style="color:var(--red);font-size:11px;margin-top:6px;">
           No {{ pos }}s available — all have been used this season.
