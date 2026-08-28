@@ -1,0 +1,98 @@
+{# Shared read-only scoring breakdown. Include with {% include "_scoring_breakdown.html" %}
+   wherever `scoring_settings` (a resolved dict, see resolve_scoring_settings) is in context. #}
+<style>
+  .sb-group{margin-bottom:1.1rem}
+  .sb-group:last-child{margin-bottom:0}
+  .sb-group-title{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-bottom:.5rem}
+  .sb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.4rem .75rem}
+  .sb-row{display:flex;justify-content:space-between;align-items:center;padding:.35rem .5rem;background:var(--s2);border-radius:6px;font-size:.82rem}
+  .sb-row .sb-label{color:var(--muted2)}
+  .sb-row .sb-val{font-weight:800;font-size:1rem;color:var(--text)}
+  .sb-row .sb-val.neg{color:#fca5a5}
+  .sb-row .sb-val.pos{color:var(--gold)}
+</style>
+
+<div class="sb-group">
+  <div class="sb-group-title">Touchdowns</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">Passing TD</span><span class="sb-val pos">{{ scoring_settings.passing_td }}</span></div>
+    <div class="sb-row"><span class="sb-label">Rush / Rec TD</span><span class="sb-val pos">{{ scoring_settings.other_td }}</span></div>
+  </div>
+</div>
+
+<div class="sb-group">
+  <div class="sb-group-title">Passing</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">Per Pass Yard</span><span class="sb-val">{{ scoring_settings.passing_yard }}</span></div>
+    <div class="sb-row"><span class="sb-label">2 Pt. Conversion</span><span class="sb-val pos">{{ scoring_settings.two_pt_conversion }}</span></div>
+    <div class="sb-row"><span class="sb-label">40+ Yd Completion Bonus</span><span class="sb-val pos">{{ scoring_settings.pass_40_completion }}</span></div>
+    <div class="sb-row"><span class="sb-label">40+ Yd Pass TD Bonus</span><span class="sb-val pos">{{ scoring_settings.pass_td_40_bonus }}</span></div>
+    <div class="sb-row"><span class="sb-label">50+ Yd Pass TD Bonus</span><span class="sb-val pos">{{ scoring_settings.pass_td_50_bonus }}</span></div>
+  </div>
+</div>
+
+<div class="sb-group">
+  <div class="sb-group-title">Rushing</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">Per Rush Yard</span><span class="sb-val">{{ scoring_settings.rushing_yard }}</span></div>
+    <div class="sb-row"><span class="sb-label">40+ Yd Rush TD Bonus</span><span class="sb-val pos">{{ scoring_settings.rush_td_40_bonus }}</span></div>
+    <div class="sb-row"><span class="sb-label">50+ Yd Rush TD Bonus</span><span class="sb-val pos">{{ scoring_settings.rush_td_50_bonus }}</span></div>
+  </div>
+</div>
+
+<div class="sb-group">
+  <div class="sb-group-title">Receiving</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">Per Reception</span><span class="sb-val">{{ scoring_settings.reception }}</span></div>
+    <div class="sb-row"><span class="sb-label">Per Rec Yard</span><span class="sb-val">{{ scoring_settings.receiving_yard }}</span></div>
+    <div class="sb-row"><span class="sb-label">40+ Yd Reception TD Bonus</span><span class="sb-val pos">{{ scoring_settings.rec_td_40_bonus }}</span></div>
+    <div class="sb-row"><span class="sb-label">50+ Yd Reception TD Bonus</span><span class="sb-val pos">{{ scoring_settings.rec_td_50_bonus }}</span></div>
+  </div>
+</div>
+
+<div class="sb-group">
+  <div class="sb-group-title">Other / Turnovers</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">Per Return Yard</span><span class="sb-val">{{ scoring_settings.return_yard }}</span></div>
+    <div class="sb-row"><span class="sb-label">Fumble Lost</span><span class="sb-val neg">{{ scoring_settings.fumble_lost }}</span></div>
+    <div class="sb-row"><span class="sb-label">Interception Thrown</span><span class="sb-val neg">{{ scoring_settings.interception }}</span></div>
+  </div>
+</div>
+
+<div class="sb-group">
+  <div class="sb-group-title">Kicking</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">Per FG Yard</span><span class="sb-val">{{ scoring_settings.fg_yard }}</span></div>
+    <div class="sb-row"><span class="sb-label">PAT Made</span><span class="sb-val pos">{{ scoring_settings.pat_made }}</span></div>
+    <div class="sb-row"><span class="sb-label">FG Missed</span><span class="sb-val neg">{{ scoring_settings.fg_missed }}</span></div>
+  </div>
+</div>
+
+<div class="sb-group">
+  <div class="sb-group-title">Defense / Special Teams</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">Per Return Yard</span><span class="sb-val">{{ scoring_settings.def_return_yard }}</span></div>
+    <div class="sb-row"><span class="sb-label">Fumble Lost</span><span class="sb-val neg">{{ scoring_settings.def_fumble_lost }}</span></div>
+    <div class="sb-row"><span class="sb-label">Sack</span><span class="sb-val pos">{{ scoring_settings.sack }}</span></div>
+    <div class="sb-row"><span class="sb-label">Safety</span><span class="sb-val pos">{{ scoring_settings.safety }}</span></div>
+    <div class="sb-row"><span class="sb-label">Forced Fumble</span><span class="sb-val pos">{{ scoring_settings.forced_fumble }}</span></div>
+    <div class="sb-row"><span class="sb-label">Blocked Kick</span><span class="sb-val pos">{{ scoring_settings.blocked_kick }}</span></div>
+  </div>
+</div>
+
+<div class="sb-group">
+  <div class="sb-group-title">Points Allowed (Defense)</div>
+  <div class="sb-grid">
+    <div class="sb-row"><span class="sb-label">0 Points</span><span class="sb-val pos">{{ scoring_settings.points_allowed_0 }}</span></div>
+    <div class="sb-row"><span class="sb-label">1–6 Points</span><span class="sb-val pos">{{ scoring_settings.points_allowed_1_6 }}</span></div>
+    <div class="sb-row"><span class="sb-label">7–13 Points</span><span class="sb-val pos">{{ scoring_settings.points_allowed_7_13 }}</span></div>
+    <div class="sb-row"><span class="sb-label">14–20 Points</span><span class="sb-val">{{ scoring_settings.points_allowed_14_20 }}</span></div>
+    <div class="sb-row"><span class="sb-label">21–27 Points</span><span class="sb-val">{{ scoring_settings.points_allowed_21_27 }}</span></div>
+    <div class="sb-row"><span class="sb-label">28–34 Points</span><span class="sb-val neg">{{ scoring_settings.points_allowed_28_34 }}</span></div>
+    <div class="sb-row"><span class="sb-label">35+ Points</span><span class="sb-val neg">{{ scoring_settings.points_allowed_35_plus }}</span></div>
+  </div>
+</div>
+
+<p style="font-size:.72rem;color:var(--muted);margin-top:.75rem">
+  Fumble/interception/FG-missed values are point penalties. A 50+ yard TD counts only toward the 50+ bonus, not also the 40+ bonus.
+</p>

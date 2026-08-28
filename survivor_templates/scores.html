@@ -1,10 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Scores Week {{ week }} — {{ league.name }}{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>Scores</h1>
-  <p>{{ league.name }} &nbsp;·&nbsp; Season {{ league.season }}</p>
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.5rem">
+  <div>
+    <h1>Scores</h1>
+    <p>{{ league.name }} &nbsp;·&nbsp; Season {{ league.season }}</p>
+  </div>
+  <button class="btn btn-gold" onclick="document.getElementById('scoring-rules-modal').showModal()" style="height:fit-content">
+    📊 Scoring Rules
+  </button>
 </div>
+
+<dialog id="scoring-rules-modal" style="background:var(--s1);color:var(--text);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;max-width:640px;width:92%;max-height:85vh;overflow-y:auto;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <h2 style="margin:0;">📊 Full Scoring Breakdown</h2>
+    <button onclick="document.getElementById('scoring-rules-modal').close()" class="btn" style="padding:.3rem .7rem;">✕</button>
+  </div>
+  {% include "_scoring_breakdown.html" %}
+</dialog>
 
 {% set my_rank = namespace(pos=0, pts=0, week_pts=0, found=false) %}
 {% for row in standings %}

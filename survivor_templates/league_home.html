@@ -1,10 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ league.name }} — Survivor{% endblock %}
 {% block content %}
-<div class="page-header">
-  <h1>{{ league.name }}</h1>
-  <p>Season {{ league.season }} &nbsp;·&nbsp; Week {{ current_week }} of {{ total_weeks }}
-     {% if is_commissioner or user.is_superadmin %}&nbsp;·&nbsp; Invite code: <strong style="color:var(--gold)">{{ league.invite_code }}</strong>{% endif %}</p>
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.5rem">
+  <div>
+    <h1>{{ league.name }}</h1>
+    <p>Season {{ league.season }} &nbsp;·&nbsp; Week {{ current_week }} of {{ total_weeks }}
+       {% if is_commissioner or user.is_superadmin %}&nbsp;·&nbsp; Invite code: <strong style="color:var(--gold)">{{ league.invite_code }}</strong>{% endif %}</p>
+  </div>
+  <button class="btn btn-gold" onclick="document.getElementById('scoring-rules-modal').showModal()" style="height:fit-content">
+    📊 Scoring Rules
+  </button>
 </div>
 
 {% if msg == 'league_created' %}
@@ -192,4 +197,12 @@
     There's no draft — just smart weekly selection. The team with the most fantasy points at the end of Week {{ total_weeks }} wins.
   </p>
 </div>
+
+<dialog id="scoring-rules-modal" style="background:var(--s1);color:var(--text);border:1px solid var(--border);border-radius:var(--r);padding:1.5rem;max-width:640px;width:92%;max-height:85vh;overflow-y:auto;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <h2 style="margin:0;">📊 Full Scoring Breakdown</h2>
+    <button onclick="document.getElementById('scoring-rules-modal').close()" class="btn" style="padding:.3rem .7rem;">✕</button>
+  </div>
+  {% include "_scoring_breakdown.html" %}
+</dialog>
 {% endblock %}

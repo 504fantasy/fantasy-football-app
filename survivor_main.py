@@ -1163,6 +1163,12 @@ def league_home(league_id: int, request: Request):
         )
     standings.sort(key=lambda x: x["season_pts"], reverse=True)
 
+    try:
+        _overrides = json.loads(league["scoring_settings"]) if league["scoring_settings"] else None
+    except Exception:
+        _overrides = None
+    scoring_settings = resolve_scoring_settings(_overrides)
+
     conn = get_db()
     chat_rows = conn.execute(
         """
@@ -1191,6 +1197,7 @@ def league_home(league_id: int, request: Request):
             "msg": request.query_params.get("msg", ""),
             "required_positions": REQUIRED_POSITIONS,
             "chat_messages": chat_messages,
+            "scoring_settings": scoring_settings,
         },
     )
 
@@ -1573,6 +1580,12 @@ def scores_page(league_id: int, request: Request, week: int = None):
         )
     standings.sort(key=lambda x: x["season_pts"], reverse=True)
 
+    try:
+        _overrides = json.loads(league["scoring_settings"]) if league["scoring_settings"] else None
+    except Exception:
+        _overrides = None
+    scoring_settings = resolve_scoring_settings(_overrides)
+
     return templates.TemplateResponse(
         "scores.html",
         {
@@ -1586,6 +1599,7 @@ def scores_page(league_id: int, request: Request, week: int = None):
             "standings": standings,
             "is_commissioner": is_commissioner(league, user),
             "my_team": get_user_team_in_league(league_id, user["id"]),
+            "scoring_settings": scoring_settings,
         },
     )
 
