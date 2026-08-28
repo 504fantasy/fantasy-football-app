@@ -314,6 +314,19 @@ def init_db(conn=None):
         FOREIGN KEY (league_id) REFERENCES survivor_leagues(id) ON DELETE SET NULL
     )""")
 
+    # ── CHAT ──────────────────────────────────────────────────────────────────
+    conn.execute(f"""
+    CREATE TABLE IF NOT EXISTS survivor_chat_messages (
+        id         {pk},
+        league_id  INTEGER NOT NULL,
+        user_id    INTEGER,
+        username   TEXT NOT NULL,
+        message    TEXT NOT NULL,
+        is_system  INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (league_id) REFERENCES survivor_leagues(id) ON DELETE CASCADE
+    )""")
+
     # ── GAME SCHEDULE ─────────────────────────────────────────────────────────
     conn.execute(f"""
     CREATE TABLE IF NOT EXISTS survivor_game_schedule (
@@ -336,6 +349,7 @@ def init_db(conn=None):
         ("sidx_members_user",         "survivor_league_members(user_id)"),
         ("sidx_members_league",       "survivor_league_members(league_id)"),
         ("sidx_players_league_pos",   "survivor_players(league_id, position)"),
+        ("sidx_chat_league_id",       "survivor_chat_messages(league_id, id)"),
     ]
     for name, cols in _idx:
         conn.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {cols}")

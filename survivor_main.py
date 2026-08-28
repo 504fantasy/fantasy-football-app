@@ -182,6 +182,26 @@ def _auto_advance_week(league_id: int, current_week: int) -> bool:
         for g in games
     )
     if all_done and current_week < 18:
+        # Post the ending week's high score before advancing, and the new
+        # week announcement after — both as system chat messages.
+        try:
+            teams = get_league_teams(league_id)
+            best_team = None
+            best_score = None
+            for team in teams:
+                pts = get_team_week_score(team["id"], current_week)["total"]
+                if best_score is None or pts > best_score:
+                    best_score = pts
+                    best_team = team
+            if best_team and best_score is not None:
+                post_chat_message(
+                    league_id, "504 Fantasy", 
+                    f"🏆 Week {current_week} High Score: {best_team['name']} with {best_score:.1f} pts!",
+                    is_system=True,
+                )
+        except Exception as e:
+            print(f"[survivor] chat: week high-score post failed league={league_id}: {e}")
+
         conn = get_db()
         conn.execute(
             "UPDATE survivor_leagues SET current_week=? WHERE id=?",
@@ -190,6 +210,16 @@ def _auto_advance_week(league_id: int, current_week: int) -> bool:
         conn.commit()
         conn.close()
         print(f"[survivor] Auto-advanced league {league_id} to week {current_week + 1}")
+
+        try:
+            post_chat_message(
+                league_id, "504 Fantasy",
+                f"📅 Week {current_week + 1} has started! Get your lineups in.",
+                is_system=True,
+            )
+        except Exception as e:
+            print(f"[survivor] chat: week-started post failed league={league_id}: {e}")
+
         return True
     return False
 
@@ -375,6 +405,22 @@ def write_audit(
         "INSERT INTO survivor_audit_log (league_id, ts, actor, action, team, player, details) "
         "VALUES (?,?,?,?,?,?,?)",
         (league_id, ts, actor, action, team, player, details),
+    )
+    conn.commit()
+    conn.close()
+
+
+def post_chat_message(league_id: int, username: str, message: str,
+                       is_system: bool = False, user_id: int = None):
+    """Post a chat message to a league — used for both user-typed messages
+    and automated system announcements (week advanced, scoring changed,
+    weekly high score)."""
+    ts = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO survivor_chat_messages (league_id, user_id, username, message, is_system, created_at) "
+        "VALUES (?,?,?,?,?,?)",
+        (league_id, user_id, username, message, 1 if is_system else 0, ts),
     )
     conn.commit()
     conn.close()
@@ -1117,6 +1163,20 @@ def league_home(league_id: int, request: Request):
         )
     standings.sort(key=lambda x: x["season_pts"], reverse=True)
 
+    conn = get_db()
+    chat_rows = conn.execute(
+        """
+        SELECT id, username, message, is_system, created_at
+        FROM survivor_chat_messages
+        WHERE league_id=?
+        ORDER BY id DESC
+        LIMIT 50
+    """,
+        (league_id,),
+    ).fetchall()
+    conn.close()
+    chat_messages = [dict(r) for r in reversed(chat_rows)]
+
     return templates.TemplateResponse(
         "league_home.html",
         {
@@ -1130,6 +1190,7 @@ def league_home(league_id: int, request: Request):
             "is_commissioner": is_commissioner(league, user),
             "msg": request.query_params.get("msg", ""),
             "required_positions": REQUIRED_POSITIONS,
+            "chat_messages": chat_messages,
         },
     )
 
@@ -1160,6 +1221,54 @@ def create_team(league_id: int, request: Request, team_name: str = Form(...)):
         team=team_name.strip(),
     )
     return RedirectResponse(f"/survivor/{league_id}?msg=team_created", status_code=303)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# LEAGUE CHAT
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/survivor/{league_id}/chat/send")
+def chat_send(league_id: int, request: Request, message: str = Form(...)):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league_ctx(league_id, user)  # confirms membership, raises 403/404 otherwise
+
+    text = message.strip()
+    if not text:
+        return RedirectResponse(f"/survivor/{league_id}", status_code=303)
+    if len(text) > 1000:
+        text = text[:1000]
+
+    post_chat_message(league_id, user["username"], text, is_system=False, user_id=user["id"])
+    return RedirectResponse(f"/survivor/{league_id}#chat-box", status_code=303)
+
+
+@app.get("/survivor/{league_id}/chat/poll")
+def chat_fetch(league_id: int, request: Request, after_id: int = 0):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401)
+    league_ctx(league_id, user)
+
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, username, message, is_system, created_at
+        FROM survivor_chat_messages
+        WHERE league_id=? AND id > ?
+        ORDER BY id ASC
+        LIMIT 100
+    """,
+        (league_id, after_id),
+    ).fetchall()
+    conn.close()
+    return JSONResponse(
+        content={"messages": [dict(r) for r in rows]},
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
+    )
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1654,6 +1763,14 @@ async def manage_scoring_settings(
         league_id=league_id,
         details=("[POST-LOCK OVERRIDE] " if is_override else "") + json.dumps(settings),
     )
+    try:
+        post_chat_message(
+            league_id, "504 Fantasy",
+            f"🔧 {user['username']} updated the league's scoring settings.",
+            is_system=True,
+        )
+    except Exception as e:
+        print(f"[survivor] chat: scoring-change post failed league={league_id}: {e}")
     return RedirectResponse(
         f"/survivor/{league_id}/manage?msg=scoring_saved", status_code=303
     )

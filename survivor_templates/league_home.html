@@ -95,6 +95,92 @@
   </div>
 </div>
 
+<!-- LEAGUE CHAT -->
+<div class="card" id="chat-box">
+  <h2>💬 League Chat</h2>
+  <style>
+    .chat-msg{padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+    .chat-msg:last-child{border-bottom:none;padding-bottom:0}
+    .chat-msg-system{font-style:italic}
+  </style>
+  <div id="chat-messages" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:.5rem;padding:.5rem 0;margin-bottom:.75rem;">
+    {% for m in chat_messages %}
+      <div class="chat-msg {% if m.is_system %}chat-msg-system{% endif %}" data-id="{{ m.id }}">
+        {% if m.is_system %}
+          <span style="color:var(--gold);font-size:.85rem;">{{ m.message }}</span>
+        {% else %}
+          <span style="color:var(--muted2);font-weight:700;font-size:.85rem;">{{ m.username }}:</span>
+          <span style="font-size:.85rem;">{{ m.message }}</span>
+        {% endif %}
+      </div>
+    {% else %}
+      <p style="color:var(--muted);font-size:.85rem;">No messages yet — say hello!</p>
+    {% endfor %}
+  </div>
+  <form method="post" action="/survivor/{{ league.id }}/chat/send" style="display:flex;gap:.5rem;">
+    <input type="text" name="message" placeholder="Type a message…" maxlength="1000" required
+           style="flex:1;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:.55rem .75rem;color:var(--text);font-size:.85rem;">
+    <button type="submit" class="btn btn-gold">Send</button>
+  </form>
+</div>
+
+<script>
+(function() {
+  const leagueId = {{ league.id }};
+  const box = document.getElementById('chat-messages');
+  let lastId = 0;
+  box.querySelectorAll('[data-id]').forEach(el => {
+    const id = parseInt(el.getAttribute('data-id'), 10);
+    if (id > lastId) lastId = id;
+  });
+  box.scrollTop = box.scrollHeight;
+
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function appendMessage(m) {
+    const div = document.createElement('div');
+    div.className = 'chat-msg' + (m.is_system ? ' chat-msg-system' : '');
+    div.setAttribute('data-id', m.id);
+    if (m.is_system) {
+      div.innerHTML = '<span style="color:var(--gold);font-size:.85rem;">' + escapeHtml(m.message) + '</span>';
+    } else {
+      div.innerHTML = '<span style="color:var(--muted2);font-weight:700;font-size:.85rem;">' + escapeHtml(m.username) + ':</span> ' +
+                       '<span style="font-size:.85rem;">' + escapeHtml(m.message) + '</span>';
+    }
+    box.appendChild(div);
+  }
+
+  async function pollChat() {
+    try {
+      const resp = await fetch(
+        `/survivor/${leagueId}/chat/poll?after_id=${lastId}&_=${Date.now()}`,
+        { cache: 'no-store' }
+      );
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.messages && data.messages.length) {
+        const wasAtBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+        data.messages.forEach(m => {
+          appendMessage(m);
+          if (m.id > lastId) lastId = m.id;
+        });
+        if (wasAtBottom) box.scrollTop = box.scrollHeight;
+      }
+    } catch (e) { /* silent — next poll will retry */ }
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') pollChat();
+  });
+
+  setInterval(pollChat, 12000);
+})();
+</script>
+
 <!-- HOW IT WORKS -->
 <div class="card" style="background:rgba(31,111,235,.06);">
   <h2>How This Game Works</h2>
