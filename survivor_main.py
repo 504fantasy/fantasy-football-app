@@ -181,7 +181,7 @@ def _auto_advance_week(league_id: int, current_week: int) -> bool:
         now_utc >= datetime.fromisoformat(g["kickoff_utc"]).replace(tzinfo=_tz.utc) + timedelta(hours=4)
         for g in games
     )
-    if all_done and current_week < 18:
+    if all_done and current_week < get_total_weeks(league_id):
         # Post the ending week's high score before advancing, and the new
         # week announcement after — both as system chat messages.
         try:
