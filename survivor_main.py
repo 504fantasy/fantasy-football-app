@@ -1277,6 +1277,31 @@ def chat_fetch(league_id: int, request: Request, after_id: int = 0):
     )
 
 
+@app.get("/survivor/{league_id}/lineup/projections")
+def lineup_projections(league_id: int, request: Request, week: int, season: int = 2026):
+    """
+    Projected points for this league's players, computed using the league's
+    actual scoring settings (see compute_survivor_lineup_projections) rather
+    than a third-party site's generic PPR formula.
+    """
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401)
+    league_ctx(league_id, user)
+
+    try:
+        from nfl_sync import compute_survivor_lineup_projections
+        results = compute_survivor_lineup_projections(league_id, week, season)
+    except Exception as e:
+        print(f"[survivor] projections error league={league_id} week={week}: {e}")
+        results = {}
+
+    return JSONResponse(
+        content={"projections": {str(k): v for k, v in results.items()}},
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"},
+    )
+
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # LINEUP PAGE  (submit / edit weekly picks)

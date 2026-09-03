@@ -1513,3 +1513,229 @@ class NFLSyncScheduler:
 
 # Module-level singleton — imported by main.py
 sync_scheduler = NFLSyncScheduler()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Sleeper-based lineup-page projections (Survivor app)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# The lineup page previously displayed Sleeper's own pre-computed pts_ppr
+# value directly, which reflects Sleeper's generic PPR formula — completely
+# disconnected from a league's actual custom scoring_settings. On top of
+# that, the old client-side JS matched Sleeper's player_id directly against
+# our own internal survivor_players.id, which are two unrelated numbering
+# systems with no guaranteed correspondence.
+#
+# This rebuilds it correctly: fetch Sleeper's raw *stat* projections (not
+# just their computed points), match players by name (the one thing both
+# systems share) against this league's actual roster, then run the matched
+# stats through this app's own scoring engine using the league's real
+# scoring_settings.
+#
+# Known limitations (documented, not silently guessed at):
+#   - 50+ yard bonus tiers aren't projectable — Sleeper's projections
+#     include a 40+ yard completion/TD field but nothing distinguishing
+#     50+ specifically, since no projection system predicts individual
+#     play distances beyond that.
+#   - Kicker FG scoring is distance-based in this app, but a projection
+#     can only give an expected number of makes, not each kick's
+#     distance — approximated using a league-average made-FG distance.
+#   - Defense/special-teams projections (sacks, safety, forced fumbles,
+#     blocked kicks, points allowed) aren't reliably available from
+#     Sleeper's free projections endpoint and are left at 0 — a real gap,
+#     not a wrong guess presented as a real number.
+
+_SLEEPER_PLAYER_DIRECTORY_CACHE: dict = {"data": None, "fetched_at": None}
+_SLEEPER_ASSUMED_AVG_FG_DISTANCE = 38  # league-average made-FG distance, for approximating FG scoring from a projected FG-make count
+
+
+def fetch_sleeper_player_directory() -> dict:
+    """
+    Return {sleeper_player_id: {"name": str, "team": str, "position": str}}.
+    This is a large (~5MB), slow-changing file — Sleeper's own docs say not
+    to fetch it more than once a day, so this is cached in-process.
+    """
+    cache = _SLEEPER_PLAYER_DIRECTORY_CACHE
+    if cache["data"] is not None and cache["fetched_at"] is not None:
+        if (datetime.now(timezone.utc) - cache["fetched_at"]).total_seconds() < 86400:
+            return cache["data"]
+
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "20", "https://api.sleeper.app/v1/players/nfl"],
+            capture_output=True, text=True, timeout=25
+        )
+        if result.returncode != 0 or not result.stdout:
+            return cache["data"] or {}
+        raw = json.loads(result.stdout)
+    except Exception as e:
+        logger.error(f"Failed to fetch Sleeper player directory: {e}")
+        return cache["data"] or {}
+
+    directory = {}
+    for pid, p in raw.items():
+        full_name = p.get("full_name") or f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
+        if not full_name:
+            continue
+        directory[pid] = {
+            "name": full_name,
+            "team": p.get("team") or "",
+            "position": p.get("position") or "",
+        }
+
+    cache["data"] = directory
+    cache["fetched_at"] = datetime.now(timezone.utc)
+    return directory
+
+
+def fetch_sleeper_projections(season: int, week: int) -> dict:
+    """
+    Return {sleeper_player_id: raw_stats_dict} — the raw per-stat-category
+    projections (not Sleeper's own pre-computed points), for regular season.
+    """
+    import subprocess
+    url = f"https://api.sleeper.com/projections/nfl/{season}/{week}?season_type=regular"
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "20", url],
+            capture_output=True, text=True, timeout=25
+        )
+        if result.returncode != 0 or not result.stdout:
+            return {}
+        data = json.loads(result.stdout)
+    except Exception as e:
+        logger.error(f"Failed to fetch Sleeper projections: {e}")
+        return {}
+
+    projections = {}
+    for entry in data:
+        pid = entry.get("player_id")
+        stats = entry.get("stats")
+        if not pid or not stats:
+            continue
+        projections[pid] = stats
+    return projections
+
+
+def _sleeper_stats_to_our_format(stats: dict) -> dict:
+    """Map Sleeper's raw projection stat field names onto this app's own
+    stat dict format (the same shape calculate_fantasy_points expects)."""
+
+    def g(key, default=0):
+        v = stats.get(key, default)
+        try:
+            return float(v) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+
+    rush_td = g("rush_td")
+    rec_td = g("rec_td")
+    other_tds = rush_td + rec_td
+
+    two_pt = g("pass_2pt") + g("rush_2pt") + g("rec_2pt")
+
+    return {
+        "receptions": g("rec"),
+        "receiving_yards": g("rec_yd"),
+        "rushing_yards": g("rush_yd"),
+        "passing_yards": g("pass_yd"),
+        "passing_tds": g("pass_td"),
+        "other_tds": other_tds,
+        "fumbles_lost": g("fum_lost"),
+        "interceptions": g("pass_int"),
+        "two_pt_conversions": two_pt,
+        "pass_40_completions": g("pass_cmp_40p"),
+        "pass_td_40": g("pass_td_40p"),
+        "pass_td_50": 0,      # not distinguishable from projections — see module docstring
+        "rush_td_40": 0,      # no equivalent Sleeper field confirmed available
+        "rush_td_50": 0,
+        "rec_td_40": 0,
+        "rec_td_50": 0,
+        "pat_made": g("xp_made", g("xpm")),
+        "fg_missed": g("fgmiss", g("fg_miss")),
+        "field_goals_made": (
+            [{"distance": _SLEEPER_ASSUMED_AVG_FG_DISTANCE}] * int(g("fgm"))
+            if g("fgm") > 0 else []
+        ),
+        # Defense/special-teams categories intentionally left at 0 — not
+        # reliably available from this data source. See module docstring.
+        "return_yards": 0,
+        "sacks": 0,
+        "safeties": 0,
+        "forced_fumbles": 0,
+        "blocked_kicks": 0,
+        "points_allowed": None,
+    }
+
+
+def compute_survivor_lineup_projections(league_id: int, week: int, season: int) -> dict:
+    """
+    Return {our_player_id: projected_points}, computed using this league's
+    actual scoring_settings — the real fix for the old Sleeper-pts_ppr /
+    mismatched-ID lineup-page projections.
+    """
+    import sqlite3
+    conn = sqlite3.connect(_os.environ.get("SURVIVOR_DB_PATH", "data/survivor.db"))
+    conn.row_factory = sqlite3.Row
+
+    league_row = conn.execute(
+        "SELECT scoring_settings FROM survivor_leagues WHERE id=?", (league_id,)
+    ).fetchone()
+    try:
+        overrides = json.loads(league_row["scoring_settings"]) if league_row and league_row["scoring_settings"] else None
+    except Exception:
+        overrides = None
+    from scoring import resolve_scoring_settings, calculate_fantasy_points
+    settings = resolve_scoring_settings(overrides)
+
+    players = conn.execute(
+        "SELECT id, name, position FROM survivor_players WHERE league_id=?", (league_id,)
+    ).fetchall()
+    conn.close()
+
+    directory = fetch_sleeper_player_directory()
+    projections = fetch_sleeper_projections(season, week)
+    if not directory or not projections:
+        return {}
+
+    # Build a name-match index from Sleeper's directory, scoped to players
+    # who actually have a projection this week (avoids matching against
+    # inactive/irrelevant entries in the ~11k-player directory).
+    by_last_name: dict[str, list] = {}
+    for sid, stats in projections.items():
+        info = directory.get(sid)
+        if not info:
+            continue
+        _, last = _normalize_name_for_match(info["name"])
+        by_last_name.setdefault(last, []).append((sid, info))
+
+    results = {}
+    for p in players:
+        exact_norm = _normalize_full_name(p["name"])
+        first_initial, last = _normalize_name_for_match(p["name"])
+        candidates = by_last_name.get(last, [])
+        if not candidates:
+            continue
+
+        match = None
+        if len(candidates) == 1:
+            match = candidates[0]
+        else:
+            exact_matches = [c for c in candidates if _normalize_full_name(c[1]["name"]) == exact_norm]
+            if len(exact_matches) == 1:
+                match = exact_matches[0]
+            else:
+                initial_matches = [c for c in candidates if _normalize_name_for_match(c[1]["name"])[0] == first_initial]
+                if len(initial_matches) == 1:
+                    match = initial_matches[0]
+        if not match:
+            continue  # ambiguous — skip rather than guess wrong
+
+        sid, info = match
+        stats = _sleeper_stats_to_our_format(projections[sid])
+        pos = p["position"].upper()
+        pts = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats, settings)
+        results[p["id"]] = round(pts, 1)
+
+    return results
