@@ -425,22 +425,15 @@ async function researchSearch(){
   const week = {{ week }};
   const season = {{ nfl_season }};
   const leagueId = {{ league.id }};
-  const cacheKey = `survivor_proj_${leagueId}_${season}_${week}`;
   let projs = {};
 
   try {
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      projs = JSON.parse(cached);
-    } else {
-      const r = await fetch(
-        `/survivor/${leagueId}/lineup/projections?week=${week}&season=${season}`,
-        { cache: 'no-store' }
-      );
-      const data = await r.json();
-      projs = data.projections || {};
-      sessionStorage.setItem(cacheKey, JSON.stringify(projs));
-    }
+    const r = await fetch(
+      `/survivor/${leagueId}/lineup/projections?week=${week}&season=${season}`,
+      { cache: 'no-store' }
+    );
+    const data = await r.json();
+    projs = data.projections || {};
 
     // Update all select dropdowns
     document.querySelectorAll('select[name]').forEach(sel => {
