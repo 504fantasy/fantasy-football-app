@@ -204,6 +204,16 @@ async function getSleeperData() {
   document.getElementById('player-results').innerHTML = '<div style="color:var(--muted)">Loading player database...</div>';
   const r = await fetch('https://api.sleeper.app/v1/players/nfl');
   sleeperData = await r.json();
+  // Sleeper leaves full_name null for team defenses (DEF) — only
+  // player_id/team are populated for those entries. Every tab on this
+  // page (Players, Stats, Injuries) filters/displays by full_name, so
+  // without this, DEF entries are silently dropped everywhere, not just
+  // wherever loads this data first.
+  Object.values(sleeperData).forEach(p => {
+    if(p.position === 'DEF' && !p.full_name) {
+      p.full_name = `${p.team || p.player_id || 'FA'} Defense`;
+    }
+  });
   return sleeperData;
 }
 
@@ -222,6 +232,23 @@ async function searchPlayers() {
     }
     el.innerHTML = '<div style="color:var(--muted)">Searching...</div>';
     const [players, , projs] = await Promise.all([getSleeperData(), getHeadshots(), getProjections(CURRENT_WEEK)]);
+    // Sleeper's own pos_adp_dd_ppr rank field isn't populated for every
+    // position (confirmed: always falls back to 999 for DEF, even though
+    // real per-team point projections do exist) — so recompute rank
+    // ourselves from the actual points, grouped by position, rather than
+    // trusting a field that doesn't work reliably across all positions.
+    const byPosition = {};
+    Object.values(players).forEach(p => {
+      const pr = projs && projs[p.player_id];
+      if (pr && p.position) {
+        byPosition[p.position] = byPosition[p.position] || [];
+        byPosition[p.position].push([p.player_id, pr.pts]);
+      }
+    });
+    Object.values(byPosition).forEach(list => {
+      list.sort((a, b) => b[1] - a[1]);
+      list.forEach(([pid], idx) => { projs[pid].posRank = idx + 1; });
+    });
     const matches = Object.values(players).filter(p => {
       if(!p.full_name || !p.position) return false;
       if(!['QB','RB','WR','TE','K','DEF'].includes(p.position)) return false;
