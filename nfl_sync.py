@@ -1540,10 +1540,19 @@ sync_scheduler = NFLSyncScheduler()
 #   - Kicker FG scoring is distance-based in this app, but a projection
 #     can only give an expected number of makes, not each kick's
 #     distance — approximated using a league-average made-FG distance.
-#   - Defense/special-teams projections (sacks, safety, forced fumbles,
-#     blocked kicks, points allowed) aren't reliably available from
-#     Sleeper's free projections endpoint and are left at 0 — a real gap,
-#     not a wrong guess presented as a real number.
+#   - Forced fumbles and blocked kicks use confirmed real Sleeper field
+#     names. Sacks and safeties use standard Sleeper naming conventions
+#     that aren't independently confirmed the same way — worth spot
+#     checking against a real DST projection once live.
+#   - Points allowed genuinely isn't available at the per-defense
+#     projection level (it depends on the specific opponent's projected
+#     score, not just this defense in isolation) and stays unavailable
+#     rather than guessed.
+#   - Team defenses are matched by team abbreviation, not name — Sleeper
+#     represents them with the team abbreviation as their own player_id
+#     (e.g. "KC"), completely differently from how it IDs human players,
+#     so the name-matching used for every other position doesn't apply
+#     to DST at all.
 
 _SLEEPER_PLAYER_DIRECTORY_CACHE: dict = {"data": None, "fetched_at": None}
 _SLEEPER_ASSUMED_AVG_FG_DISTANCE = 38  # league-average made-FG distance, for approximating FG scoring from a projected FG-make count
@@ -1658,13 +1667,21 @@ def _sleeper_stats_to_our_format(stats: dict) -> dict:
             [{"distance": _SLEEPER_ASSUMED_AVG_FG_DISTANCE}] * int(g("fgm"))
             if g("fgm") > 0 else []
         ),
-        # Defense/special-teams categories intentionally left at 0 — not
-        # reliably available from this data source. See module docstring.
-        "return_yards": 0,
-        "sacks": 0,
-        "safeties": 0,
-        "forced_fumbles": 0,
-        "blocked_kicks": 0,
+        "return_yards": g("def_kr_yd") + g("def_pr_yd"),
+        # Confirmed real Sleeper field names (found in their own API
+        # client library source): forced fumble and blocked kick.
+        "forced_fumbles": g("ff"),
+        "blocked_kicks": g("blk_kick"),
+        # Best-effort — these follow Sleeper's standard naming convention
+        # but aren't independently confirmed the way ff/blk_kick are.
+        # Defaults to 0 via .get() if the field doesn't actually exist,
+        # same as before, but no longer hardcoded to 0 regardless.
+        "sacks": g("sack"),
+        "safeties": g("safe"),
+        # Points allowed isn't a single field Sleeper exposes at the
+        # per-player-projection level (it's matchup-dependent, not a
+        # property of the defense projected in isolation) — still
+        # genuinely unavailable here, not just unconfirmed.
         "points_allowed": None,
     }
 
@@ -1690,13 +1707,13 @@ def compute_survivor_lineup_projections(league_id: int, week: int, season: int) 
     settings = resolve_scoring_settings(overrides)
 
     players = conn.execute(
-        "SELECT id, name, position FROM survivor_players WHERE league_id=?", (league_id,)
+        "SELECT id, name, position, nfl_team FROM survivor_players WHERE league_id=?", (league_id,)
     ).fetchall()
     conn.close()
 
     directory = fetch_sleeper_player_directory()
     projections = fetch_sleeper_projections(season, week)
-    if not directory or not projections:
+    if not projections:
         return {}
 
     # Build a name-match index from Sleeper's directory, scoped to players
@@ -1712,6 +1729,27 @@ def compute_survivor_lineup_projections(league_id: int, week: int, season: int) 
 
     results = {}
     for p in players:
+        if p["position"].upper() == "DST":
+            # Sleeper keys team defenses by team abbreviation directly
+            # (e.g. "KC"), not by a name — so match on that instead of
+            # the name-matching logic used for every other position.
+            # Which convention Sleeper actually uses for the handful of
+            # teams with two abbreviations in use across data sources
+            # (Rams/Raiders/Jaguars) isn't confirmed, so try both the
+            # normalized and raw form rather than assuming one.
+            raw_team = (p["nfl_team"] or "").upper()
+            normalized_team = TEAM_MAP.get(raw_team, raw_team)
+            reverse_team = next((k for k, v in TEAM_MAP.items() if v == normalized_team), normalized_team)
+            team = normalized_team if normalized_team in projections else (
+                reverse_team if reverse_team in projections else normalized_team
+            )
+            if team not in projections:
+                continue
+            stats = _sleeper_stats_to_our_format(projections[team])
+            pts = calculate_fantasy_points({"pos": "DST", "multiplier": None}, stats, settings)
+            results[p["id"]] = round(pts, 1)
+            continue
+
         exact_norm = _normalize_full_name(p["name"])
         first_initial, last = _normalize_name_for_match(p["name"])
         candidates = by_last_name.get(last, [])
