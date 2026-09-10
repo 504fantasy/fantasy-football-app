@@ -1188,6 +1188,7 @@ def league_home(league_id: int, request: Request):
     except Exception:
         _overrides = None
     scoring_settings = resolve_scoring_settings(_overrides)
+    slots = get_league_slots(league_id)
 
     conn = get_db()
     chat_rows = conn.execute(
@@ -1218,6 +1219,7 @@ def league_home(league_id: int, request: Request):
             "required_positions": REQUIRED_POSITIONS,
             "chat_messages": chat_messages,
             "scoring_settings": scoring_settings,
+            "slots": slots,
         },
     )
 
