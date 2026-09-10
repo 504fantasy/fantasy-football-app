@@ -478,4 +478,41 @@ async function researchSearch(){
 })();
 </script>
 
+{% if week_schedule %}
+<div class="card" style="margin-top:1.5rem;">
+  <h2 style="margin-bottom:1rem;">🏈 Week {{ week }} NFL Schedule</h2>
+  <div style="display:flex;flex-direction:column;gap:.4rem;">
+    {% for g in week_schedule %}
+    <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;background:var(--s2);border-radius:8px;font-size:.85rem;">
+      <span style="display:flex;align-items:center;gap:.35rem;min-width:60px;">
+        <img src="{{ g.away | espn_logo }}" alt="" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">
+        {{ g.away }}
+      </span>
+      <span style="color:var(--muted);">@</span>
+      <span style="display:flex;align-items:center;gap:.35rem;min-width:60px;">
+        <img src="{{ g.home | espn_logo }}" alt="" style="width:18px;height:18px;object-fit:contain" onerror="this.style.display='none'">
+        {{ g.home }}
+      </span>
+      <span class="week-schedule-kickoff" data-iso="{{ g.kickoff_utc }}" style="margin-left:auto;color:var(--muted);font-size:.78rem;"></span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<script>
+document.querySelectorAll('.week-schedule-kickoff').forEach(el => {
+  let iso = el.getAttribute('data-iso');
+  if (!iso) return;
+  // Stored kickoff times have no timezone indicator (e.g. "2026-09-10T00:20:00"),
+  // but they ARE UTC — without marking that explicitly, new Date() silently
+  // treats the string as local time and never actually converts it.
+  if (!/Z$|[+-]\d\d:?\d\d$/.test(iso)) iso += 'Z';
+  const d = new Date(iso);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  el.textContent = `${weekday} ${date}, ${time}`;
+});
+</script>
+{% endif %}
+
 {% endblock %}

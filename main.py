@@ -4165,10 +4165,15 @@ def api_nfl_games(week: int, season: int = None, season_type: int = 3):
         status_desc = status_type.get("description", "Scheduled")
         completed = status_type.get("completed", False)
 
-        # Live game info
+        # Live game info. period/displayClock live under the competition's
+        # own status object, NOT situation (confirmed via a live diagnostic
+        # against an actual in-progress game) -- situation only carries
+        # down/distance/possession data, so period always defaulted to 0
+        # here and the quarter/clock string was silently always empty.
         situation = comp.get("situation", {})
-        period = situation.get("period", 0)
-        clock = situation.get("displayClock", "")
+        comp_status = comp.get("status", {})
+        period = comp_status.get("period", 0)
+        clock = comp_status.get("displayClock", "")
         down_distance = situation.get("downDistanceText", "")
         quarter_str = ""
         if not completed and period > 0:

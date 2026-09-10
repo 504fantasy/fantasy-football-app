@@ -622,7 +622,12 @@ def fetch_points_allowed(season: int, week: int, season_type: int = 2) -> dict:
     points_allowed: dict = {}
     for event in data.get("events", []):
         status = event.get("status", {}).get("type", {})
-        if not status.get("completed"):
+        # Only skip games that haven't started yet -- "in" (in progress)
+        # and "post" (final) both have real, usable data. The old
+        # completed-only check meant points allowed never updated until
+        # a game was fully over, even though ESPN's live scoreboard has
+        # the current in-game score the whole time.
+        if status.get("state") == "pre":
             continue
         comps = event.get("competitions", [{}])[0].get("competitors", [])
         if len(comps) != 2:
@@ -707,7 +712,12 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
 
     for event in sb.get("events", []):
         status = event.get("status", {}).get("type", {})
-        if not status.get("completed"):
+        # Only skip games that haven't started yet -- see the matching
+        # comment in fetch_points_allowed. A player's real receptions/
+        # yards/etc. during a live, ongoing game ARE available from
+        # ESPN's box score the whole time; the old completed-only check
+        # meant nothing synced for anyone until their game fully ended.
+        if status.get("state") == "pre":
             continue
         event_id = event.get("id")
         if not event_id:

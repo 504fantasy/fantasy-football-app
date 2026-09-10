@@ -907,6 +907,26 @@ def get_team_kickoff_utc(league_id: int, week: int, team: str) -> str | None:
     return row["kickoff_utc"] if row else None
 
 
+def get_week_schedule(league_id: int, week: int) -> list:
+    """
+    Return this week's games, one row per real matchup (not per team —
+    survivor_game_schedule stores each game twice, once from each team's
+    perspective, so this dedupes to the away-team row, which naturally
+    reads as "away @ home"). Sorted by kickoff time, for display on the
+    lineup page.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT team as away, opponent as home, kickoff_utc "
+        "FROM survivor_game_schedule "
+        "WHERE league_id=? AND week=? AND is_home=0 "
+        "ORDER BY kickoff_utc ASC",
+        (league_id, week)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def team_has_kicked_off(league_id: int, week: int, team: str) -> bool:
     """Return True if the team's game has already started."""
     from datetime import datetime, timezone
@@ -1369,6 +1389,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
     ).fetchall()
     conn.close()
     used_players = [dict(r) for r in used_rows]
+    week_schedule = get_week_schedule(league_id, week)
 
     return templates.TemplateResponse(
         "lineup.html",
@@ -1395,6 +1416,7 @@ def lineup_page(league_id: int, request: Request, week: int = None):
             "msg": request.query_params.get("msg", ""),
             "error": request.query_params.get("error", ""),
             "nfl_season": int(os.environ.get("NFL_SEASON", "2026")),
+            "week_schedule": week_schedule,
         },
     )
 
