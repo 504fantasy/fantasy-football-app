@@ -86,11 +86,7 @@
       </div>
     </div>
     {% if ts.is_own_team %}<div style="font-size:.68rem;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:6px">Your Team</div>{% endif %}
-    {% if ts.hidden %}
-    <div style="padding:1rem;text-align:center;color:var(--muted2);font-size:.85rem;font-style:italic;background:var(--s2);border-radius:8px;border:1px dashed var(--border)">
-      🔒 Lineup hidden until first game kicks off
-    </div>
-    {% elif ts.players %}
+    {% if ts.players %}
     <style>
     .stat-chips{display:flex;flex-wrap:wrap;gap:.25rem;align-items:center}
     .sc{display:inline-block;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;background:rgba(232,184,75,.12);color:var(--gold);border:1px solid rgba(232,184,75,.3)}
@@ -121,6 +117,13 @@
     .game-chip .gc-live  { color: var(--green); font-size: .68rem; text-transform:uppercase; letter-spacing:.06em }
     </style>
     {% for p in ts.players | sort(attribute='final_points', reverse=True) %}
+    {% if p.hidden_pick %}
+    <div class="player-row">
+      <div style="width:32px;height:32px;border-radius:50%;background:#1a1f2e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.9rem;color:#64748b">🔒</div>
+      <span class="badge badge-{{ p.position|lower if p.position in ['QB','RB','WR','TE','DST','K'] else 'muted' }}" style="flex-shrink:0">{{ p.position }}</span>
+      <span style="color:var(--muted2);font-style:italic;font-size:.85rem">Hidden until game starts</span>
+    </div>
+    {% else %}
     <div class="player-row">
       {% if p.headshot_url %}
       <img src="{{ p.headshot_url }}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;background:#1a1f2e;flex-shrink:0" onerror="this.style.display='none'">
@@ -211,6 +214,7 @@
       {% endif %}
       <span class="player-pts {% if p.final_points == 0 %}zero{% endif %}">{{ p.final_points }}</span>
     </div>
+    {% endif %}
     {% endfor %}
     {% else %}
     <p style="color:var(--muted);font-size:12px;">No lineup submitted.</p>

@@ -4448,8 +4448,13 @@ def manage_team_payment(
     if not is_admin_or_commissioner(league, user):
         raise HTTPException(status_code=403)
     conn = get_db()
-    from datetime import date
-    payment_date = date.today().isoformat() if paid else None
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    # Explicit local (Central/New Orleans) date rather than date.today(),
+    # which depends on whatever timezone the server's OS happens to be
+    # set to (commonly UTC by default on cloud VPS) -- same class of bug
+    # fixed for Survivor's payment-date stamping.
+    payment_date = datetime.now(ZoneInfo('America/Chicago')).strftime('%Y-%m-%d') if paid else None
     conn.execute(adapt_sql(
         "UPDATE teams SET paid=?, payment_date=?, payment_note=? WHERE id=? AND league_id=?"
     ), (paid, payment_date, payment_note.strip(), team_id, league_id))
@@ -4577,8 +4582,13 @@ def manage_team_payment(
     if not is_admin_or_commissioner(league, user):
         raise HTTPException(status_code=403)
     conn = get_db()
-    from datetime import date
-    payment_date = date.today().isoformat() if paid else None
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    # Explicit local (Central/New Orleans) date rather than date.today(),
+    # which depends on whatever timezone the server's OS happens to be
+    # set to (commonly UTC by default on cloud VPS) -- same class of bug
+    # fixed for Survivor's payment-date stamping.
+    payment_date = datetime.now(ZoneInfo('America/Chicago')).strftime('%Y-%m-%d') if paid else None
     conn.execute(adapt_sql(
         "UPDATE teams SET paid=?, payment_date=?, payment_note=? WHERE id=? AND league_id=?"
     ), (paid, payment_date, payment_note.strip(), team_id, league_id))

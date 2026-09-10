@@ -1549,37 +1549,42 @@ def scores_page(league_id: int, request: Request, week: int = None):
     teams = get_league_teams(league_id)
 
     # Per-week scores for display
-    from datetime import datetime, timezone
-    now_utc = datetime.now(timezone.utc)
-    # Check if first game of the week has kicked off
-    conn = get_db()
-    sched = conn.execute(
-        "SELECT kickoff_utc FROM survivor_game_schedule "
-        "WHERE league_id=? AND week=? ORDER BY kickoff_utc ASC LIMIT 1",
-        (league_id, week)
-    ).fetchone()
-    conn.close()
-    week_locked = False
-    if sched:
-        first_ko = datetime.fromisoformat(sched["kickoff_utc"]).replace(tzinfo=timezone.utc)
-        week_locked = now_utc >= first_ko
-    is_comm = is_commissioner(league, user)
     week_scores = []
     for team in teams:
         result = get_team_week_score(team["id"], week)
         owner = get_user_by_id(team["owner_id"])
         lineup = get_team_lineup(team["id"], week)
-        # Show lineup only to own team, commissioner, or after first kickoff
         is_own_team = team["owner_id"] == user["id"]
-        show_players = is_own_team or week_locked
+
+        if is_own_team:
+            visible_players = result["players"]
+        else:
+            # Reveal each player individually once THEIR OWN game has
+            # started, instead of gating the whole lineup on the week's
+            # very first kickoff — someone in a Sunday afternoon slot no
+            # longer stays hidden just because Thursday's game hasn't
+            # happened, and vice versa: a Thursday pick still shows even
+            # though the rest of the week's games haven't been played.
+            visible_players = []
+            for p in result["players"]:
+                p_visible = dict(p)
+                if not team_has_kicked_off(league_id, week, p.get("nfl_team") or ""):
+                    p_visible["hidden_pick"] = True
+                    # final_points stays intact (needed for correct sort
+                    # order in the template) — only strip what would
+                    # reveal WHO the pick is.
+                    for field in ("name", "player_id", "headshot_url"):
+                        p_visible.pop(field, None)
+                visible_players.append(p_visible)
+
         week_scores.append(
             {
                 "team": team,
                 "owner": owner,
-                "players": result["players"] if show_players else [],
-                "total": result["total"] if show_players else None,
+                "players": visible_players,
+                "total": result["total"],
                 "complete": lineup_is_complete(lineup),
-                "hidden": not show_players,
+                "hidden": False,
                 "is_own_team": is_own_team,
             }
         )
@@ -1829,7 +1834,11 @@ def manage_team_payment(
     if not is_commissioner(league, user):
         raise HTTPException(status_code=403)
     from datetime import datetime, timezone
-    payment_date = datetime.now(timezone.utc).strftime("%Y-%m-%d") if paid else None
+    from zoneinfo import ZoneInfo
+    # Use local (Central/New Orleans) date, not UTC — a payment marked in
+    # the evening was landing on the next calendar day, since UTC is
+    # already 5-6 hours ahead of Central time.
+    payment_date = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y-%m-%d") if paid else None
     conn = get_db()
     conn.execute(
         adapt_sql("UPDATE survivor_teams SET paid=?, payment_date=?, payment_note=? WHERE id=? AND league_id=?"),
