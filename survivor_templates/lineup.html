@@ -8,6 +8,10 @@
 
 {% if msg == 'lineup_saved' %}
   <div class="alert alert-success">✓ Lineup saved for Week {{ week }}.</div>
+{% elif msg == 'partial_save' %}
+  <div class="alert alert-error">
+    ⚠ Your other changes were saved, but this pick couldn't be updated: {{ request.query_params.get('skipped_detail', '') }}
+  </div>
 {% endif %}
 
 {% if league.entry_fee and league.entry_fee > 0 and my_team and not my_team.paid %}

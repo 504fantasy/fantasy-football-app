@@ -1491,47 +1491,63 @@ async def lineup_submit(
     used = get_used_player_ids_for_team(my_team["id"], exclude_week=week)
     # Load existing lineup so we can tell if a slot's CURRENT player has
     # already kicked off — that slot must stay frozen even if the
-    # replacement player's own game hasn't started yet. Checking only the
-    # incoming player's kickoff time (as before) missed this: swapping a
-    # locked-in player out for someone whose game hasn't started yet would
-    # pass that check even though the original pick should no longer be
-    # editable at all.
+    # replacement player's own game hasn't started yet.
     existing_lineup = {
         (row["position"], row.get("slot", 1) or 1): row
         for row in get_team_lineup(my_team["id"], week)
     }
-    # Validate all picks
+
+    # Duplicate-picks is a whole-form input error the user has to fix
+    # themselves — there's no sensible way to "partially save around" it,
+    # so this alone still aborts the entire submission.
     all_pids = list(picks.values())
     if len(set(all_pids)) != len(all_pids):
         conn.close()
         return RedirectResponse(f"{base}&error=duplicate_players", status_code=303)
+
+    # Every other check is now evaluated PER SLOT, independently. Before
+    # this, a single locked/invalid slot (e.g. WR, correctly blocked
+    # because that game already started) aborted the ENTIRE submission —
+    # silently discarding otherwise-valid changes to other positions
+    # (e.g. a kicker swap) bundled in the same form post. Now each slot
+    # either saves or is skipped on its own, and the user gets a clear
+    # summary of exactly which picks didn't go through and why.
+    reason_text = {
+        "slot_locked": "that slot is locked (game already started)",
+        "invalid_player": "invalid selection",
+        "wrong_position": "wrong position for that slot",
+        "player_already_used": "already used this season",
+        "game_started": "that player's game has already started",
+    }
+    ts = datetime.now(_tz.utc).isoformat()
+    skipped = []  # list of (pos, reason_code)
+
     for (pos, slot), pid in picks.items():
         existing = existing_lineup.get((pos, slot))
+
         if existing and existing["player_id"] != pid:
             if existing.get("locked") or _has_kicked_off(existing.get("nfl_team") or ""):
-                conn.close()
-                return RedirectResponse(f"{base}&error=slot_locked_{pos}", status_code=303)
+                skipped.append((pos, "slot_locked"))
+                continue
+
         row = conn.execute(
             "SELECT * FROM survivor_players WHERE id=? AND league_id=?",
             (pid, league_id),
         ).fetchone()
         if not row:
-            conn.close()
-            return RedirectResponse(f"{base}&error=invalid_player_{pos}", status_code=303)
+            skipped.append((pos, "invalid_player"))
+            continue
         if row["position"].upper() != pos:
-            conn.close()
-            return RedirectResponse(f"{base}&error=wrong_position_{pos}", status_code=303)
+            skipped.append((pos, "wrong_position"))
+            continue
         if pid in used:
-            conn.close()
-            return RedirectResponse(f"{base}&error=player_already_used_{pos}", status_code=303)
+            skipped.append((pos, "player_already_used"))
+            continue
         if _has_kicked_off(row["nfl_team"] or ""):
-            conn.close()
-            return RedirectResponse(f"{base}&error=game_started_{pos}", status_code=303)
-    # Upsert each slot
-    ts = datetime.now(_tz.utc).isoformat()
-    for (pos, slot), pid in picks.items():
-        prow = conn.execute("SELECT nfl_team FROM survivor_players WHERE id=?", (pid,)).fetchone()
-        auto_locked = 1 if (prow and _has_kicked_off(prow["nfl_team"] or "")) else 0
+            skipped.append((pos, "game_started"))
+            continue
+
+        auto_locked = 1 if _has_kicked_off(row["nfl_team"] or "") else 0
         conn.execute(
             adapt_sql("""
             INSERT INTO survivor_lineups
@@ -1544,6 +1560,7 @@ async def lineup_submit(
             """),
             (league_id, my_team["id"], week, pos, slot, pid, auto_locked, ts),
         )
+
     conn.commit()
     conn.close()
     write_audit(
@@ -1551,8 +1568,13 @@ async def lineup_submit(
         action="LINEUP_SUBMIT",
         league_id=league_id,
         team=my_team["name"],
-        details=f"week={week} picks={len(picks)}",
+        details=f"week={week} picks={len(picks)} skipped={len(skipped)}",
     )
+
+    if skipped:
+        from urllib.parse import quote
+        detail = "; ".join(f"{pos} ({reason_text.get(r, r)})" for pos, r in skipped)
+        return RedirectResponse(f"{base}&msg=partial_save&skipped_detail={quote(detail)}", status_code=303)
     return RedirectResponse(f"{base}&msg=lineup_saved", status_code=303)
 
 
