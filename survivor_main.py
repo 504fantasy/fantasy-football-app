@@ -1525,6 +1525,15 @@ async def lineup_submit(
     for (pos, slot), pid in picks.items():
         existing = existing_lineup.get((pos, slot))
 
+        # No actual change attempted for this slot — nothing to validate
+        # and nothing to re-save. Without this, resubmitting a form where
+        # most slots are already locked-and-unchanged (e.g. from an
+        # accidental Enter-key submission while using the search box)
+        # flagged every one of them as a false "couldn't be updated"
+        # failure, even though the user never touched them.
+        if existing and existing["player_id"] == pid:
+            continue
+
         if existing and existing["player_id"] != pid:
             if existing.get("locked") or _has_kicked_off(existing.get("nfl_team") or ""):
                 skipped.append((pos, "slot_locked"))
@@ -2068,6 +2077,20 @@ def manage_add_player(
             f"/survivor/{league_id}/manage?error=bad_position", status_code=303
         )
     conn = get_db()
+    # Explicit case-insensitive check -- the table's UNIQUE(league_id, name)
+    # constraint is case-sensitive, so "DeVonta Smith" and "devonta smith"
+    # register as two different values and the constraint alone never
+    # catches this, letting the same real player get added twice under
+    # different capitalization.
+    existing = conn.execute(
+        "SELECT id FROM survivor_players WHERE league_id=? AND LOWER(name)=LOWER(?)",
+        (league_id, name.strip()),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return RedirectResponse(
+            f"/survivor/{league_id}/manage?error=player_exists", status_code=303
+        )
     try:
         conn.execute(
             "INSERT INTO survivor_players (league_id, name, position, nfl_team) VALUES (?,?,?,?)",

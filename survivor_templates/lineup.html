@@ -96,6 +96,9 @@
           <span class="badge badge-red">All Used!</span>
         {% endif %}
       </div>
+      <input type="text" class="player-search" data-target="{{ field_name }}"
+             placeholder="Search {{ pos }}s by name…" autocomplete="off"
+             style="width:100%;margin-bottom:6px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:14px;">
       <select name="{{ field_name }}" required {% if avail | length == 0 %}disabled{% endif %}>
         <option value="">— Select {{ pos }}{% if num_slots > 1 %} #{{ slot_num }}{% endif %} —</option>
         {% for p in avail | sort(attribute='name') %}
@@ -479,6 +482,12 @@ async function researchSearch(){
   } catch(e) {
     console.log('Projections unavailable:', e.message);
   }
+  // Signal completion either way -- the search-filter script below waits
+  // for this instead of racing against this fetch, since running before
+  // this finishes could have its setup undone when this rebuilds the
+  // same select elements moments later.
+  window.survivorProjectionsDone = true;
+  document.dispatchEvent(new Event('survivor-projections-done'));
 })();
 </script>
 
@@ -518,5 +527,83 @@ document.querySelectorAll('.week-schedule-kickoff').forEach(el => {
 });
 </script>
 {% endif %}
+
+<script>
+// Filters each position's dropdown live as the user types, since scrolling
+// through a long player pool (300+ names for some positions) to find one
+// specific player is painful, especially on mobile.
+//
+// This actually removes/re-adds real <option> elements rather than
+// toggling CSS display:none on them — hiding options via CSS isn't
+// reliably respected for native <select> dropdowns across browsers,
+// since the open dropdown list is often rendered by the operating
+// system itself rather than the browser's own CSS engine. Confirmed via
+// direct console testing: the filter function ran correctly with no
+// errors and found the right elements, but display:none simply had no
+// visible effect on the dropdown's actual option list.
+//
+// Setup itself waits for the projections script to finish (see the
+// 'survivor-projections-done' event dispatched above) rather than
+// running immediately — that script does an async fetch and, once it
+// resolves, completely rebuilds every select's option list. Setting up
+// this feature (and capturing the option list) before that finished
+// meant it could be capturing a snapshot that was about to be replaced.
+function setupPlayerSearch() {
+  document.querySelectorAll('.player-search').forEach(input => {
+    const targetName = input.getAttribute('data-target');
+    const select = document.querySelector(`select[name="${targetName}"]`);
+    if (!select) return;
+
+    const placeholder = select.querySelector('option[value=""]');
+    // Excludes the placeholder specifically (by reference, since we
+    // already have it), NOT by checking value=="" — a disabled "Game
+    // Started" option also has an empty value (it's not selectable
+    // either), so filtering on value alone was permanently removing
+    // every already-started player from the searchable list the moment
+    // their game kicked off, regardless of what was typed afterward.
+    const allOptions = Array.from(select.querySelectorAll('option')).filter(o => o !== placeholder);
+
+    function applyFilter() {
+      const term = input.value.trim().toLowerCase();
+      const currentValue = select.value;
+      select.innerHTML = '';
+      if (placeholder) select.appendChild(placeholder);
+      allOptions.forEach(opt => {
+        if (!term || opt.textContent.toLowerCase().includes(term)) {
+          select.appendChild(opt);
+        }
+      });
+      if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+        select.value = currentValue;
+      }
+    }
+
+    input.addEventListener('input', applyFilter);
+
+    // Run once immediately too — a browser can restore a previously-
+    // typed value into this box on page reload (e.g. after a form
+    // resubmission) without firing an actual keystroke, which would
+    // otherwise leave the dropdown unfiltered despite text already
+    // sitting in the search box.
+    applyFilter();
+
+    // A plain text input inside a form submits the form on Enter by
+    // default — someone typing a search term and hitting Enter out of
+    // habit (like searching Google) would otherwise submit the entire
+    // lineup unintentionally.
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+  });
+}
+
+if (window.survivorProjectionsDone) {
+  // Projections already finished before this script even ran (a very
+  // fast fetch, or one that failed instantly) -- safe to set up right away.
+  setupPlayerSearch();
+} else {
+  document.addEventListener('survivor-projections-done', setupPlayerSearch, { once: true });
+}
+</script>
 
 {% endblock %}
