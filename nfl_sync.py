@@ -603,20 +603,29 @@ def fetch_points_allowed(season: int, week: int, season_type: int = 2) -> dict:
     gets through fine.
     """
     import subprocess
+    import time
     url = (
         f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         f"?week={week}&seasontype={season_type}&dates={season}"
     )
-    try:
-        result = subprocess.run(
-            ["curl", "-s", "--max-time", "8", url],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode != 0 or not result.stdout:
-            return {}
-        data = json.loads(result.stdout)
-    except Exception as e:
-        logger.error(f"Failed to fetch points-allowed data: {e}")
+    data = None
+    last_error = None
+    for attempt in range(3):
+        try:
+            result = subprocess.run(
+                ["curl", "-s", "--max-time", "8", url],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0 and result.stdout:
+                data = json.loads(result.stdout)
+                break
+            last_error = f"returncode={result.returncode}, empty={not result.stdout}"
+        except Exception as e:
+            last_error = str(e)
+        if attempt < 2:
+            time.sleep(0.5 * (attempt + 1))
+    if data is None:
+        logger.error(f"Failed to fetch points-allowed data after 3 attempts: {last_error}")
         return {}
 
     points_allowed: dict = {}
@@ -681,19 +690,31 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
     """
     import subprocess
     import re
+    import time
 
-    def _curl_json(url):
-        try:
-            result = subprocess.run(
-                ["curl", "-s", "--max-time", "10", url],
-                capture_output=True, text=True, timeout=12
-            )
-            if result.returncode != 0 or not result.stdout:
-                return None
-            return json.loads(result.stdout)
-        except Exception as e:
-            logger.error(f"ESPN fetch failed for {url}: {e}")
-            return None
+    def _curl_json(url, retries=2):
+        # A single transient timeout or network hiccup on one game's
+        # request used to silently drop that ENTIRE game's players from
+        # this whole sync cycle, with no retry — explaining why specific
+        # players intermittently showed "no stats" despite their game
+        # being long over, self-correcting only whenever a later sync
+        # cycle's request for that same game happened to succeed.
+        last_error = None
+        for attempt in range(retries + 1):
+            try:
+                result = subprocess.run(
+                    ["curl", "-s", "--max-time", "10", url],
+                    capture_output=True, text=True, timeout=12
+                )
+                if result.returncode == 0 and result.stdout:
+                    return json.loads(result.stdout)
+                last_error = f"returncode={result.returncode}, empty={not result.stdout}"
+            except Exception as e:
+                last_error = str(e)
+            if attempt < retries:
+                time.sleep(0.5 * (attempt + 1))
+        logger.error(f"ESPN fetch failed for {url} after {retries + 1} attempts: {last_error}")
+        return None
 
     scoreboard_url = (
         f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
@@ -1274,17 +1295,27 @@ def sync_survivor_week(league_id: int, week: int, season: int) -> dict:
         exact = by_exact_name.get(_normalize_full_name(name), [])
         if len(exact) == 1:
             return exact[0]
+        # ESPN already gives full display names, not short codes -- fuzzy
+        # first-initial+last-name matching isn't just unneeded there, it's
+        # actively unsafe: it can never distinguish two different real
+        # people who happen to share a first initial and surname (e.g.
+        # "Genesis Smith", a real but unrelated player with no offensive
+        # stats tracked here, was incorrectly matching to "Geno Smith" --
+        # the only "G. Smith" in this roster -- silently overwriting his
+        # real 215-yard game with an empty stat line). Fuzzy matching is
+        # only genuinely needed for nflverse's short-code PBP data
+        # ("G.Smith"), where the full first name isn't available at all.
+        if source != "nflverse":
+            return None
         first_initial, last = _normalize_name_for_match(name)
         candidates = by_last_name.get(last, [])
         if not candidates:
             return None
-        if len(candidates) == 1:
-            return candidates[0]
         for p in candidates:
             p_first, _ = _normalize_name_for_match(p["name"])
             if p_first == first_initial:
                 return p
-        return None  # ambiguous — multiple same-last-name players, skip rather than guess
+        return None  # no first-initial match among same-last-name candidates — skip rather than guess
 
     # -- Offensive players --
     for (pkey, w), stats in player_stats.items():
@@ -1728,14 +1759,20 @@ def compute_survivor_lineup_projections(league_id: int, week: int, season: int) 
 
     # Build a name-match index from Sleeper's directory, scoped to players
     # who actually have a projection this week (avoids matching against
-    # inactive/irrelevant entries in the ~11k-player directory).
-    by_last_name: dict[str, list] = {}
+    # inactive/irrelevant entries in the ~11k-player directory). Keyed by
+    # exact normalized full name only -- Sleeper gives full names here
+    # (like ESPN), so fuzzy first-initial+last-name matching would carry
+    # the same risk as the ESPN stat-sync bug: two different real people
+    # sharing a first initial and surname (e.g. two different "G. Smith"s)
+    # can't be told apart by that alone, and guessing risks crediting the
+    # wrong player's projection to someone else entirely.
+    by_exact_name: dict[str, tuple] = {}
     for sid, stats in projections.items():
         info = directory.get(sid)
         if not info:
             continue
-        _, last = _normalize_name_for_match(info["name"])
-        by_last_name.setdefault(last, []).append((sid, info))
+        norm = _normalize_full_name(info["name"])
+        by_exact_name.setdefault(norm, []).append((sid, info))
 
     results = {}
     for p in players:
@@ -1761,24 +1798,12 @@ def compute_survivor_lineup_projections(league_id: int, week: int, season: int) 
             continue
 
         exact_norm = _normalize_full_name(p["name"])
-        first_initial, last = _normalize_name_for_match(p["name"])
-        candidates = by_last_name.get(last, [])
+        candidates = by_exact_name.get(exact_norm, [])
         if not candidates:
             continue
-
-        match = None
-        if len(candidates) == 1:
-            match = candidates[0]
-        else:
-            exact_matches = [c for c in candidates if _normalize_full_name(c[1]["name"]) == exact_norm]
-            if len(exact_matches) == 1:
-                match = exact_matches[0]
-            else:
-                initial_matches = [c for c in candidates if _normalize_name_for_match(c[1]["name"])[0] == first_initial]
-                if len(initial_matches) == 1:
-                    match = initial_matches[0]
-        if not match:
-            continue  # ambiguous — skip rather than guess wrong
+        if len(candidates) != 1:
+            continue  # multiple people share this exact full name -- ambiguous, skip rather than guess
+        match = candidates[0]
 
         sid, info = match
         stats = _sleeper_stats_to_our_format(projections[sid])
