@@ -602,30 +602,12 @@ def fetch_points_allowed(season: int, week: int, season_type: int = 2) -> dict:
     TLS fingerprint even with a browser User-Agent header, but plain curl
     gets through fine.
     """
-    import subprocess
-    import time
     url = (
         f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         f"?week={week}&seasontype={season_type}&dates={season}"
     )
-    data = None
-    last_error = None
-    for attempt in range(3):
-        try:
-            result = subprocess.run(
-                ["curl", "-s", "--max-time", "8", url],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0 and result.stdout:
-                data = json.loads(result.stdout)
-                break
-            last_error = f"returncode={result.returncode}, empty={not result.stdout}"
-        except Exception as e:
-            last_error = str(e)
-        if attempt < 2:
-            time.sleep(0.5 * (attempt + 1))
+    data = _espn_curl_json(url)
     if data is None:
-        logger.error(f"Failed to fetch points-allowed data after 3 attempts: {last_error}")
         return {}
 
     points_allowed: dict = {}
@@ -659,7 +641,100 @@ def fetch_points_allowed(season: int, week: int, season_type: int = 2) -> dict:
     return points_allowed
 
 
-def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple[dict, dict]:
+def _espn_curl_json(url, retries=2):
+    """
+    Fetch a URL via curl and parse it as JSON, retrying on failure. Uses
+    curl rather than urllib -- ESPN's bot protection blocks urllib's TLS
+    fingerprint even with a browser User-Agent header, but plain curl
+    works fine.
+
+    A single transient timeout or network hiccup used to silently drop
+    an entire request's worth of data with no retry at all -- e.g. one
+    game's box score missing every one of its players for a whole sync
+    cycle, self-correcting only whenever a later, separate sync attempt
+    happened to succeed for that same game.
+    """
+    import subprocess
+    import time
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            result = subprocess.run(
+                ["curl", "-s", "--max-time", "10", url],
+                capture_output=True, text=True, timeout=12
+            )
+            if result.returncode == 0 and result.stdout:
+                return json.loads(result.stdout)
+            last_error = f"returncode={result.returncode}, empty={not result.stdout}"
+        except Exception as e:
+            last_error = str(e)
+        if attempt < retries:
+            time.sleep(0.5 * (attempt + 1))
+    logger.error(f"ESPN fetch failed for {url} after {retries + 1} attempts: {last_error}")
+    return None
+
+
+_ESPN_TEAM_ROSTERS_CACHE: dict = {"data": None, "fetched_at": None}
+
+
+def fetch_espn_team_rosters() -> dict:
+    """
+    Fetch every current NFL player's ESPN athlete ID, grouped by team.
+
+    Used to backfill survivor_players.espn_id for existing players (and,
+    going forward, to look up a new player's ID at the moment they're
+    manually added) -- matching on this stable ID instead of on name
+    avoids the whole class of same-surname (and sometimes same-first-
+    name) collision bugs that name-based matching is exposed to.
+
+    This is 32 sequential HTTP requests (one per team), so it's cached
+    in-process for a day -- rosters don't meaningfully change within
+    that window, and without caching, something like the manual "add
+    player" flow would re-fetch all 32 teams on every single add.
+
+    Returns {team_abbreviation: {player_full_name: espn_id}}.
+    """
+    cache = _ESPN_TEAM_ROSTERS_CACHE
+    if cache["data"] is not None and cache["fetched_at"] is not None:
+        if (datetime.now(timezone.utc) - cache["fetched_at"]).total_seconds() < 86400:
+            return cache["data"]
+
+    teams_data = _espn_curl_json("https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams")
+    if not teams_data:
+        logger.error("Failed to fetch ESPN team list -- cannot fetch rosters")
+        return cache["data"] or {}
+
+    rosters: dict = {}
+    teams = teams_data.get("sports", [{}])[0].get("leagues", [{}])[0].get("teams", [])
+    for t in teams:
+        team = t.get("team", {})
+        team_id = team.get("id")
+        abbr = team.get("abbreviation", "").upper()
+        if not team_id or not abbr:
+            continue
+
+        roster_data = _espn_curl_json(
+            f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/{team_id}/roster"
+        )
+        if not roster_data:
+            logger.warning(f"Failed to fetch roster for team {abbr} (id={team_id})")
+            continue
+
+        team_players: dict = {}
+        for group in roster_data.get("athletes", []):
+            for item in group.get("items", []):
+                name = item.get("fullName") or item.get("displayName")
+                pid = item.get("id")
+                if name and pid:
+                    team_players[name] = int(pid)
+        rosters[abbr] = team_players
+
+    cache["data"] = rosters
+    cache["fetched_at"] = datetime.now(timezone.utc)
+    return rosters
+
+
+def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple[dict, dict, dict]:
     """
     Fetch per-player and per-team stats for a week directly from ESPN's
     game-summary endpoints (boxscore + scoringPlays), rather than nflverse.
@@ -683,48 +758,26 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
     at that same distance as a deliberate overestimate-safe fallback
     rather than guessing individual distances.
 
-    Returns (player_stats, team_stats):
+    Returns (player_stats, team_stats, name_to_espn_id):
       player_stats keyed by ESPN's own display name (e.g. "Adam Prentice")
         -> dict of stat_name -> value
       team_stats keyed by team abbreviation -> dict of stat_name -> value
+      name_to_espn_id keyed by that same display name -> ESPN's own
+        stable athlete ID, letting callers match by ID instead of name
+        wherever survivor_players.espn_id has been backfilled
     """
-    import subprocess
     import re
-    import time
-
-    def _curl_json(url, retries=2):
-        # A single transient timeout or network hiccup on one game's
-        # request used to silently drop that ENTIRE game's players from
-        # this whole sync cycle, with no retry — explaining why specific
-        # players intermittently showed "no stats" despite their game
-        # being long over, self-correcting only whenever a later sync
-        # cycle's request for that same game happened to succeed.
-        last_error = None
-        for attempt in range(retries + 1):
-            try:
-                result = subprocess.run(
-                    ["curl", "-s", "--max-time", "10", url],
-                    capture_output=True, text=True, timeout=12
-                )
-                if result.returncode == 0 and result.stdout:
-                    return json.loads(result.stdout)
-                last_error = f"returncode={result.returncode}, empty={not result.stdout}"
-            except Exception as e:
-                last_error = str(e)
-            if attempt < retries:
-                time.sleep(0.5 * (attempt + 1))
-        logger.error(f"ESPN fetch failed for {url} after {retries + 1} attempts: {last_error}")
-        return None
 
     scoreboard_url = (
         f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         f"?week={week}&seasontype={season_type}&dates={season}"
     )
-    sb = _curl_json(scoreboard_url)
+    sb = _espn_curl_json(scoreboard_url)
     if not sb:
         return {}, {}
 
     player_stats: dict[str, dict] = {}
+    name_to_espn_id: dict[str, int] = {}
     team_stats: dict[str, dict] = {}
 
     def _add_td(pname, field, amt=1):
@@ -744,7 +797,7 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
         if not event_id:
             continue
 
-        summary = _curl_json(
+        summary = _espn_curl_json(
             f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event={event_id}"
         )
         if not summary:
@@ -761,8 +814,14 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
                 cat_name = cat.get("name")
                 for a in cat.get("athletes", []):
                     pname = a.get("athlete", {}).get("displayName")
+                    pid_raw = a.get("athlete", {}).get("id")
                     if not pname:
                         continue
+                    if pid_raw:
+                        try:
+                            name_to_espn_id[pname] = int(pid_raw)
+                        except (TypeError, ValueError):
+                            pass
                     stats = a.get("stats", [])
                     player_stats.setdefault(pname, {})
                     try:
@@ -855,7 +914,7 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
             elif "Two-Point" in type_text or "two-point" in text.lower():
                 _add_td(scorer, "two_pt_conversions")
 
-    return player_stats, team_stats
+    return player_stats, team_stats, name_to_espn_id
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1230,6 +1289,7 @@ def sync_survivor_week(league_id: int, week: int, season: int) -> dict:
     player_stats: dict = {}
     team_stats: dict = {}
     id_to_name: dict = {}
+    espn_name_to_id: dict = {}
     source = None
     try:
         if is_preseason:
@@ -1263,7 +1323,7 @@ def sync_survivor_week(league_id: int, week: int, season: int) -> dict:
             f"[survivor] No nflverse data for league={league_id} week={week} — "
             f"using ESPN box-score fallback instead"
         )
-        espn_players, espn_teams = fetch_espn_week_stats(
+        espn_players, espn_teams, espn_name_to_id = fetch_espn_week_stats(
             season, espn_week, season_type=espn_season_type
         )
         player_stats = {(name, week): stats for name, stats in espn_players.items()}
@@ -1278,20 +1338,38 @@ def sync_survivor_week(league_id: int, week: int, season: int) -> dict:
     # fuzzy first-initial+last-name is the fallback (needed for nflverse's
     # short-name PBP data).
     players = conn.execute(
-        "SELECT id, name, position, nfl_team FROM survivor_players WHERE league_id=?",
+        "SELECT id, name, position, nfl_team, espn_id FROM survivor_players WHERE league_id=?",
         (league_id,)
     ).fetchall()
     by_exact_name: dict[str, list] = {}
     by_last_name: dict[str, list] = {}
+    by_espn_id: dict[int, list] = {}
     for p in players:
         by_exact_name.setdefault(_normalize_full_name(p["name"]), []).append(p)
         _, last = _normalize_name_for_match(p["name"])
         by_last_name.setdefault(last, []).append(p)
+        if p["espn_id"] is not None:
+            by_espn_id.setdefault(p["espn_id"], []).append(p)
 
     def _match_player(pkey):
         name = id_to_name.get(pkey)
         if not name:
             return None
+        # Try matching by ESPN's own stable athlete ID first, when
+        # available -- this is what actually closes out the whole class
+        # of name-collision bugs found tonight (Genesis/Geno Smith,
+        # DeMarcus/Trevor Lawrence, two different Justin Jeffersons):
+        # an ID can't accidentally collide with an unrelated person the
+        # way a name can, so this is preferred whenever we have it.
+        # Falls through to name matching below for the handful of
+        # players who couldn't be matched during the one-time ID
+        # backfill (see backfill_player_ids.py).
+        if source == "espn":
+            espn_id = espn_name_to_id.get(name)
+            if espn_id is not None:
+                id_matches = by_espn_id.get(espn_id, [])
+                if len(id_matches) == 1:
+                    return id_matches[0]
         exact = by_exact_name.get(_normalize_full_name(name), [])
         if len(exact) == 1:
             return exact[0]
@@ -1748,7 +1826,7 @@ def compute_survivor_lineup_projections(league_id: int, week: int, season: int) 
     settings = resolve_scoring_settings(overrides)
 
     players = conn.execute(
-        "SELECT id, name, position, nfl_team FROM survivor_players WHERE league_id=?", (league_id,)
+        "SELECT id, name, position, nfl_team, sleeper_id FROM survivor_players WHERE league_id=?", (league_id,)
     ).fetchall()
     conn.close()
 
@@ -1797,13 +1875,46 @@ def compute_survivor_lineup_projections(league_id: int, week: int, season: int) 
             results[p["id"]] = round(pts, 1)
             continue
 
+        # Try matching by Sleeper's own stable player ID first, when
+        # available -- this is what actually closes out the whole class
+        # of name-collision bugs found tonight, more directly than the
+        # team-disambiguation fallback below: an ID can't accidentally
+        # collide with an unrelated person sharing a name, the way
+        # matching by name (even with team as a tiebreaker) still can
+        # in principle. Falls through to name matching for the handful
+        # of players who couldn't be matched during the one-time ID
+        # backfill (see backfill_player_ids.py).
+        if p["sleeper_id"] and p["sleeper_id"] in projections:
+            info = directory.get(p["sleeper_id"])
+            if info:
+                sid = p["sleeper_id"]
+                stats = _sleeper_stats_to_our_format(projections[sid])
+                pos = p["position"].upper()
+                pts = calculate_fantasy_points({"pos": pos, "multiplier": None}, stats, settings)
+                results[p["id"]] = round(pts, 1)
+                continue
+
         exact_norm = _normalize_full_name(p["name"])
         candidates = by_exact_name.get(exact_norm, [])
         if not candidates:
             continue
-        if len(candidates) != 1:
-            continue  # multiple people share this exact full name -- ambiguous, skip rather than guess
-        match = candidates[0]
+        if len(candidates) == 1:
+            match = candidates[0]
+        else:
+            # Multiple people share this exact full name -- a real, if
+            # rare, case (e.g. Vikings WR Justin Jefferson vs. an
+            # unrelated Browns LB who happens to have the identical
+            # name). Team is a safe, objective disambiguator here, unlike
+            # first-initial fuzzy matching, which can never truly
+            # distinguish two different real people from each other.
+            our_team = TEAM_MAP.get((p["nfl_team"] or "").upper(), (p["nfl_team"] or "").upper())
+            team_matches = [
+                c for c in candidates
+                if TEAM_MAP.get((c[1].get("team") or "").upper(), (c[1].get("team") or "").upper()) == our_team
+            ]
+            if len(team_matches) != 1:
+                continue  # still ambiguous even with team -- skip rather than guess
+            match = team_matches[0]
 
         sid, info = match
         stats = _sleeper_stats_to_our_format(projections[sid])

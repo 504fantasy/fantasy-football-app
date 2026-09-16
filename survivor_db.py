@@ -251,6 +251,8 @@ def init_db(conn=None):
         name      TEXT NOT NULL,
         position  TEXT NOT NULL,
         nfl_team  TEXT NOT NULL,
+        espn_id     INTEGER,
+        sleeper_id  TEXT,
         FOREIGN KEY (league_id) REFERENCES survivor_leagues(id) ON DELETE CASCADE,
         UNIQUE(league_id, name)
     )""")
@@ -365,6 +367,8 @@ def init_db(conn=None):
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN passing_tds      INTEGER DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN other_tds        INTEGER DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN two_pt_conversions   INTEGER DEFAULT 0")
+    _safe_alter(conn, "ALTER TABLE survivor_players ADD COLUMN espn_id INTEGER")
+    _safe_alter(conn, "ALTER TABLE survivor_players ADD COLUMN sleeper_id TEXT")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN pass_40_completions  INTEGER DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN pass_td_40           INTEGER DEFAULT 0")
     _safe_alter(conn, "ALTER TABLE survivor_player_scores  ADD COLUMN pass_td_50           INTEGER DEFAULT 0")

@@ -84,6 +84,9 @@ try:
     from nfl_sync import sync_survivor_week
     from nfl_sync import NFLSyncScheduler
     from nfl_sync import TEAM_MAP as _SHARED_TEAM_MAP
+    from nfl_sync import fetch_espn_team_rosters
+    from nfl_sync import fetch_sleeper_player_directory
+    from nfl_sync import _normalize_full_name
 except ImportError:
 
     def _seed_players(*a, **kw):
@@ -97,6 +100,15 @@ except ImportError:
 
     def current_nfl_week():
         return 1
+
+    def fetch_espn_team_rosters():
+        return {}
+
+    def fetch_sleeper_player_directory():
+        return {}
+
+    def _normalize_full_name(name):
+        return name.strip().lower()
 
     _SHARED_TEAM_MAP = {"LA": "LAR", "LAS": "LV", "JAC": "JAX"}
 
@@ -2091,10 +2103,57 @@ def manage_add_player(
         return RedirectResponse(
             f"/survivor/{league_id}/manage?error=player_exists", status_code=303
         )
+
+    # Look up this player's stable espn_id/sleeper_id now, at add-time,
+    # the same way the one-time backfill (backfill_player_ids.py) does --
+    # team+name first, falling back to a name-only match only when it's
+    # globally unique. Matching by name at every sync going forward is
+    # exactly the failure mode this whole ID system exists to avoid, so
+    # a brand new player should never be left to rely on it.
+    team_norm_new = _SHARED_TEAM_MAP.get(nfl_team.strip().upper(), nfl_team.strip().upper())
+    name_norm_new = _normalize_full_name(name.strip())
+    espn_id = None
+    sleeper_id = None
+    try:
+        espn_rosters = fetch_espn_team_rosters()
+        team_players = espn_rosters.get(team_norm_new, {})
+        team_matches = [eid for pname, eid in team_players.items() if _normalize_full_name(pname) == name_norm_new]
+        if len(team_matches) == 1:
+            espn_id = team_matches[0]
+        else:
+            global_matches = [
+                eid for players in espn_rosters.values()
+                for pname, eid in players.items()
+                if _normalize_full_name(pname) == name_norm_new
+            ]
+            if len(global_matches) == 1:
+                espn_id = global_matches[0]
+    except Exception as e:
+        print(f"[survivor] espn_id lookup failed for new player {name!r}: {e}")
+
+    try:
+        sleeper_directory = fetch_sleeper_player_directory()
+        team_sids = [
+            sid for sid, info in sleeper_directory.items()
+            if _SHARED_TEAM_MAP.get((info.get("team") or "").upper(), (info.get("team") or "").upper()) == team_norm_new
+            and _normalize_full_name(info.get("name", "")) == name_norm_new
+        ]
+        if len(team_sids) == 1:
+            sleeper_id = team_sids[0]
+        else:
+            global_sids = [
+                sid for sid, info in sleeper_directory.items()
+                if _normalize_full_name(info.get("name", "")) == name_norm_new
+            ]
+            if len(global_sids) == 1:
+                sleeper_id = global_sids[0]
+    except Exception as e:
+        print(f"[survivor] sleeper_id lookup failed for new player {name!r}: {e}")
+
     try:
         conn.execute(
-            "INSERT INTO survivor_players (league_id, name, position, nfl_team) VALUES (?,?,?,?)",
-            (league_id, name.strip(), pos, nfl_team.strip().upper()),
+            "INSERT INTO survivor_players (league_id, name, position, nfl_team, espn_id, sleeper_id) VALUES (?,?,?,?,?,?)",
+            (league_id, name.strip(), pos, nfl_team.strip().upper(), espn_id, sleeper_id),
         )
         conn.commit()
     except Exception:
