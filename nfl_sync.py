@@ -805,6 +805,7 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
 
         # -- Box score: core aggregate stats (column positions confirmed
         # via ESPN's own labels/keys metadata) --
+        game_player_names: set = set()
         for team_block in summary.get("boxscore", {}).get("players", []):
             team_abbr = TEAM_MAP.get(
                 str(team_block.get("team", {}).get("abbreviation", "")).upper(),
@@ -817,6 +818,7 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
                     pid_raw = a.get("athlete", {}).get("id")
                     if not pname:
                         continue
+                    game_player_names.add(pname)
                     if pid_raw:
                         try:
                             name_to_espn_id[pname] = int(pid_raw)
@@ -877,10 +879,12 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
                     except (ValueError, IndexError, ZeroDivisionError):
                         continue
 
-        # -- scoringPlays: yardage detail for 40+/50+ TD distance bonuses
-        # and 2pt conversions. Best-effort text parsing — if a play's text
+        # -- scoringPlays: yardage detail for 40+/50+ TD distance bonuses,
+        # 2pt conversions, and now (see below) each individual field goal's
+        # actual distance. Best-effort text parsing — if a play's text
         # doesn't match the expected pattern, that specific bonus is
         # skipped without affecting the base stats above. --
+        fg_scoring_plays_seen: set = set()
         for sp in summary.get("scoringPlays", []):
             type_text = sp.get("type", {}).get("text", "")
             text = sp.get("text", "") or ""
@@ -913,6 +917,63 @@ def fetch_espn_week_stats(season: int, week: int, season_type: int = 2) -> tuple
                         _add_td(passer, "pass_td_40")
             elif "Two-Point" in type_text or "two-point" in text.lower():
                 _add_td(scorer, "two_pt_conversions")
+            elif "Field Goal" in type_text:
+                # The box score's "kicking" summary line only gives the
+                # season-long make (e.g. "3/3 FG, long 60"), with no way
+                # to tell each individual kick's own distance -- so the
+                # code above repeats that longest distance for every made
+                # kick, as a rough, overestimate-safe placeholder. Each
+                # individual scoring play here DOES have the real
+                # distance, though, so the first field goal scoring play
+                # seen for a kicker in this game clears that placeholder
+                # entirely, and every one (including this first) is then
+                # appended with its own real, specific distance.
+                player_stats.setdefault(scorer, {})
+                if scorer not in fg_scoring_plays_seen:
+                    player_stats[scorer]["field_goals_made"] = []
+                    fg_scoring_plays_seen.add(scorer)
+                player_stats[scorer]["field_goals_made"].append({"distance": yards})
+
+        # -- Drives (full play-by-play): 40+ yard completion bonus. This
+        # can't come from the box score or scoringPlays sections above --
+        # box score only gives season totals, and scoringPlays only
+        # covers plays that actually scored, so a 45-yard completion
+        # that didn't result in a touchdown is invisible to both. The
+        # individual play text here has it, but names appear abbreviated
+        # ("D.Prescott" rather than "Dak Prescott"), so each one is
+        # bridged back to this game's real player names via
+        # _normalize_name_for_match, which already treats both forms as
+        # equivalent. If that abbreviation matches more than one distinct
+        # full name among this game's own players (extremely rare, but
+        # not impossible), it's treated as ambiguous and skipped rather
+        # than guessed. --
+        abbrev_to_full: dict = {}
+        for full_name in game_player_names:
+            key = _normalize_name_for_match(full_name)
+            if key in abbrev_to_full and abbrev_to_full[key] != full_name:
+                abbrev_to_full[key] = None  # ambiguous within this game
+            else:
+                abbrev_to_full[key] = full_name
+
+        completion_re = re.compile(r"^(?:\([^)]*\)\s*)?([A-Z][a-zA-Z'\-]*\.[A-Za-z'\-]+)\s+pass\s+")
+        yards_re = re.compile(r"for\s+(\d+)\s+yards?")
+        for drive in summary.get("drives", {}).get("previous", []):
+            for play in drive.get("plays", []):
+                type_text = play.get("type", {}).get("text", "")
+                if type_text not in ("Pass Reception", "Passing Touchdown"):
+                    continue
+                text = play.get("text", "") or ""
+                passer_match = completion_re.match(text)
+                yards_match = yards_re.search(text)
+                if not passer_match or not yards_match:
+                    continue
+                yards = int(yards_match.group(1))
+                if yards < 40:
+                    continue
+                key = _normalize_name_for_match(passer_match.group(1))
+                full_name = abbrev_to_full.get(key)
+                if full_name:
+                    _add_td(full_name, "pass_40_completions")
 
     return player_stats, team_stats, name_to_espn_id
 
