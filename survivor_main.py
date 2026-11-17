@@ -2294,6 +2294,74 @@ def manage_delete_team(
 # ── Score entry ──────────────────────────────────────────────────────────────
 
 
+@app.post("/survivor/{league_id}/manage/lineup/override")
+def manage_lineup_override(
+    league_id: int,
+    request: Request,
+    team_id: int = Form(...),
+    week: int = Form(...),
+    player_id: int = Form(...),
+    slot: int = Form(1),
+):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    league = league_ctx(league_id, user)
+    if not is_commissioner(league, user):
+        raise HTTPException(status_code=403)
+    from survivor_db import get_league_slots
+
+    base = f"/survivor/{league_id}/manage"
+    conn = get_db()
+    team = conn.execute(
+        "SELECT * FROM survivor_teams WHERE id=? AND league_id=?", (team_id, league_id)
+    ).fetchone()
+    player = conn.execute(
+        "SELECT * FROM survivor_players WHERE id=? AND league_id=?", (player_id, league_id)
+    ).fetchone()
+    if not team or not player:
+        conn.close()
+        return RedirectResponse(f"{base}?error=bad_team_or_player", status_code=303)
+    pos = player["position"].upper()
+    max_slots = get_league_slots(league_id).get(pos, 1)
+    if slot < 1 or slot > max_slots:
+        conn.close()
+        return RedirectResponse(f"{base}?error=bad_slot_for_{pos}", status_code=303)
+    # Same player can't fill two slots in the same week
+    dup = conn.execute(
+        "SELECT 1 FROM survivor_lineups WHERE team_id=? AND week=? AND player_id=? "
+        "AND NOT (position=? AND slot=?)",
+        (team_id, week, player_id, pos, slot),
+    ).fetchone()
+    if dup:
+        conn.close()
+        return RedirectResponse(f"{base}?error=player_already_in_that_lineup", status_code=303)
+    ts = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        adapt_sql("""
+        INSERT INTO survivor_lineups
+            (league_id, team_id, week, position, slot, player_id, locked, submitted_at)
+        VALUES (?,?,?,?,?,?,1,?)
+        ON CONFLICT(team_id, week, position, slot)
+        DO UPDATE SET player_id=excluded.player_id,
+                      submitted_at=excluded.submitted_at,
+                      locked=1
+        """),
+        (league_id, team_id, week, pos, slot, player_id, ts),
+    )
+    conn.commit()
+    conn.close()
+    write_audit(
+        actor=user["username"],
+        action="COMMISSIONER_LINEUP_OVERRIDE",
+        league_id=league_id,
+        team=team["name"],
+        player=player["name"],
+        details=f"week={week} pos={pos} slot={slot}",
+    )
+    return RedirectResponse(f"{base}?msg=lineup_override_saved", status_code=303)
+
+
 @app.post("/survivor/{league_id}/manage/scores/entry")
 def manage_score_entry(
     league_id: int,

@@ -59,6 +59,7 @@
   <button class="s-tab" onclick="switchSTab('settings')">Settings</button>
   <button class="s-tab" onclick="switchSTab('members')">Members</button>
   <button class="s-tab" onclick="switchSTab('scores')">Score Entry</button>
+  <button class="s-tab" onclick="switchSTab('lineupfix')">Lineup Override</button>
   <button class="s-tab" onclick="switchSTab('players')">Players</button>
   <a href="/survivor/{{ league.id }}/audit" class="s-tab" style="text-decoration:none">Audit Log</a>
 </div>
@@ -398,6 +399,51 @@
         <div class="form-group"><label>Override Note</label><input type="text" name="override_note" placeholder="Reason"></div>
       </div>
       <button type="submit" class="btn btn-gold" style="margin-top:8px;">Save Score</button>
+    </form>
+  </div>
+</div>
+
+<!-- LINEUP OVERRIDE -->
+<div id="s-panel-lineupfix" class="s-panel">
+  <div class="card">
+    <div class="card-title">Commissioner Lineup Override</div>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:12px;">
+      Set a player in any team's lineup for any week. Bypasses kickoff locks and the
+      "already used this season" rule. The player counts as used for later weeks. Make sure the player's
+      stats exist for that week (run a week sync, or use Score Entry). Logged in the audit log.
+    </p>
+    <form method="post" action="/survivor/{{ league.id }}/manage/lineup/override">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+        <div class="form-group">
+          <label>Team</label>
+          <select name="team_id" required>
+            <option value="">— Select —</option>
+            {% for t in teams %}<option value="{{ t.id }}">{{ t.name }} ({{ t.owner_name }})</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Week</label>
+          <input type="number" name="week" value="{{ current_week }}" min="1" max="{{ total_weeks }}" required>
+        </div>
+        <div class="form-group">
+          <label>Player</label>
+          <select name="player_id" required>
+            <option value="">— Select —</option>
+            {% for pos in required_positions %}
+              <optgroup label="{{ pos }}">
+                {% for p in players if p.position == pos %}
+                  <option value="{{ p.id }}">{{ p.name }} ({{ p.nfl_team }})</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Slot # (for WR #2, etc.)</label>
+          <input type="number" name="slot" value="1" min="1" max="6">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-success" style="margin-top:10px;">Set Lineup Pick</button>
     </form>
   </div>
 </div>

@@ -1,0 +1,165 @@
+diff --git a/survivor_main.py b/survivor_main.py
+index 2bbe542..9c5440b 100644
+--- a/survivor_main.py
++++ b/survivor_main.py
+@@ -2294,6 +2294,74 @@ def manage_delete_team(
+ # ── Score entry ──────────────────────────────────────────────────────────────
+ 
+ 
++@app.post("/survivor/{league_id}/manage/lineup/override")
++def manage_lineup_override(
++    league_id: int,
++    request: Request,
++    team_id: int = Form(...),
++    week: int = Form(...),
++    player_id: int = Form(...),
++    slot: int = Form(1),
++):
++    user = get_current_user(request)
++    if not user:
++        return RedirectResponse("/login", status_code=303)
++    league = league_ctx(league_id, user)
++    if not is_commissioner(league, user):
++        raise HTTPException(status_code=403)
++    from survivor_db import get_league_slots
++
++    base = f"/survivor/{league_id}/manage"
++    conn = get_db()
++    team = conn.execute(
++        "SELECT * FROM survivor_teams WHERE id=? AND league_id=?", (team_id, league_id)
++    ).fetchone()
++    player = conn.execute(
++        "SELECT * FROM survivor_players WHERE id=? AND league_id=?", (player_id, league_id)
++    ).fetchone()
++    if not team or not player:
++        conn.close()
++        return RedirectResponse(f"{base}?error=bad_team_or_player", status_code=303)
++    pos = player["position"].upper()
++    max_slots = get_league_slots(league_id).get(pos, 1)
++    if slot < 1 or slot > max_slots:
++        conn.close()
++        return RedirectResponse(f"{base}?error=bad_slot_for_{pos}", status_code=303)
++    # Same player can't fill two slots in the same week
++    dup = conn.execute(
++        "SELECT 1 FROM survivor_lineups WHERE team_id=? AND week=? AND player_id=? "
++        "AND NOT (position=? AND slot=?)",
++        (team_id, week, player_id, pos, slot),
++    ).fetchone()
++    if dup:
++        conn.close()
++        return RedirectResponse(f"{base}?error=player_already_in_that_lineup", status_code=303)
++    ts = datetime.now(timezone.utc).isoformat()
++    conn.execute(
++        adapt_sql("""
++        INSERT INTO survivor_lineups
++            (league_id, team_id, week, position, slot, player_id, locked, submitted_at)
++        VALUES (?,?,?,?,?,?,1,?)
++        ON CONFLICT(team_id, week, position, slot)
++        DO UPDATE SET player_id=excluded.player_id,
++                      submitted_at=excluded.submitted_at,
++                      locked=1
++        """),
++        (league_id, team_id, week, pos, slot, player_id, ts),
++    )
++    conn.commit()
++    conn.close()
++    write_audit(
++        actor=user["username"],
++        action="COMMISSIONER_LINEUP_OVERRIDE",
++        league_id=league_id,
++        team=team["name"],
++        player=player["name"],
++        details=f"week={week} pos={pos} slot={slot}",
++    )
++    return RedirectResponse(f"{base}?msg=lineup_override_saved", status_code=303)
++
++
+ @app.post("/survivor/{league_id}/manage/scores/entry")
+ def manage_score_entry(
+     league_id: int,
+diff --git a/survivor_templates/lineup.html b/survivor_templates/lineup.html
+index e73b9cd..8ab7068 100644
+--- a/survivor_templates/lineup.html
++++ b/survivor_templates/lineup.html
+@@ -99,7 +99,7 @@
+       <input type="text" class="player-search" data-target="{{ field_name }}"
+              placeholder="Search {{ pos }}s by name…" autocomplete="off"
+              style="width:100%;margin-bottom:6px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:14px;">
+-      <select name="{{ field_name }}" required {% if avail | length == 0 %}disabled{% endif %}>
++      <select name="{{ field_name }}" {% if avail | length == 0 %}disabled{% endif %}>
+         <option value="">— Select {{ pos }}{% if num_slots > 1 %} #{{ slot_num }}{% endif %} —</option>
+         {% for p in avail | sort(attribute='name') %}
+           {% if cur_pick and cur_pick.player_id == p.id %}
+@@ -143,7 +143,7 @@
+     {% if lineup_complete %}
+       <span class="badge badge-green">Lineup complete</span>
+     {% else %}
+-      <span class="badge badge-muted">Incomplete — fill all 6 positions</span>
++      <span class="badge badge-muted">Partial lineup — empty positions score 0</span>
+     {% endif %}
+   </div>
+ </form>
+diff --git a/survivor_templates/manage.html b/survivor_templates/manage.html
+index 0de8686..f860107 100644
+--- a/survivor_templates/manage.html
++++ b/survivor_templates/manage.html
+@@ -59,6 +59,7 @@
+   <button class="s-tab" onclick="switchSTab('settings')">Settings</button>
+   <button class="s-tab" onclick="switchSTab('members')">Members</button>
+   <button class="s-tab" onclick="switchSTab('scores')">Score Entry</button>
++  <button class="s-tab" onclick="switchSTab('lineupfix')">Lineup Override</button>
+   <button class="s-tab" onclick="switchSTab('players')">Players</button>
+   <a href="/survivor/{{ league.id }}/audit" class="s-tab" style="text-decoration:none">Audit Log</a>
+ </div>
+@@ -402,6 +403,51 @@
+   </div>
+ </div>
+ 
++<!-- LINEUP OVERRIDE -->
++<div id="s-panel-lineupfix" class="s-panel">
++  <div class="card">
++    <div class="card-title">Commissioner Lineup Override</div>
++    <p style="color:var(--muted);font-size:13px;margin-bottom:12px;">
++      Set a player in any team's lineup for any week. Bypasses kickoff locks and the
++      "already used this season" rule. The player counts as used for later weeks. Make sure the player's
++      stats exist for that week (run a week sync, or use Score Entry). Logged in the audit log.
++    </p>
++    <form method="post" action="/survivor/{{ league.id }}/manage/lineup/override">
++      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
++        <div class="form-group">
++          <label>Team</label>
++          <select name="team_id" required>
++            <option value="">— Select —</option>
++            {% for t in teams %}<option value="{{ t.id }}">{{ t.name }} ({{ t.owner_name }})</option>{% endfor %}
++          </select>
++        </div>
++        <div class="form-group">
++          <label>Week</label>
++          <input type="number" name="week" value="{{ current_week }}" min="1" max="{{ total_weeks }}" required>
++        </div>
++        <div class="form-group">
++          <label>Player</label>
++          <select name="player_id" required>
++            <option value="">— Select —</option>
++            {% for pos in required_positions %}
++              <optgroup label="{{ pos }}">
++                {% for p in players if p.position == pos %}
++                  <option value="{{ p.id }}">{{ p.name }} ({{ p.nfl_team }})</option>
++                {% endfor %}
++              </optgroup>
++            {% endfor %}
++          </select>
++        </div>
++        <div class="form-group">
++          <label>Slot # (for WR #2, etc.)</label>
++          <input type="number" name="slot" value="1" min="1" max="6">
++        </div>
++      </div>
++      <button type="submit" class="btn btn-success" style="margin-top:10px;">Set Lineup Pick</button>
++    </form>
++  </div>
++</div>
++
+ <!-- PLAYERS (collapsible) -->
+ <div id="s-panel-players" class="s-panel">
+   <div class="card">
