@@ -2,8 +2,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # load .env before anything else reads os.environ
 
+import html as _html
 import json
 import os
+import re
 import secrets
 import sqlite3  # still needed for IntegrityError
 import threading
@@ -1056,6 +1058,12 @@ def register(request: Request,
     email    = email.strip().lower()
     if not username:
         return RedirectResponse("/register?error=empty", status_code=303)
+    # Plain names only: bots were registering HTML/spam as the username, which
+    # then got echoed into outgoing emails.
+    if not re.fullmatch(r"[A-Za-z0-9_. \-]{3,30}", username):
+        return RedirectResponse("/register?error=bad_username", status_code=303)
+    if not re.fullmatch(r"[^@\s<>\"']+@[^@\s<>\"']+\.[^@\s<>\"']+", email) or len(email) > 120:
+        return RedirectResponse("/register?error=bad_email", status_code=303)
     if not email or "@" not in email:
         return RedirectResponse("/register?error=bad_email", status_code=303)
     if get_user_by_email(email):
@@ -1079,7 +1087,7 @@ def register(request: Request,
         subject="Welcome to 504 Fantasy! 🏈",
         html=f"""<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#080a0e;color:#eaecf2;padding:2rem;border-radius:12px;">
           <h1 style="color:#e8b84b;">Welcome to 504 Fantasy! 🏈</h1>
-          <p style="color:#8898b0;">Hey <strong style="color:#eaecf2">{username}</strong>, your account is all set up. Jump in and join or create a league!</p>
+          <p style="color:#8898b0;">Hey <strong style="color:#eaecf2">{_html.escape(username)}</strong>, your account is all set up. Jump in and join or create a league!</p>
           <a href="https://504fantasy.com/login" style="display:inline-block;margin-top:1.5rem;padding:.75rem 1.75rem;background:#e8b84b;color:#080a0e;border-radius:8px;text-decoration:none;font-weight:800;">Go to 504 Fantasy</a>
           <p style="margin-top:2rem;font-size:.8rem;color:#5e6e88;">Questions? <a href="mailto:support@504fantasy.com" style="color:#e8b84b;">support@504fantasy.com</a></p>
         </div>""",
@@ -1115,7 +1123,7 @@ def forgot_password_submit(request: Request, email: str = Form(...)):
             subject="Reset your 504 Fantasy password",
             html=f"""<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#080a0e;color:#eaecf2;padding:2rem;border-radius:12px;">
               <h1 style="color:#e8b84b;">Password Reset 🏈</h1>
-              <p style="color:#8898b0;">Hey <strong style="color:#eaecf2">{user['username']}</strong>, click below to reset your password. Link expires in <strong style="color:#eaecf2">1 hour</strong>.</p>
+              <p style="color:#8898b0;">Hey <strong style="color:#eaecf2">{_html.escape(user['username'])}</strong>, click below to reset your password. Link expires in <strong style="color:#eaecf2">1 hour</strong>.</p>
               <a href="{reset_url}" style="display:inline-block;margin-top:1.5rem;padding:.75rem 1.75rem;background:#e8b84b;color:#080a0e;border-radius:8px;text-decoration:none;font-weight:800;">Reset My Password</a>
               <p style="margin-top:1.5rem;font-size:.8rem;color:#5e6e88;">If you didn't request this, ignore this email.</p>
               <p style="font-size:.8rem;color:#5e6e88;">Or copy: <a href="{reset_url}" style="color:#e8b84b;word-break:break-all;">{reset_url}</a></p>

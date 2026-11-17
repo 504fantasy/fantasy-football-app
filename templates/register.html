@@ -49,6 +49,9 @@
     {% elif request.query_params.get('error')=='no_number' %}
       <div class="alert">Password must contain at least one number.</div>
     {% endif %}
+    {% if request.query_params.get('error')=='bad_username' %}
+      <div class="alert">Username must be 3-30 characters: letters, numbers, spaces, . _ - only.</div>
+    {% endif %}
     {% if request.query_params.get('error')=='bad_email' %}
       <div class="alert">Please enter a valid email address.</div>
     {% endif %}
