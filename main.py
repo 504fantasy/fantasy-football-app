@@ -836,7 +836,16 @@ def multipliers_locked_for(league: dict) -> bool:
 app = FastAPI()
 from fastapi.staticfiles import StaticFiles
 app.mount("/static", StaticFiles(directory="static"), name="static")
-limiter = Limiter(key_func=get_remote_address, default_limits=[])
+def _client_ip(request) -> str:
+    """Real client IP behind nginx (X-Real-IP / first X-Forwarded-For hop)."""
+    ip = request.headers.get("x-real-ip")
+    if not ip:
+        xff = request.headers.get("x-forwarded-for", "")
+        ip = xff.split(",")[0].strip() if xff else ""
+    return ip or get_remote_address(request)
+
+
+limiter = Limiter(key_func=_client_ip, default_limits=[])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, lambda req, exc: __import__('fastapi').responses.JSONResponse(
     status_code=429, content={"detail": "Too many requests. Please wait and try again."}
@@ -932,6 +941,24 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
 # EMAIL HELPER  (Resend API)
 # ======================================================
 
+_EMAIL_DAILY = {"date": None, "count": 0}
+_WELCOME_DAILY_CAP = 40  # keeps the rest of the free-tier 100/day for password resets
+
+
+def _welcome_budget_ok() -> bool:
+    from datetime import date
+    today = date.today().isoformat()
+    if _EMAIL_DAILY["date"] != today:
+        _EMAIL_DAILY["date"], _EMAIL_DAILY["count"] = today, 0
+    if _EMAIL_DAILY["count"] >= _WELCOME_DAILY_CAP:
+        return False
+    _EMAIL_DAILY["count"] += 1
+    return True
+
+
+_RESET_LAST_SENT: dict = {}  # email -> epoch of last reset email
+
+
 def send_email(to: str, subject: str, html: str) -> bool:
     """Send an email via Resend API. Returns True on success."""
     import urllib.error
@@ -1010,11 +1037,15 @@ def get_user_by_email(email: str):
 
 @app.post("/register")
 @limiter.limit("3/minute")
+@limiter.limit("6/hour")
 def register(request: Request, 
     username: str = Form(...),
     password: str = Form(...),
     email:    str = Form(...),
+    website:  str = Form(""),
 ):
+    if website.strip():  # honeypot: humans never see/fill this field
+        return RedirectResponse("/login?registered=1", status_code=303)
     if len(password) < 8:
         return RedirectResponse("/register?error=short", status_code=303)
     if not any(ch.isupper() for ch in password):
@@ -1042,7 +1073,8 @@ def register(request: Request,
             return RedirectResponse("/register?error=taken", status_code=303)
         return RedirectResponse("/register?error=db_error", status_code=303)
     conn.close()
-    send_email(
+    if _welcome_budget_ok():
+      send_email(
         to=email,
         subject="Welcome to 504 Fantasy! 🏈",
         html=f"""<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#080a0e;color:#eaecf2;padding:2rem;border-radius:12px;">
@@ -1051,7 +1083,7 @@ def register(request: Request,
           <a href="https://504fantasy.com/login" style="display:inline-block;margin-top:1.5rem;padding:.75rem 1.75rem;background:#e8b84b;color:#080a0e;border-radius:8px;text-decoration:none;font-weight:800;">Go to 504 Fantasy</a>
           <p style="margin-top:2rem;font-size:.8rem;color:#5e6e88;">Questions? <a href="mailto:support@504fantasy.com" style="color:#e8b84b;">support@504fantasy.com</a></p>
         </div>""",
-    )
+      )
     return RedirectResponse("/login?registered=1", status_code=303)
 
 
@@ -1065,10 +1097,16 @@ def forgot_password_page(request: Request):
 
 
 @app.post("/forgot-password")
-def forgot_password_submit(email: str = Form(...)):
+@limiter.limit("5/hour")
+def forgot_password_submit(request: Request, email: str = Form(...)):
+    import time
     email = email.strip().lower()
     user  = get_user_by_email(email)
+    # At most one reset email per address per 5 minutes (stops targeted spam)
+    if user and time.time() - _RESET_LAST_SENT.get(email, 0) < 300:
+        user = None
     if user:
+        _RESET_LAST_SENT[email] = time.time()
         token     = create_reset_token(user["id"])
         base_url  = os.environ.get("BASE_URL", "https://504fantasy.com")
         reset_url = f"{base_url}/reset-password?token={token}"
